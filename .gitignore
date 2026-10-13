@@ -1,0 +1,28 @@
+# Archived pre-rebuild implementation (reference only)
+OLD/
+
+# Workspace-managed mounts
+.agents/
+.aws/
+.codex/
+
+# Dependencies and generated output
+node_modules/
+.next/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Logs, temporary files, and editor metadata
+*.log
+*.tmp
+.DS_Store
+.idea/
+.vscode/
+
