@@ -1,32 +1,56 @@
+import fcntl
 import logging
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
-from sqlalchemy import select
+from sqlalchemy import case, select, update
 from sqlalchemy.orm import Session
 
+from .clone_processing import (
+    process_delete_voice,
+    process_prepare_reference,
+    process_register_voice,
+)
 from .config import get_settings
 from .database import SessionLocal, create_database
 from .media import (
     copy_reference_video,
     create_preview_proxy,
     extract_audio,
+    run_ffmpeg,
     write_srt,
     write_waveform,
 )
-from .models import Artifact, Job, MediaAsset, Project, ProviderRun, Segment, Speaker, VoiceProfile
-from .providers import ProviderRegistry
+from .models import (
+    Artifact,
+    Job,
+    MediaAsset,
+    Project,
+    ProviderRun,
+    Segment,
+    Speaker,
+    TimelineRevision,
+)
+from .processing import process_transcribe
+from .processing import process_translate as process_real_translate
+from .providers.retry import safe_error
+from .separation_processing import process_separate
+from .voice_processing import process_render_preview
+from .voice_processing import process_synthesize as process_voice_candidates
 
 logger = logging.getLogger("cinedub.worker")
 settings = get_settings()
 
 
-def _update_progress(session: Session, job: Job, progress: float) -> None:
+def _update_progress(session: Session, job: Job, progress: float, phase: str | None = None) -> None:
     session.refresh(job)
     if job.cancel_requested:
         raise InterruptedError("Job cancelled")
     job.progress = progress
+    if phase:
+        job.phase = phase
     session.commit()
 
 
@@ -56,9 +80,29 @@ def process_demo_pipeline(session: Session, job: Job) -> dict:
     existing = session.scalar(select(Segment).where(Segment.project_id == job.project_id))
     if existing:
         return {"preserved_existing_segments": True}
+    revision = TimelineRevision(
+        project_id=job.project_id,
+        job_id=job.id,
+        provider="fake",
+        model="deterministic-fixture-v1",
+        warnings_json=["DEMO: dialogue and performance are fixtures"],
+    )
+    session.add(revision)
+    session.flush()
+    session.get(Project, job.project_id).active_revision_id = revision.id
     speakers = [
-        Speaker(project_id=job.project_id, label="SPEAKER_00", display_name="Speaker A"),
-        Speaker(project_id=job.project_id, label="SPEAKER_01", display_name="Speaker B"),
+        Speaker(
+            project_id=job.project_id,
+            revision_id=revision.id,
+            label="SPEAKER_00",
+            display_name="Speaker A",
+        ),
+        Speaker(
+            project_id=job.project_id,
+            revision_id=revision.id,
+            label="SPEAKER_01",
+            display_name="Speaker B",
+        ),
     ]
     session.add_all(speakers)
     session.flush()
@@ -116,6 +160,7 @@ def process_demo_pipeline(session: Session, job: Job) -> dict:
         session.add(
             Segment(
                 project_id=job.project_id,
+                revision_id=revision.id,
                 speaker_id=speaker,
                 index=index,
                 start_ms=start,
@@ -136,20 +181,35 @@ def process_demo_pipeline(session: Session, job: Job) -> dict:
 
 
 def process_ingest(session: Session, job: Job) -> dict:
-    source = session.scalar(
-        select(MediaAsset)
-        .where(MediaAsset.project_id == job.project_id, MediaAsset.kind == "source")
-        .order_by(MediaAsset.created_at.desc())
-    )
+    existing = session.scalars(select(Artifact).where(Artifact.job_id == job.id)).all()
+    if existing:
+        return {"artifact_ids": [item.id for item in existing]}
+    source = session.get(MediaAsset, job.input_json.get("source_asset_id"))
     if not source:
         raise ValueError("No source media is available")
     source_path = Path(source.path)
     output_dir = settings.storage_root / job.project_id / "ingest" / job.id
     audio_path = output_dir / "source-48khz.wav"
+    _update_progress(session, job, 0, "extracting_audio")
     extract_audio(source_path, audio_path)
-    _update_progress(session, job, 0.45)
+    _update_progress(session, job, 0.35, "creating_waveform")
     waveform_path = output_dir / "waveform.json"
     write_waveform(audio_path, waveform_path)
+    _update_progress(session, job, 0.5, "preparing_recognition_audio")
+    recognition_path = output_dir / "recognition-16khz.wav"
+    run_ffmpeg(
+        [
+            "-i",
+            str(audio_path),
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-c:a",
+            "pcm_s16le",
+            str(recognition_path),
+        ]
+    )
     artifacts = [
         Artifact(
             project_id=job.project_id,
@@ -158,7 +218,7 @@ def process_ingest(session: Session, job: Job) -> dict:
             path=str(audio_path.resolve()),
             filename="source-48khz.wav",
             media_type="audio/wav",
-            metadata_json={"sample_rate": 48000, "channels": 2},
+            metadata_json={"sample_rate": 48000, "channels": 2, "source_asset_id": source.id},
         ),
         Artifact(
             project_id=job.project_id,
@@ -167,12 +227,22 @@ def process_ingest(session: Session, job: Job) -> dict:
             path=str(waveform_path.resolve()),
             filename="waveform.json",
             media_type="application/json",
-            metadata_json={},
+            metadata_json={"source_asset_id": source.id},
+        ),
+        Artifact(
+            project_id=job.project_id,
+            job_id=job.id,
+            kind="recognition_audio",
+            path=str(recognition_path.resolve()),
+            filename=recognition_path.name,
+            media_type="audio/wav",
+            metadata_json={"sample_rate": 16000, "channels": 1, "source_asset_id": source.id},
         ),
     ]
     streams = source.metadata_json.get("streams", [])
     has_video = any(stream.get("codec_type") == "video" for stream in streams)
     if has_video:
+        _update_progress(session, job, 0.7, "creating_video_proxy")
         proxy_path = output_dir / "preview.mp4"
         create_preview_proxy(source_path, proxy_path)
         artifacts.append(
@@ -183,7 +253,7 @@ def process_ingest(session: Session, job: Job) -> dict:
                 path=str(proxy_path.resolve()),
                 filename="preview.mp4",
                 media_type="video/mp4",
-                metadata_json={"purpose": "browser-preview"},
+                metadata_json={"purpose": "browser-preview", "source_asset_id": source.id},
             )
         )
     session.add_all(artifacts)
@@ -192,103 +262,46 @@ def process_ingest(session: Session, job: Job) -> dict:
 
 
 def process_translate(session: Session, job: Job) -> dict:
-    registry = ProviderRegistry(settings)
-    provider = registry.translator(job.provider)
-    segments = session.scalars(
-        select(Segment).where(Segment.project_id == job.project_id).order_by(Segment.index)
-    ).all()
-    if not segments:
-        raise ValueError("No transcript segments exist")
-    translated = 0
-    for index, segment in enumerate(segments, start=1):
-        if segment.status == "approved":
-            continue
-        started = time.monotonic()
-        result = provider.translate(segment.source_text, "en-IN", "ml-IN")
-        elapsed = round((time.monotonic() - started) * 1000)
-        segment.translated_text = result.text
-        segment.status = "translated"
-        segment.version += 1
-        _provider_run(session, job, "translator", result.provider, result.model, elapsed)
-        translated += 1
-        _update_progress(session, job, index / len(segments) * 0.9)
-    session.commit()
-    return {"translated_segments": translated, "preserved_approved": len(segments) - translated}
+    return process_real_translate(session, job)
 
 
 def process_synthesize(session: Session, job: Job) -> dict:
-    provider = ProviderRegistry(settings).voice_synthesizer(job.provider)
-    segments = session.scalars(
-        select(Segment).where(Segment.project_id == job.project_id).order_by(Segment.index)
-    ).all()
-    profiles = {
-        profile.speaker_id: profile
-        for profile in session.scalars(
-            select(VoiceProfile).where(VoiceProfile.project_id == job.project_id)
-        ).all()
-    }
-    created = []
-    for index, segment in enumerate(segments, start=1):
-        profile = profiles.get(segment.speaker_id or "")
-        if job.provider != "fake" and (not profile or profile.consent_status != "approved"):
-            raise PermissionError(
-                f"Approved voice consent is missing for segment {segment.index + 1}"
-            )
-        output = settings.storage_root / job.project_id / "voice" / f"{segment.id}.wav"
-        started = time.monotonic()
-        result = provider.synthesize(
-            segment.translated_text or segment.source_text,
-            "ml-IN",
-            output,
-            voice_id=profile.provider_voice_id if profile else segment.speaker_id,
-        )
-        elapsed = round((time.monotonic() - started) * 1000)
-        artifact = Artifact(
-            project_id=job.project_id,
-            job_id=job.id,
-            kind="dialogue_candidate",
-            path=str(result.audio_path.resolve()),
-            filename=f"segment-{segment.index + 1}-ml.wav",
-            media_type="audio/wav",
-            metadata_json={"segment_id": segment.id, "provider": result.provider},
-        )
-        session.add(artifact)
-        segment.status = "voiced"
-        segment.version += 1
-        _provider_run(session, job, "voice_synthesizer", result.provider, result.model, elapsed)
-        session.flush()
-        created.append(artifact.id)
-        _update_progress(session, job, index / len(segments) * 0.9)
-    session.commit()
-    return {"artifact_ids": created}
+    return process_voice_candidates(session, job)
 
 
 def process_export(session: Session, job: Job) -> dict:
-    segments = session.scalars(
-        select(Segment).where(Segment.project_id == job.project_id).order_by(Segment.index)
-    ).all()
+    existing = session.scalars(select(Artifact).where(Artifact.job_id == job.id)).all()
+    if existing:
+        return {"artifact_ids": [item.id for item in existing], "dubbed_mix": False}
+    _update_progress(session, job, 0, "writing_subtitles")
+    segments = [SimpleNamespace(**snapshot) for snapshot in job.input_json.get("segments", [])]
     if not segments:
         raise ValueError("No segments are available to export")
     export_dir = settings.storage_root / job.project_id / "exports" / job.id
-    srt_path = export_dir / "malayalam.srt"
+    revision = session.get(TimelineRevision, job.input_json.get("revision_id"))
+    filename = "demo-malayalam.srt" if revision.provider == "fake" else "malayalam.srt"
+    srt_path = export_dir / filename
     write_srt(list(segments), srt_path)
     subtitle = Artifact(
         project_id=job.project_id,
         job_id=job.id,
         kind="subtitle",
         path=str(srt_path.resolve()),
-        filename="malayalam.srt",
+        filename=filename,
         media_type="application/x-subrip",
-        metadata_json={"language": "ml-IN", "segment_count": len(segments)},
+        metadata_json={
+            "language": "ml-IN",
+            "segment_count": len(segments),
+            "revision_id": revision.id,
+            "provider": revision.provider,
+            "segment_versions": {line.id: line.version for line in segments},
+            "incomplete": any(not line.translated_text.strip() for line in segments),
+        },
     )
     session.add(subtitle)
     session.flush()
     artifact_ids = [subtitle.id]
-    source = session.scalar(
-        select(MediaAsset)
-        .where(MediaAsset.project_id == job.project_id, MediaAsset.kind == "source")
-        .order_by(MediaAsset.created_at.desc())
-    )
+    source = session.get(MediaAsset, revision.source_asset_id) if revision.source_asset_id else None
     if source and Path(source.path).suffix.lower() in {".mp4", ".mov", ".mkv", ".webm"}:
         target = export_dir / f"reference{Path(source.path).suffix.lower()}"
         copy_reference_video(Path(source.path), target)
@@ -311,9 +324,15 @@ def process_export(session: Session, job: Job) -> dict:
 PROCESSORS = {
     "ingest": process_ingest,
     "demo_pipeline": process_demo_pipeline,
+    "transcribe": process_transcribe,
     "translate": process_translate,
     "synthesize": process_synthesize,
     "export": process_export,
+    "render_preview": process_render_preview,
+    "prepare_reference": process_prepare_reference,
+    "register_voice": process_register_voice,
+    "delete_voice": process_delete_voice,
+    "separate": process_separate,
 }
 
 
@@ -323,9 +342,19 @@ def claim_job(session: Session) -> Job | None:
     )
     if not job:
         return None
-    job.status = "running"
-    job.started_at = datetime.now(UTC)
-    job.attempts += 1
+    result = session.execute(
+        update(Job)
+        .where(Job.id == job.id, Job.status == "queued")
+        .values(
+            status="running",
+            started_at=datetime.now(UTC),
+            attempts=Job.attempts + 1,
+            phase=case((Job.phase == "queued", "preparing"), else_=Job.phase),
+        )
+    )
+    if result.rowcount != 1:
+        session.rollback()
+        return None
     session.commit()
     session.refresh(job)
     return job
@@ -345,9 +374,10 @@ def process_once(session: Session) -> bool:
         job.output_json = output
         job.progress = 1.0
         job.status = "completed"
+        job.phase = "completed"
         if job.stage == "ingest":
             project.status = "draft"
-        elif job.stage == "export":
+        elif job.stage in {"export", "render_preview"}:
             project.status = "ready"
         else:
             project.status = "review"
@@ -356,26 +386,87 @@ def process_once(session: Session) -> bool:
         job = session.get(Job, job.id)
         project = session.get(Project, job.project_id)
         job.status = "cancelled"
+        job.phase = "cancelled"
         job.error_code = "cancelled"
         job.error_message = str(exc)
         project.status = "review"
     except Exception as exc:  # worker boundary records structured failures
-        logger.exception("Job %s failed", job.id)
+        logger.error("job_id=%s stage=%s error_type=%s", job.id, job.stage, type(exc).__name__)
         session.rollback()
         job = session.get(Job, job.id)
         project = session.get(Project, job.project_id)
         job.status = "failed"
+        job.retryable = (
+            job.stage == "transcribe"
+            and bool(job.remote_job_id)
+            and isinstance(exc, (TimeoutError, ConnectionError))
+        )
+        # Status/download errors can safely resume a known remote job without resubmission.
+        if (
+            job.stage == "transcribe"
+            and job.remote_job_id
+            and job.phase in {"starting", "polling", "downloading"}
+        ):
+            job.retryable = True
         job.error_code = type(exc).__name__
-        job.error_message = str(exc)[:2000]
+        job.error_message = safe_error(exc)
+        if job.stage == "register_voice" and job.checkpoint_json.get("pending_registration"):
+            job.error_code = "uncertain_registration"
+            job.error_message = (
+                "Voice upload outcome is unknown. Inspect provider voices/usage "
+                "before an explicit retry."
+            )
         project.status = "failed"
     job.finished_at = datetime.now(UTC)
     session.commit()
     return True
 
 
+def recover_jobs(session: Session) -> None:
+    for job in session.scalars(select(Job).where(Job.status == "running")).all():
+        uncertain = job.provider != "fake" and (
+            (job.stage == "transcribe" and not job.remote_job_id and job.phase == "creating")
+            or bool(job.checkpoint_json.get("pending_chunk"))
+            or bool(job.checkpoint_json.get("pending_voice"))
+            or bool(job.checkpoint_json.get("pending_registration"))
+        )
+        if uncertain:
+            job.status = "failed"
+            job.error_code = "uncertain_submission"
+            job.error_message = (
+                "Interrupted provider submission; inspect usage before explicitly retrying"
+            )
+            job.finished_at = datetime.now(UTC)
+            session.get(Project, job.project_id).status = "failed"
+        else:
+            job.status = "queued"
+            if job.stage == "transcribe" and job.remote_job_id and job.phase == "creating":
+                job.phase = "created"
+    session.commit()
+
+
+def worker_lock_path() -> Path:
+    if settings.database_url.startswith("sqlite:///"):
+        database = Path(settings.database_url.removeprefix("sqlite:///")).resolve()
+        return database.with_name(f"{database.name}.worker.lock")
+    return settings.storage_root / ".worker.lock"
+
+
 def run_worker(poll_interval: float = 1.0) -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    create_database()
+    lock_path = worker_lock_path()
+    with lock_path.open("a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise RuntimeError("A CineDub worker is already running for this database") from exc
+        create_database()
+        with SessionLocal() as session:
+            recover_jobs(session)
+        _worker_loop(poll_interval)
+
+
+def _worker_loop(poll_interval: float) -> None:
     logger.info("CineDub worker started")
     while True:
         with SessionLocal() as session:

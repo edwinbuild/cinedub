@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import shutil
 from collections.abc import AsyncIterator
@@ -6,45 +7,62 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from .config import get_settings
-from .database import SessionLocal, create_database, get_session
+from .consent import artifact_block_reason
+from .database import SessionLocal, create_database
+from .dependencies import SessionDep, require_project
 from .diagnostics import hardware_diagnostics
+from .jobs import ACTIVE, budget_totals, estimate_job, prepare_job, write_lock
 from .media import MediaError, probe_media, safe_filename
 from .models import (
     Artifact,
-    ConsentRecord,
     Job,
     MediaAsset,
     Project,
+    ProviderRun,
     Segment,
+    SegmentEdit,
     Speaker,
+    StemSet,
+    TimelineRevision,
     VoiceProfile,
+    new_id,
 )
 from .providers import ProviderRegistry
+from .routes.stems import router as stems_router
+from .routes.voices import router as voices_router
 from .schemas import (
     ArtifactRead,
+    BudgetUpdate,
     CapabilityRead,
+    HardwareRead,
     JobCreate,
+    JobEstimate,
     JobRead,
     MediaAssetRead,
     ProjectCreate,
     ProjectDetail,
     ProjectRead,
+    RevisionActivate,
+    RevisionRead,
     SegmentRead,
     SegmentUpdate,
+    SpeakerCreate,
     SpeakerRead,
-    VoiceProfileCreate,
+    SpeakerUpdate,
+    StemSetRead,
     VoiceProfileRead,
 )
+from .streaming import media_response
+from .timeline import revision_segments
 
 settings = get_settings()
-SessionDep = Annotated[Session, Depends(get_session)]
 UploadDep = Annotated[UploadFile, File()]
 
 
@@ -54,24 +72,22 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="CineDub API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="CineDub API", version="0.2.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.web_origin, "http://localhost:3000"],
     allow_credentials=False,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Content-Type", "Range"],
+    expose_headers=["Content-Range", "Accept-Ranges", "Content-Length"],
 )
 
 
-def require_project(session: Session, project_id: str) -> Project:
-    project = session.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    return project
+app.include_router(voices_router)
+app.include_router(stems_router)
 
 
-def artifact_read(artifact: Artifact) -> ArtifactRead:
+def artifact_read(artifact: Artifact, session: Session | None = None) -> ArtifactRead:
     return ArtifactRead(
         id=artifact.id,
         project_id=artifact.project_id,
@@ -81,6 +97,9 @@ def artifact_read(artifact: Artifact) -> ArtifactRead:
         media_type=artifact.media_type,
         created_at=artifact.created_at,
         download_url=f"/artifacts/{artifact.id}/download",
+        content_url=f"/artifacts/{artifact.id}/content",
+        metadata_json=artifact.metadata_json,
+        access_blocked_reason=artifact_block_reason(session, artifact) if session else None,
     )
 
 
@@ -91,11 +110,11 @@ def project_detail(session: Session, project: Project) -> ProjectDetail:
         .order_by(MediaAsset.created_at)
     ).all()
     speakers = session.scalars(
-        select(Speaker).where(Speaker.project_id == project.id).order_by(Speaker.label)
+        select(Speaker)
+        .where(Speaker.project_id == project.id, Speaker.revision_id == project.active_revision_id)
+        .order_by(Speaker.label)
     ).all()
-    segments = session.scalars(
-        select(Segment).where(Segment.project_id == project.id).order_by(Segment.index)
-    ).all()
+    segments = revision_segments(session, project.id, project.active_revision_id)
     jobs = session.scalars(
         select(Job).where(Job.project_id == project.id).order_by(Job.created_at.desc())
     ).all()
@@ -110,7 +129,33 @@ def project_detail(session: Session, project: Project) -> ProjectDetail:
         speakers=[SpeakerRead.model_validate(item) for item in speakers],
         segments=[SegmentRead.model_validate(item) for item in segments],
         jobs=[JobRead.model_validate(item) for item in jobs],
-        artifacts=[artifact_read(item) for item in artifacts],
+        artifacts=[artifact_read(item, session) for item in artifacts],
+        revisions=[
+            RevisionRead.model_validate(item)
+            for item in session.scalars(
+                select(TimelineRevision)
+                .where(TimelineRevision.project_id == project.id)
+                .order_by(TimelineRevision.created_at.desc())
+            ).all()
+        ],
+        spent_estimate_inr=budget_totals(session, project.id)[0],
+        reserved_inr=budget_totals(session, project.id)[1],
+        stem_sets=[
+            StemSetRead.model_validate(item)
+            for item in session.scalars(
+                select(StemSet)
+                .where(StemSet.project_id == project.id)
+                .order_by(StemSet.created_at.desc())
+            ).all()
+        ],
+        voice_profiles=[
+            VoiceProfileRead.model_validate(item)
+            for item in session.scalars(
+                select(VoiceProfile)
+                .where(VoiceProfile.project_id == project.id)
+                .order_by(VoiceProfile.updated_at.desc())
+            ).all()
+        ],
     )
 
 
@@ -126,15 +171,25 @@ async def health() -> dict:
 
 
 @app.get("/capabilities", response_model=list[CapabilityRead])
-async def capabilities() -> list[CapabilityRead]:
+async def capabilities(session: SessionDep) -> list[CapabilityRead]:
     registry = ProviderRegistry(settings)
-    return [
-        CapabilityRead.model_validate(item, from_attributes=True)
-        for item in registry.capabilities()
-    ]
+    values = []
+    for item in registry.capabilities():
+        value = CapabilityRead.model_validate(item, from_attributes=True)
+        value.verified = item.available and bool(
+            session.scalar(
+                select(ProviderRun.id).where(
+                    ProviderRun.capability == item.capability,
+                    ProviderRun.provider == item.selected_provider,
+                    ProviderRun.status == "completed",
+                )
+            )
+        )
+        values.append(value)
+    return values
 
 
-@app.get("/diagnostics")
+@app.get("/diagnostics", response_model=HardwareRead)
 async def diagnostics() -> dict:
     return hardware_diagnostics(settings.storage_root)
 
@@ -146,7 +201,11 @@ async def list_projects(session: SessionDep) -> list[Project]:
 
 @app.post("/projects", response_model=ProjectRead, status_code=status.HTTP_201_CREATED)
 async def create_project(payload: ProjectCreate, session: SessionDep) -> Project:
-    project = Project(**payload.model_dump(), duration_limit_seconds=settings.max_duration_seconds)
+    project = Project(
+        **payload.model_dump(),
+        duration_limit_seconds=settings.max_duration_seconds,
+        budget_inr=settings.project_budget_inr,
+    )
     session.add(project)
     session.commit()
     session.refresh(project)
@@ -156,6 +215,18 @@ async def create_project(payload: ProjectCreate, session: SessionDep) -> Project
 @app.get("/projects/{project_id}", response_model=ProjectDetail)
 async def get_project(project_id: str, session: SessionDep) -> ProjectDetail:
     return project_detail(session, require_project(session, project_id))
+
+
+@app.patch("/projects/{project_id}/budget", response_model=ProjectDetail)
+async def change_budget(project_id: str, payload: BudgetUpdate, session: SessionDep):
+    write_lock(session)
+    project = require_project(session, project_id)
+    spent, reserved = budget_totals(session, project_id)
+    if payload.budget_inr < spent + reserved:
+        raise HTTPException(422, "Budget cannot be lower than spent and reserved estimates")
+    project.budget_inr = payload.budget_inr
+    session.commit()
+    return project_detail(session, project)
 
 
 @app.post(
@@ -168,7 +239,10 @@ async def upload_asset(
     file: UploadDep,
     session: SessionDep,
 ) -> MediaAsset:
+    write_lock(session)
     project = require_project(session, project_id)
+    if session.scalar(select(Job.id).where(Job.project_id == project_id, Job.status.in_(ACTIVE))):
+        raise HTTPException(409, "Wait for active processing before importing another source")
     original_name = safe_filename(file.filename or "upload.bin")
     extension = Path(original_name).suffix.lower()
     if extension not in {".mp4", ".mov", ".mkv", ".webm", ".wav", ".mp3", ".flac", ".m4a"}:
@@ -183,8 +257,10 @@ async def upload_asset(
     )
     target_dir = settings.storage_root / project.id / "source"
     target_dir.mkdir(parents=True, exist_ok=True)
+    asset.id = new_id()
     target = target_dir / f"{asset.id}{extension}"
     received = 0
+    digest = hashlib.sha256()
     try:
         with target.open("xb") as destination:
             while chunk := file.file.read(1024 * 1024):
@@ -194,15 +270,23 @@ async def upload_asset(
                         status_code=413, detail="Upload exceeds configured size limit"
                     )
                 destination.write(chunk)
+                digest.update(chunk)
         metadata = probe_media(target)
         duration_ms = metadata.get("duration_ms")
+        if not duration_ms or duration_ms <= 0:
+            raise HTTPException(422, "Media must have a readable positive duration")
+        if not any(item.get("codec_type") == "audio" for item in metadata.get("streams", [])):
+            raise HTTPException(422, "Scene must contain an audio stream")
         if duration_ms and duration_ms > project.duration_limit_seconds * 1000:
             detail = f"The first release supports at most {project.duration_limit_seconds} seconds"
             raise HTTPException(
                 status_code=422,
                 detail=detail,
             )
-    except (HTTPException, MediaError):
+    except MediaError as exc:
+        target.unlink(missing_ok=True)
+        raise HTTPException(422, str(exc)) from exc
+    except HTTPException:
         target.unlink(missing_ok=True)
         raise
     finally:
@@ -210,10 +294,17 @@ async def upload_asset(
 
     asset.path = str(target.resolve())
     asset.duration_ms = metadata.get("duration_ms")
-    asset.metadata_json = metadata
+    asset.metadata_json = {**metadata, "sha256": digest.hexdigest()}
     session.add(asset)
     session.flush()
-    session.add(Job(project_id=project.id, stage="ingest", provider="local"))
+    session.add(
+        Job(
+            project_id=project.id,
+            stage="ingest",
+            provider="local",
+            input_json={"source_asset_id": asset.id},
+        )
+    )
     project.status = "processing"
     session.commit()
     session.refresh(asset)
@@ -232,60 +323,138 @@ async def update_segment(
     if segment.version != payload.expected_version:
         raise HTTPException(status_code=409, detail="Segment changed; refresh before saving")
     values = payload.model_dump(exclude={"expected_version"}, exclude_unset=True)
+    for field in ("source_text", "translated_text", "start_ms", "end_ms", "status"):
+        if field in values and values[field] is None:
+            raise HTTPException(422, f"{field} cannot be null")
+    if "source_text" in values and not values["source_text"].strip():
+        raise HTTPException(422, "English dialogue must not be blank")
     if values.get("speaker_id"):
         speaker = session.get(Speaker, values["speaker_id"])
-        if not speaker or speaker.project_id != segment.project_id:
+        if (
+            not speaker
+            or speaker.project_id != segment.project_id
+            or speaker.revision_id != segment.revision_id
+        ):
             raise HTTPException(status_code=422, detail="Speaker does not belong to this project")
-    for field, value in values.items():
-        setattr(segment, field, value)
-    segment.version += 1
+    start = values.get("start_ms", segment.start_ms)
+    end = values.get("end_ms", segment.end_ms)
+    revision = session.get(TimelineRevision, segment.revision_id) if segment.revision_id else None
+    source = (
+        session.get(MediaAsset, revision.source_asset_id)
+        if revision and revision.source_asset_id
+        else None
+    )
+    if end <= start or (source and end > source.duration_ms):
+        raise HTTPException(422, "Line timing must satisfy 0 ≤ start < end ≤ scene duration")
+    changed = any(
+        values.get(field, getattr(segment, field)) != getattr(segment, field)
+        for field in ("source_text", "translated_text", "speaker_id", "start_ms", "end_ms")
+    )
+    if changed:
+        values.update(
+            {"human_edited": True, "status": "needs_review", "selected_candidate_id": None}
+        )
+    if "speaker_id" in values:
+        values["warnings_json"] = [
+            warning
+            for warning in segment.warnings_json
+            if warning != "Speaker unassigned; review this line"
+        ]
+        if values["speaker_id"] is None:
+            values["warnings_json"].append("Speaker unassigned; review this line")
+    if (
+        values.get("status") == "approved"
+        and not values.get("translated_text", segment.translated_text).strip()
+    ):
+        raise HTTPException(422, "Add a Malayalam translation before approving this line")
+    before = SegmentRead.model_validate(segment).model_dump(mode="json")
+    result = session.execute(
+        update(Segment)
+        .where(Segment.id == segment_id, Segment.version == payload.expected_version)
+        .values(**values, version=payload.expected_version + 1)
+    )
+    if result.rowcount != 1:
+        session.rollback()
+        raise HTTPException(409, "Segment changed; refresh before saving")
+    session.refresh(segment)
+    session.add(
+        SegmentEdit(
+            segment_id=segment.id,
+            version=segment.version,
+            before_json=before,
+            after_json=SegmentRead.model_validate(segment).model_dump(mode="json"),
+        )
+    )
     session.commit()
     session.refresh(segment)
     return segment
 
 
-@app.post(
-    "/projects/{project_id}/voice-profiles",
-    response_model=VoiceProfileRead,
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_voice_profile(
-    project_id: str,
-    payload: VoiceProfileCreate,
-    session: SessionDep,
-) -> VoiceProfile:
+@app.post("/projects/{project_id}/speakers", response_model=SpeakerRead, status_code=201)
+async def create_speaker(project_id: str, payload: SpeakerCreate, session: SessionDep):
+    write_lock(session)
     require_project(session, project_id)
-    speaker = session.get(Speaker, payload.speaker_id)
-    if not speaker or speaker.project_id != project_id:
-        raise HTTPException(status_code=422, detail="Speaker does not belong to this project")
-    if payload.reference_asset_id:
-        reference = session.get(MediaAsset, payload.reference_asset_id)
-        if not reference or reference.project_id != project_id:
-            raise HTTPException(
-                status_code=422, detail="Reference asset does not belong to this project"
-            )
-    profile = VoiceProfile(
+    revision = session.get(TimelineRevision, payload.revision_id)
+    if not revision or revision.project_id != project_id:
+        raise HTTPException(422, "Select a revision belonging to this project")
+    name = payload.display_name.strip()
+    if not name:
+        raise HTTPException(422, "Speaker name cannot be blank")
+    speaker = Speaker(
         project_id=project_id,
-        speaker_id=payload.speaker_id,
-        display_name=payload.display_name,
-        provider=payload.provider,
-        provider_voice_id=payload.provider_voice_id,
-        reference_asset_id=payload.reference_asset_id,
-        consent_status="approved" if payload.consent.approved else "denied",
+        revision_id=revision.id,
+        label=f"MANUAL_{new_id()}",
+        display_name=name,
     )
-    session.add(profile)
-    session.flush()
-    session.add(
-        ConsentRecord(
-            voice_profile_id=profile.id,
-            status=profile.consent_status,
-            attested_by=payload.consent.attested_by,
-            note=payload.consent.note,
-        )
-    )
+    session.add(speaker)
     session.commit()
-    session.refresh(profile)
-    return profile
+    return speaker
+
+
+@app.patch("/speakers/{speaker_id}", response_model=SpeakerRead)
+async def rename_speaker(speaker_id: str, payload: SpeakerUpdate, session: SessionDep):
+    speaker = session.get(Speaker, speaker_id)
+    if not speaker:
+        raise HTTPException(404, "Speaker not found")
+    if not payload.display_name.strip():
+        raise HTTPException(422, "Speaker name must not be blank")
+    speaker.display_name = payload.display_name.strip()
+    session.commit()
+    return speaker
+
+
+@app.get("/projects/{project_id}/revisions", response_model=list[RevisionRead])
+async def list_revisions(project_id: str, session: SessionDep):
+    require_project(session, project_id)
+    return session.scalars(
+        select(TimelineRevision)
+        .where(TimelineRevision.project_id == project_id)
+        .order_by(TimelineRevision.created_at.desc())
+    ).all()
+
+
+@app.post("/projects/{project_id}/revisions/{revision_id}/activate", response_model=ProjectDetail)
+async def activate_revision(
+    project_id: str, revision_id: str, payload: RevisionActivate, session: SessionDep
+):
+    write_lock(session)
+    project = require_project(session, project_id)
+    revision = session.get(TimelineRevision, revision_id)
+    if not revision or revision.project_id != project.id:
+        raise HTTPException(404, "Timeline revision not found")
+    if project.active_revision_id != payload.expected_active_revision_id:
+        raise HTTPException(409, "Active timeline changed; refresh first")
+    if session.scalar(select(Job.id).where(Job.project_id == project_id, Job.status.in_(ACTIVE))):
+        raise HTTPException(409, "Wait for active processing before switching timelines")
+    project.active_revision_id = revision.id
+    project.status = "review"
+    session.commit()
+    return project_detail(session, project)
+
+
+@app.post("/projects/{project_id}/jobs/estimate", response_model=JobEstimate)
+async def job_estimate(project_id: str, payload: JobCreate, session: SessionDep):
+    return estimate_job(session, require_project(session, project_id), payload)
 
 
 @app.post(
@@ -296,30 +465,52 @@ async def create_job(
     payload: JobCreate,
     session: SessionDep,
 ) -> Job:
+    write_lock(session)
     project = require_project(session, project_id)
-    active = session.scalar(
-        select(Job).where(
-            Job.project_id == project_id,
-            Job.stage == payload.stage,
-            Job.status.in_(["queued", "running"]),
+    provider, inputs, cost = prepare_job(session, project, payload)
+    estimate = estimate_job(session, project, payload)
+    if estimate.cached_job_id:
+        return session.get(Job, estimate.cached_job_id)
+    if session.scalar(select(Job.id).where(Job.project_id == project_id, Job.status.in_(ACTIVE))):
+        raise HTTPException(409, "Another job is active; wait or cancel it first")
+    if cost > estimate.remaining_inr:
+        raise HTTPException(
+            402, "Estimated project budget exceeded; adjust local budget configuration"
         )
-    )
-    if active:
-        return active
-    default_provider = {
-        "ingest": "local",
-        "demo_pipeline": "fake",
-        "translate": settings.translator,
-        "synthesize": settings.voice_synthesizer,
-        "export": "local",
-    }[payload.stage]
     job = Job(
-        project_id=project_id, stage=payload.stage, provider=payload.provider or default_provider
+        project_id=project_id,
+        stage=payload.stage,
+        provider=provider,
+        input_json=inputs,
+        estimated_cost_inr=cost,
     )
     project.status = "processing"
     session.add(job)
     session.commit()
     session.refresh(job)
+    return job
+
+
+@app.post("/jobs/{job_id}/resume", response_model=JobRead)
+async def resume_job(job_id: str, session: SessionDep):
+    write_lock(session)
+    job = session.get(Job, job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    if job.status != "failed" or not job.retryable or not job.remote_job_id:
+        raise HTTPException(422, "This job cannot safely resume; create a new request explicitly")
+    if session.scalar(
+        select(Job.id).where(Job.project_id == job.project_id, Job.status.in_(ACTIVE))
+    ):
+        raise HTTPException(409, "Another job is active")
+    job.status = "queued"
+    job.cancel_requested = False
+    job.error_code = None
+    job.error_message = None
+    job.finished_at = None
+    job.checkpoint_json = {**job.checkpoint_json, "poll_started_at": None}
+    session.get(Project, job.project_id).status = "processing"
+    session.commit()
     return job
 
 
@@ -333,6 +524,8 @@ async def cancel_job(job_id: str, session: SessionDep) -> Job:
     job.cancel_requested = True
     if job.status == "queued":
         job.status = "cancelled"
+        job.phase = "cancelled"
+        session.get(Project, job.project_id).status = "review"
     session.commit()
     session.refresh(job)
     return job
@@ -364,20 +557,24 @@ async def project_events(project_id: str, request: Request) -> StreamingResponse
     return StreamingResponse(stream(), media_type="text/event-stream")
 
 
-@app.get("/artifacts/{artifact_id}/download")
-async def download_artifact(artifact_id: str, session: SessionDep) -> StreamingResponse:
+@app.api_route("/artifacts/{artifact_id}/content", methods=["GET", "HEAD"])
+@app.api_route("/artifacts/{artifact_id}/download", methods=["GET", "HEAD"])
+async def download_artifact(artifact_id: str, request: Request, session: SessionDep):
     artifact = session.get(Artifact, artifact_id)
     if not artifact:
         raise HTTPException(status_code=404, detail="Artifact not found")
+    blocked = artifact_block_reason(session, artifact)
+    if blocked:
+        raise HTTPException(403, blocked)
     path = Path(artifact.path).resolve()
     storage_root = settings.storage_root.resolve()
     if not path.is_relative_to(storage_root) or not path.is_file():
         raise HTTPException(status_code=404, detail="Artifact file is unavailable")
 
-    async def chunks() -> AsyncIterator[bytes]:
-        with path.open("rb") as handle:
-            while chunk := handle.read(1024 * 1024):
-                yield chunk
-
-    headers = {"Content-Disposition": f'attachment; filename="{artifact.filename}"'}
-    return StreamingResponse(chunks(), media_type=artifact.media_type, headers=headers)
+    return media_response(
+        path,
+        artifact.media_type,
+        request,
+        artifact.filename,
+        download=request.url.path.endswith("/download"),
+    )

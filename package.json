@@ -1,6 +1,6 @@
 {
   "name": "cinedub",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "workspaces": [
     "apps/web",
@@ -13,9 +13,15 @@
     "lint:web": "npm run lint --workspace @cinedub/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test:web": "npm run test --workspace @cinedub/web",
+    "test:e2e": "playwright test",
+    "contracts:generate": "PYTHONPATH=apps/api .venv/bin/python scripts/generate-contracts.py --write",
+    "contracts:check": "PYTHONPATH=apps/api .venv/bin/python scripts/generate-contracts.py --check",
     "test": "bash scripts/check.sh"
   },
   "engines": {
     "node": ">=22"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.0"
   }
 }

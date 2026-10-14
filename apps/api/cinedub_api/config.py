@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -29,6 +30,25 @@ class Settings(BaseSettings):
     performance_analyzer: str = "local"
     stem_separator: str = "local"
     timing_aligner: str = "local"
+    transcription_model: Literal["saaras:v4", "saaras:v3"] = "saaras:v4"
+    translation_model: Literal["mayura:v1", "sarvam-translate:v1"] = "mayura:v1"
+    translation_style: Literal[
+        "formal", "modern-colloquial", "classic-colloquial", "code-mixed"
+    ] = "modern-colloquial"
+    project_budget_inr: float = Field(default=50.0, gt=0)
+    stt_diarization_inr_per_hour: float = Field(default=45.0, ge=0)
+    translation_inr_per_10k_chars: float = Field(default=20.0, ge=0)
+    provider_poll_seconds: float = Field(default=5.0, gt=0)
+    provider_timeout_seconds: int = Field(default=600, gt=0)
+    synthesis_model: Literal["bulbul:v3"] = "bulbul:v3"
+    synthesis_inr_per_10k_chars: float = Field(default=30.0, ge=0)
+    max_timing_speedup: float = Field(default=1.15, ge=1, le=1.25)
+    local_asr_model_dir: Path = Path("./models/faster-whisper-small.en")
+    local_asr_threads: int = Field(default=4, ge=1, le=8)
+    local_asr_timeout_seconds: int = Field(default=600, ge=10, le=1800)
+    local_separator_model_dir: Path = Path("./models/mrx")
+    local_separator_threads: int = Field(default=4, ge=1, le=8)
+    local_separator_timeout_seconds: int = Field(default=900, ge=10, le=1800)
 
     sarvam_api_key: str | None = Field(
         default=None,

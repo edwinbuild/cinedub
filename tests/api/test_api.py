@@ -81,6 +81,7 @@ async def test_upload_validates_and_ingests_real_media(client, session):
     assert {artifact["kind"] for artifact in detail["artifacts"]} == {
         "source_audio",
         "waveform",
+        "recognition_audio",
     }
 
 
