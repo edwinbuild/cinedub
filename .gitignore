@@ -13,6 +13,16 @@ dist/
 build/
 coverage/
 *.tsbuildinfo
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Local application state and downloaded models
+data/
+models/
+.cache/
 
 # Local configuration and secrets
 .env

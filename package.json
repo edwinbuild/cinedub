@@ -1,0 +1,21 @@
+{
+  "name": "cinedub",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "packages/contracts"
+  ],
+  "scripts": {
+    "dev": "bash scripts/dev.sh",
+    "dev:web": "npm run dev --workspace @cinedub/web",
+    "build:web": "npm run build --workspace @cinedub/web",
+    "lint:web": "npm run lint --workspace @cinedub/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test:web": "npm run test --workspace @cinedub/web",
+    "test": "bash scripts/check.sh"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
