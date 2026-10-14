@@ -93,6 +93,39 @@ class StemReviewRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class MixRender(Base, TimestampMixin):
+    __tablename__ = "mix_renders"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    job_id: Mapped[str] = mapped_column(ForeignKey("jobs.id"), unique=True)
+    revision_id: Mapped[str] = mapped_column(ForeignKey("timeline_revisions.id"))
+    source_asset_id: Mapped[str] = mapped_column(ForeignKey("media_assets.id"))
+    stem_set_id: Mapped[str] = mapped_column(ForeignKey("stem_sets.id"))
+    status: Mapped[str] = mapped_column(String(32), default="needs_review")
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    settings_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    artifacts_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    quality_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    reviews: Mapped[list["MixReviewRecord"]] = relationship(
+        order_by="MixReviewRecord.created_at", lazy="selectin"
+    )
+
+
+class MixReviewRecord(Base):
+    __tablename__ = "mix_review_records"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    mix_id: Mapped[str] = mapped_column(ForeignKey("mix_renders.id"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(32))
+    reviewed_by: Mapped[str] = mapped_column(String(120))
+    note: Mapped[str] = mapped_column(Text)
+    certificate_artifact_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    bundle_artifact_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Speaker(Base, TimestampMixin):
     __tablename__ = "speakers"
 

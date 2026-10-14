@@ -10,6 +10,7 @@ import { ScenePlayer } from "@/components/scene-player";
 import { VoicePanel } from "@/components/voice-panel";
 import { ClonePanel } from "@/components/clone-panel";
 import { StemPanel } from "@/components/stem-panel";
+import { MixPanel } from "@/components/mix-panel";
 import { API_URL, api } from "@/lib/api";
 
 export default function ProjectPage() {
@@ -198,6 +199,7 @@ export default function ProjectPage() {
       <section className="timelinePanel">
         <ScenePlayer artifacts={project.artifacts} sourceId={sourceId} mediaRef={mediaRef} onTime={onTime} stopAt={stopAt} onStop={onStop} />
         <StemPanel project={project} sourceId={sourceId} disabled={locked} onSaved={load} />
+        <MixPanel project={project} disabled={locked || !timelineMatches} unsaved={dirtyIds.size > 0} onSaved={load} onRun={run} />
         {voicePreview && <section className="dubPreview" aria-label="Dialogue-only preview"><h2>{voicePreview.metadata_json.demo ? "Demo-tone preview" : "Dialogue-only preview"}</h2>
           <p className="lineWarning">{previewStale ? "Saved preview uses earlier takes. Render again after selecting current audio." : "Original dialogue, music and effects are excluded from this preview."}</p>
           {voicePreview.access_blocked_reason ? <p className="lineWarning">{voicePreview.access_blocked_reason}</p>

@@ -37,6 +37,10 @@ NAMES = {
     "StemSetRead": "StemSet",
     "StemReview": "StemReview",
     "StemReviewRecordRead": "StemReviewRecord",
+    "MixSettings": "MixSettings",
+    "MixReview": "MixReview",
+    "MixReviewRecordRead": "MixReviewRecord",
+    "MixRenderRead": "MixRender",
 }
 REQUESTS = {
     "JobCreate",
@@ -52,6 +56,8 @@ REQUESTS = {
     "VoiceProfileSelection",
     "ConsentRevocation",
     "StemReview",
+    "MixReview",
+    "MixSettings",
 }
 
 

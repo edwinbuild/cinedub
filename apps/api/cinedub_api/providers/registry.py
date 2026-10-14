@@ -134,7 +134,7 @@ class ProviderRegistry:
                 )
             if capability == "media_exporter":
                 reason = (
-                    "Subtitles and dialogue-only previews; retained-background mixing is pending"
+                    "Subtitles, dialogue previews and reviewed stereo music/effects mix exports"
                 )
             result.append(
                 Capability(

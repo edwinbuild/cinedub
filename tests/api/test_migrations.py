@@ -32,7 +32,7 @@ def test_fresh_and_upgrade_paths_preserve_legacy_edits(tmp_path):
     with sqlite3.connect(fresh) as connection:
         assert (
             connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
-            == "0005_reviewed_stems"
+            == "0006_reviewed_mixes"
         )
         fresh_columns = {row[1] for row in connection.execute("PRAGMA table_info(segments)")}
     legacy = tmp_path / "legacy.db"
@@ -151,3 +151,74 @@ def test_voice_upgrade_preserves_stock_selection_without_approving_legacy_clones
             connection.execute("SELECT scope_json FROM consent_records WHERE id='c'").fetchone()[0]
             == "{}"
         )
+
+
+def test_reviewed_stems_survive_mix_upgrade_and_backup(tmp_path):
+    database = tmp_path / "stems.db"
+    environment = migrate(database, "0005_reviewed_stems")
+    now = "2026-10-15 00:00:00"
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "INSERT INTO projects (id, name, source_language, target_language, status, "
+            "duration_limit_seconds, created_at, updated_at, budget_inr) "
+            "VALUES ('p','Stems','en-IN','ml-IN','review',120,?,?,50)",
+            (now, now),
+        )
+        connection.execute(
+            "INSERT INTO media_assets (id, project_id, kind, path, filename, media_type, "
+            "duration_ms, metadata_json, created_at, updated_at, active_stem_set_id) "
+            "VALUES ('a','p','source','/unused','scene.wav','audio/wav',8000,'{}',?,?,'stems')",
+            (now, now),
+        )
+        connection.execute(
+            "INSERT INTO jobs (id, project_id, stage, status, progress, provider, attempts, "
+            "cancel_requested, input_json, output_json, created_at, updated_at, phase, "
+            "checkpoint_json, estimated_cost_inr, charged_estimate_inr, retryable, warnings_json) "
+            "VALUES ('j','p','separate','completed',1,'local',1,0,'{}','{}',"
+            "?,?,'completed','{}',0,0,0,'[]')",
+            (now, now),
+        )
+        connection.execute(
+            "INSERT INTO stem_sets VALUES "
+            "('stems','p','a','j','local','pinned-model','approved',2,'{}','{}',?,?)",
+            (now, now),
+        )
+        connection.execute(
+            "INSERT INTO stem_review_records VALUES "
+            "('r','stems',2,'approved','Fixture reviewer','Preserve review history',?)",
+            (now,),
+        )
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from cinedub_api.database import create_database; create_database()",
+        ],
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+    )
+    backups = list(tmp_path.glob("stems.db.v02-stems-*.bak"))
+    assert len(backups) == 1
+    with sqlite3.connect(backups[0]) as connection:
+        assert (
+            connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
+            == "0005_reviewed_stems"
+        )
+    with sqlite3.connect(database) as connection:
+        assert (
+            connection.execute("SELECT active_stem_set_id FROM media_assets").fetchone()[0]
+            == "stems"
+        )
+        assert connection.execute("SELECT status, version FROM stem_sets").fetchone() == (
+            "approved",
+            2,
+        )
+        assert (
+            connection.execute("SELECT note FROM stem_review_records").fetchone()[0]
+            == "Preserve review history"
+        )
+        assert connection.execute("SELECT COUNT(*) FROM mix_renders").fetchone()[0] == 0

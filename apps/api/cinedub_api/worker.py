@@ -23,6 +23,8 @@ from .media import (
     write_srt,
     write_waveform,
 )
+from .mix_packaging import process_package_mix
+from .mix_processing import process_render_mix
 from .models import (
     Artifact,
     Job,
@@ -333,6 +335,8 @@ PROCESSORS = {
     "register_voice": process_register_voice,
     "delete_voice": process_delete_voice,
     "separate": process_separate,
+    "render_mix": process_render_mix,
+    "package_mix": process_package_mix,
 }
 
 
@@ -377,7 +381,7 @@ def process_once(session: Session) -> bool:
         job.phase = "completed"
         if job.stage == "ingest":
             project.status = "draft"
-        elif job.stage in {"export", "render_preview"}:
+        elif job.stage in {"export", "render_preview", "package_mix"}:
             project.status = "ready"
         else:
             project.status = "review"
@@ -409,7 +413,11 @@ def process_once(session: Session) -> bool:
         ):
             job.retryable = True
         job.error_code = type(exc).__name__
-        job.error_message = safe_error(exc)
+        job.error_message = (
+            "Local processing deadline exceeded; the process stopped. Retry explicitly."
+            if isinstance(exc, TimeoutError) and job.provider == "local"
+            else safe_error(exc)
+        )
         if job.stage == "register_voice" and job.checkpoint_json.get("pending_registration"):
             job.error_code = "uncertain_registration"
             job.error_message = (

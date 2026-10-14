@@ -308,13 +308,11 @@ async def revoke_voice_consent(profile_id: str, payload: ConsentRevocation, sess
                 for voice in job.input_json.get("voices", {}).values()
             )
             or (
-                job.stage == "render_preview"
+                job.stage in {"render_preview", "render_mix", "package_mix"}
                 and any(
-                    session.get(Artifact, candidate_id)
-                    .metadata_json.get("voice", {})
-                    .get("profile_id")
-                    == profile.id
+                    not candidate or artifact_block_reason(session, candidate)
                     for candidate_id in job.input_json.get("candidates", {}).values()
+                    for candidate in [session.get(Artifact, candidate_id)]
                 )
             )
         ):

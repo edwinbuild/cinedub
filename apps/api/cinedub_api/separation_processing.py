@@ -1,6 +1,5 @@
 """Durable source-bound cinematic stems. Originals and earlier runs are never overwritten."""
 
-import hashlib
 import json
 import math
 from pathlib import Path
@@ -8,17 +7,12 @@ from pathlib import Path
 from sqlalchemy import select
 
 from .config import get_settings
-from .media import probe_media, run_ffmpeg
+from .media import canonical_audio_filter, file_digest, probe_media, run_ffmpeg
 from .media_quality import measure_loudness
 from .models import Artifact, MediaAsset, ProviderRun, StemSet
 from .processing import check_cancel, checkpoint
 from .providers import ProviderRegistry
 from .providers.local_separation import read_manifest
-
-
-def file_digest(path):
-    with Path(path).open("rb") as handle:
-        return hashlib.file_digest(handle, "sha256").hexdigest()
 
 
 def process_separate(session, job):
@@ -52,8 +46,7 @@ def process_separate(session, job):
             "-ar",
             "44100",
             "-af",
-            f"aresample=44100,apad=whole_len={round(source.duration_ms * 44.1)},"
-            f"atrim=end_sample={round(source.duration_ms * 44.1)}",
+            canonical_audio_filter(source.metadata_json, 44100),
             "-f",
             "f32le",
             str(raw_path),
@@ -100,7 +93,7 @@ def process_separate(session, job):
         )
     if metadata["model"] != job.input_json["model"]:
         raise ValueError("Separation output model does not match scheduled inputs")
-    metadata = {**metadata, "source_sha256": source_hash}
+    metadata = {**metadata, "source_sha256": source_hash, "timeline_mapping_version": 2}
     checkpoint(session, job, "validating_stems")
     stem_set = StemSet(
         project_id=job.project_id,

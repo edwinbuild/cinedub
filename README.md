@@ -1,6 +1,6 @@
 # CineDub
 
-A local English → Malayalam cinema dubbing workspace. The current development branch connects media playback, transcription, translation, human review, stock/consented-voice candidates, timing fit and dialogue-only previews. Optional offline models support English transcription and reviewed cinematic dialogue/music/effects separation. Cloning contracts and consent/reference workflows are connected but not live-verified. Final background mixing and emotion preservation remain unfinished.
+A local English → Malayalam cinema dubbing workspace. The current development branch connects media playback, transcription, translation, human review, stock/consented-voice candidates, timing fit and stereo exports with reviewed music/effects. Optional offline models support English transcription and cinematic dialogue/music/effects separation. Cloning contracts and consent/reference workflows are connected but not live-verified. Natural Malayalam quality, forced alignment and emotion preservation remain unfinished.
 
 `OLD/` remains an ignored reference archive. Nothing in the current application imports or executes it.
 
@@ -25,7 +25,7 @@ PORT=3001 npm run dev
 
 Open <http://127.0.0.1:3001>. The launcher derives the allowed browser origin from this port and passes an explicit port to Next.js rather than silently moving to a different origin. Run only one API and worker against a local workspace. The worker holds an exclusive SQLite-database lock (or a storage-directory lock for other databases).
 
-SQLite, local filesystem artifacts and a separate database-backed worker are the development defaults. Before upgrading a previous schema, application startup creates a consistent sibling `.v01-*.bak`, `.v02-*.bak`, `.v02-voices-*.bak` or `.v02-consent-*.bak` backup. Migration 0002 preserves existing dialogue and approvals in a legacy/demo revision; 0003 adds candidates; 0004 adds scoped clone consent and explicit speaker voice selection; 0005 adds reviewed source-bound stems. Stock choices survive upgrade; legacy generic clone approvals require new scoped consent. To return to an older schema, stop all processes and restore its backup; dropping history through a downgrade is intentionally unsupported.
+SQLite, local filesystem artifacts and a separate database-backed worker are the development defaults. Before upgrading a previous schema, application startup creates a consistent sibling `.v01-*.bak`, `.v02-*.bak`, `.v02-voices-*.bak`, `.v02-consent-*.bak` or `.v02-stems-*.bak` backup. Migration 0002 preserves existing dialogue and approvals in a legacy/demo revision; 0003 adds candidates; 0004 adds scoped clone consent and explicit speaker voice selection; 0005 adds reviewed source-bound stems; 0006 adds mix renders and listening acceptance history. Stock choices survive upgrade; legacy generic clone approvals require new scoped consent. To return to an older schema, stop all processes and restore its backup; dropping history through a downgrade is intentionally unsupported.
 
 ## Use real Sarvam processing
 
@@ -74,7 +74,7 @@ PYTHONPATH=apps/api .venv/bin/python scripts/setup-local-separation.py
 
 The optional MRX model is about 30 MiB on disk, with offline CPU inference and no PyTorch/GPU requirement. Four threads, disposable model process, 10 GiB address-space limit and a 15-minute deadline bound this two-minute-scene profile. A controlled 18.644-second synthetic clip used about 1.45 GiB peak model-process RAM and 9.2 seconds inference time; not an accuracy or maximum-resource guarantee. It is a cinematic three-stem separator, not a music-vocal remover. See [model/license decision](docs/decisions/0005-cinematic-separation.md) and [measured limitations](docs/evaluations/local-separation.md).
 
-Restart the app, import a scene and choose **Separate dialogue & background**. Listen to dialogue, music and effects; enter reviewer/notes and approve or reject. Originals and earlier runs remain unchanged. New runs never replace the approved set automatically. To transcribe cleaned dialogue, explicitly choose **Reviewed dialogue stem** in **Transcription audio**. Original audio remains the default. Approval records a human decision, not an automatic quality score. Independent listening players are not synchronized scene proxies; final background mixing is not connected yet.
+Restart the app, import a scene and choose **Separate dialogue & background**. Listen to dialogue, music and effects; enter reviewer/notes and approve or reject. Originals and earlier runs remain unchanged. New runs never replace the approved set automatically. To transcribe cleaned dialogue, explicitly choose **Reviewed dialogue stem** in **Transcription audio**. Original audio remains the default. Approval also enables retained music/effects mixing below. Independent stem listening players are not synchronized scene proxies.
 
 To verify actual local separation followed by local recognition, install eSpeak NG and both models, then run:
 
@@ -83,6 +83,26 @@ CINEDUB_E2E_SEPARATOR=1 CINEDUB_E2E_TRANSCRIBER=local npm run test:e2e -- tests/
 ```
 
 This uses isolated temporary projects and original synthetic media, not paid APIs or actor recordings. The default suite skips this optional inference test.
+
+## Mix reviewed dialogue with music and effects
+
+Open **Mix & export** in the scene editor after approving the source stems, approving every translated line and explicitly selecting a timing-ready take for each line. Select the active timeline's source before reviewing. Adjust dialogue/music/effects gains or mute a background stem, then **Render retained-background mix**. The renderer never maps original dialogue into the output, but separated background may retain speech leakage: listen before accepting.
+
+Defaults are 48 kHz stereo, -23 LUFS and maximum -2 dBTP. Linear normalization preserves dynamics when feasible; dynamics processing needs explicit opt-in. Targets and actual measurements are recorded in the report. Failed level, checksum, duration, codec or current-edit checks publish no valid render.
+
+Download a PCM24 WAV master, PCM16 listening copy, matching Malayalam SRT, render manifest and (for video input) original-resolution SDR H.264/AAC MP4. Compatible H.264 picture is copied rather than downscaled to the browser proxy. This profile does not perform HDR conversion, surround or theatrical mastering. See [profile and tolerances](docs/decisions/0006-reviewed-stereo-exports.md).
+
+Listen against picture, enter reviewer/notes and confirm review, then **Approve mix and export bundle**. A worker job verifies the files and creates a ZIP plus an acceptance certificate. New edits or stem/voice changes make older renders historical; rejection does not erase them. Clone consent revocation blocks dependent media, manifests and bundles. Demo takes remain labelled demo tones even after simulated approval.
+
+Audio preparation now preserves audio-track offsets relative to the container timeline. If an older scene has an offset track, prepare/separate it again and review a fresh transcript; zero-offset scenes are unaffected.
+
+The actual separator-to-export browser workflow uses generated video/audio and no paid APIs:
+
+```bash
+CINEDUB_E2E_SEPARATOR=1 npm run test:e2e -- tests/e2e/mix-workflow.spec.ts
+```
+
+It needs the optional separator and eSpeak NG; speech/translation remain labelled fixtures. [Verification and natural-scene acceptance](docs/evaluations/retained-background-mix.md) distinguish these integration checks from human quality review.
 
 ## Consented voice references and cloning
 
@@ -136,7 +156,7 @@ This uses temporary projects, no Sarvam key and no model download. The ordinary 
 ## Following milestones
 
 - Live stock-voice listening, Malayalam expert review and timing-quality evaluation.
-- Live consented-cloning acceptance, natural-scene separation evaluation and final mixing.
+- Live consented-cloning acceptance and natural-scene separation/mix listening.
 - Forced alignment and measured performance/emotion analysis.
 - Broader reliability, editing polish and human quality evaluation before a v1.0 completion claim.
 

@@ -77,6 +77,48 @@ class StemReview(BaseModel):
     note: str = Field(default="", max_length=1000)
 
 
+class MixSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    profile: Literal["stereo-review-v1"] = "stereo-review-v1"
+    dialogue_gain_db: float = Field(default=0, ge=-24, le=12, allow_inf_nan=False)
+    music_gain_db: float = Field(default=0, ge=-60, le=12, allow_inf_nan=False)
+    effects_gain_db: float = Field(default=0, ge=-60, le=12, allow_inf_nan=False)
+    music_muted: bool = False
+    effects_muted: bool = False
+    target_lufs: float = Field(default=-23, ge=-30, le=-14, allow_inf_nan=False)
+    true_peak_dbfs: float = Field(default=-2, ge=-6, le=-2, allow_inf_nan=False)
+    allow_dynamic_normalization: bool = False
+
+
+class MixReview(BaseModel):
+    status: Literal["approved", "rejected"]
+    expected_version: int = Field(ge=1)
+    reviewed_by: str = Field(min_length=1, max_length=120)
+    note: str = Field(default="", max_length=1000)
+    listening_confirmed: bool = False
+
+
+class MixReviewRecordRead(StemReviewRecordRead):
+    certificate_artifact_id: str | None
+    bundle_artifact_id: str | None
+
+
+class MixRenderRead(ORMModel):
+    id: str
+    job_id: str
+    revision_id: str
+    source_asset_id: str
+    stem_set_id: str
+    status: Literal["needs_review", "approved", "rejected"]
+    version: int
+    settings_json: dict
+    artifacts_json: dict
+    quality_json: dict
+    created_at: datetime
+    reviews: list[MixReviewRecordRead]
+    stale_reason: str | None = None
+
+
 class SpeakerRead(ORMModel):
     id: str
     project_id: str
@@ -155,6 +197,7 @@ class JobCreate(BaseModel):
         "register_voice",
         "delete_voice",
         "separate",
+        "render_mix",
     ]
     provider: Literal["fake", "sarvam", "local"] | None = None
     source_asset_id: str | None = None
@@ -170,6 +213,7 @@ class JobCreate(BaseModel):
     )
     reference_reviewed: bool = False
     transcription_input: Literal["original", "dialogue_stem"] = "original"
+    mix_settings: MixSettings = Field(default_factory=MixSettings)
 
 
 class JobEstimate(BaseModel):
@@ -227,6 +271,7 @@ class ProjectDetail(ProjectRead):
     reserved_inr: float
     voice_profiles: list["VoiceProfileRead"]
     stem_sets: list[StemSetRead]
+    mixes: list[MixRenderRead]
 
 
 class ConsentInput(BaseModel):

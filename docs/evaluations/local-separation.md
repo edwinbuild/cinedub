@@ -31,4 +31,12 @@ Unit/integration checks cover STFT inverse identity, overlap crossfades, stereo 
 
 The opt-in browser test executes real MRX and local ASR, plays three browser-decodable listening files, explicitly approves a fixture set, recognizes its dialogue, keeps the approved choice during a rerun and rejects it back to original-audio routing. Its simulated review checkbox is **not** human listening evidence.
 
-Still required: authorized natural-film clips, dialogue leakage measurement/listening, quiet and overlapping dialogue, ambience/transient retention, cross-chunk continuity, phase/stereo review, two-minute resource envelope, and human acceptance. Final retained-background mixing/loudness/export remains a separate milestone.
+Still required: authorized natural-film clips, dialogue leakage measurement/listening, quiet and overlapping dialogue, ambience/transient retention, cross-chunk continuity, phase/stereo review and human acceptance. Maximum-duration resource measurement is recorded below; reviewed mix exports have independent technical and listening gates.
+
+## Two minute resource run on 2026-10-15
+
+A 120-second stereo input, made by looping the original synthetic mixture, completed all 16 inference chunks through the bounded `LocalSeparator` adapter. Reported child inference latency was **44,486 ms**, peak process RSS **1,849.1 MiB** (about 1.81 GiB), CPU four threads and zero input normalization gain. The parent enforced a 180-second deadline; the child retained its 10 GiB address-space cap. This measures one synthetic maximum-duration input, not all content or total application memory. The host had 30 GiB installed RAM and about 11 GiB available before this run; the result supports the 24 GiB design budget but is not a physical 24 GiB host certification.
+
+All three float32 WAV masters had exactly 5,760,000 frames, 48 kHz, two channels and 120,000 ms duration, and passed a full FFmpeg decode. The ignored local evidence is under `data/evaluation/mrx-120s-PTjf5n/`. Reconstruction SNR (22.73 dB) remains a sum diagnostic, not isolation quality.
+
+The short-scene resource envelope is now measured at two minutes on this host. Natural-scene leakage, effects/stereo and human listening gates remain open. [Reviewed stereo mixing/export](../decisions/0006-reviewed-stereo-exports.md) was connected after the initial separation benchmark.

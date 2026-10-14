@@ -54,7 +54,7 @@ export function StemPanel({ project, sourceId, disabled, onSaved }: {
   const sets = project.stem_sets.filter((stems) => stems.source_asset_id === sourceId);
   if (!sets.length) return null;
   return <section className="stemPanel" aria-label="Separated audio review"><h2>Review separated audio</h2>
-    <p>Original media is unchanged. New runs do not replace an approved choice. Approval enables the dialogue stem as an explicit transcription input; background mixing is not connected yet.</p>
+    <p>Original media is unchanged. New runs do not replace an approved choice. Approval enables dialogue-stem transcription and music/effects mixing for this source.</p>
     {sets.map((stems) => <StemReviewCard key={stems.id} stems={stems} project={project} disabled={disabled} onSaved={onSaved} />)}
   </section>;
 }

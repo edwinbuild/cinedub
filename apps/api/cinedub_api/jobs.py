@@ -15,6 +15,7 @@ from .consent import (
     profile_is_selected,
     validate_voice_use,
 )
+from .mixes import freeze_background
 from .models import (
     Artifact,
     Job,
@@ -63,6 +64,7 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
         "synthesize": settings.voice_synthesizer,
         "export": "local",
         "render_preview": "local",
+        "render_mix": "local",
         "prepare_reference": "local",
         "register_voice": settings.voice_synthesizer,
         "delete_voice": settings.voice_synthesizer,
@@ -127,6 +129,11 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
                 "timeout_seconds": settings.local_separator_timeout_seconds,
             }
         )
+    if (
+        payload.stage == "render_mix"
+        and shutil.disk_usage(settings.storage_root).free < 2 * 1024**3
+    ):
+        raise HTTPException(422, "Keep at least 2 GiB free for mix/export intermediates")
     if payload.stage in {"prepare_reference", "register_voice", "delete_voice"}:
         profile = (
             session.get(VoiceProfile, payload.voice_profile_id)
@@ -253,10 +260,12 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
                     (
                         item
                         for item in session.scalars(
-                            select(Artifact).where(
+                            select(Artifact)
+                            .where(
                                 Artifact.project_id == project.id,
                                 Artifact.kind == "recognition_audio",
                             )
+                            .order_by(Artifact.created_at.desc())
                         ).all()
                         if item.metadata_json.get("source_asset_id") == source.id
                     ),
@@ -267,7 +276,7 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
                 inputs["recognition_artifact_id"] = audio.id
         if provider == "sarvam":
             cost = source.duration_ms / 3_600_000 * settings.stt_diarization_inr_per_hour
-    if payload.stage in {"translate", "synthesize", "export", "render_preview"}:
+    if payload.stage in {"translate", "synthesize", "export", "render_preview", "render_mix"}:
         revision_id = payload.revision_id or project.active_revision_id
         revision = session.get(TimelineRevision, revision_id) if revision_id else None
         if not revision or revision.project_id != project.id:
@@ -278,6 +287,10 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
         if not segments:
             raise HTTPException(422, "This timeline has no speech to process")
         if payload.segment_ids is not None:
+            if payload.stage == "render_mix":
+                raise HTTPException(
+                    422, "Retained-background exports require the complete timeline"
+                )
             ids = set(payload.segment_ids)
             if not ids or not ids.issubset({line.id for line in segments}):
                 raise HTTPException(422, "Selected lines do not belong to this revision")
@@ -312,7 +325,7 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
                 )
         voices = {}
         candidates = {}
-        if payload.stage in {"synthesize", "render_preview"}:
+        if payload.stage in {"synthesize", "render_preview", "render_mix"}:
             if any(
                 line.status != "approved" or not line.translated_text.strip() for line in segments
             ):
@@ -414,6 +427,19 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
                 if not revision.source_asset_id:
                     raise HTTPException(422, "A source scene is required to render a preview")
                 inputs["candidates"] = candidates
+                if payload.stage == "render_mix":
+                    inputs["candidate_hashes"] = {
+                        key: session.get(Artifact, value).metadata_json.get("sha256")
+                        for key, value in candidates.items()
+                    }
+                    if payload.allow_incomplete:
+                        raise HTTPException(422, "Review and select every line before mix export")
+                    try:
+                        inputs.update(
+                            freeze_background(session, project, revision, payload.mix_settings)
+                        )
+                    except ValueError as exc:
+                        raise HTTPException(422, str(exc)) from exc
         if (
             payload.stage == "export"
             and any(not line.translated_text.strip() for line in segments)

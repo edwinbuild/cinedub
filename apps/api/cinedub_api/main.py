@@ -20,10 +20,12 @@ from .dependencies import SessionDep, require_project
 from .diagnostics import hardware_diagnostics
 from .jobs import ACTIVE, budget_totals, estimate_job, prepare_job, write_lock
 from .media import MediaError, probe_media, safe_filename
+from .mixes import mix_read
 from .models import (
     Artifact,
     Job,
     MediaAsset,
+    MixRender,
     Project,
     ProviderRun,
     Segment,
@@ -35,6 +37,7 @@ from .models import (
     new_id,
 )
 from .providers import ProviderRegistry
+from .routes.mixes import router as mixes_router
 from .routes.stems import router as stems_router
 from .routes.voices import router as voices_router
 from .schemas import (
@@ -85,6 +88,7 @@ app.add_middleware(
 
 app.include_router(voices_router)
 app.include_router(stems_router)
+app.include_router(mixes_router)
 
 
 def artifact_read(artifact: Artifact, session: Session | None = None) -> ArtifactRead:
@@ -140,6 +144,14 @@ def project_detail(session: Session, project: Project) -> ProjectDetail:
         ],
         spent_estimate_inr=budget_totals(session, project.id)[0],
         reserved_inr=budget_totals(session, project.id)[1],
+        mixes=[
+            mix_read(session, item)
+            for item in session.scalars(
+                select(MixRender)
+                .where(MixRender.project_id == project.id)
+                .order_by(MixRender.created_at.desc())
+            ).all()
+        ],
         stem_sets=[
             StemSetRead.model_validate(item)
             for item in session.scalars(

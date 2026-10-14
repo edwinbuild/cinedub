@@ -8,7 +8,7 @@ from sqlalchemy import select
 from .audio import combine_audio, fit_dialogue, mux_dialogue_preview, render_dialogue_mix
 from .config import get_settings
 from .consent import artifact_block_reason, profile_is_selected, validate_voice_use
-from .media import probe_media
+from .media import file_digest, probe_media
 from .models import Artifact, MediaAsset, ProviderRun, Segment, VoiceProfile
 from .processing import charge, check_cancel, checkpoint, split_translation
 from .providers import ProviderRegistry
@@ -145,6 +145,7 @@ def process_synthesize(session, job):
                 "voice": voice,
                 "signature": candidate_signature(snapshot, voice),
                 "demo": job.provider == "fake",
+                "sha256": file_digest(fitted if fit["fit_status"] == "ready" else raw),
             },
         )
         session.add(artifact)

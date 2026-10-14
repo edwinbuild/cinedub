@@ -97,6 +97,33 @@ export interface Artifact {
   access_blocked_reason: string | null;
 }
 
+export interface MixRender {
+  id: string;
+  job_id: string;
+  revision_id: string;
+  source_asset_id: string;
+  stem_set_id: string;
+  status: "needs_review" | "approved" | "rejected";
+  version: number;
+  settings_json: Record<string, unknown>;
+  artifacts_json: Record<string, unknown>;
+  quality_json: Record<string, unknown>;
+  created_at: string;
+  reviews: Array<MixReviewRecord>;
+  stale_reason: string | null;
+}
+
+export interface MixReviewRecord {
+  id: string;
+  version: number;
+  status: "approved" | "rejected";
+  reviewed_by: string;
+  note: string;
+  created_at: string;
+  certificate_artifact_id: string | null;
+  bundle_artifact_id: string | null;
+}
+
 export interface TimelineRevision {
   id: string;
   source_asset_id: string | null;
@@ -165,10 +192,23 @@ export interface ProjectDetail {
   reserved_inr: number;
   voice_profiles: Array<VoiceProfile>;
   stem_sets: Array<StemSet>;
+  mixes: Array<MixRender>;
+}
+
+export interface MixSettings {
+  profile?: "stereo-review-v1";
+  dialogue_gain_db?: number;
+  music_gain_db?: number;
+  effects_gain_db?: number;
+  music_muted?: boolean;
+  effects_muted?: boolean;
+  target_lufs?: number;
+  true_peak_dbfs?: number;
+  allow_dynamic_normalization?: boolean;
 }
 
 export interface JobRequest {
-  stage: "ingest" | "demo_pipeline" | "transcribe" | "translate" | "synthesize" | "export" | "render_preview" | "prepare_reference" | "register_voice" | "delete_voice" | "separate";
+  stage: "ingest" | "demo_pipeline" | "transcribe" | "translate" | "synthesize" | "export" | "render_preview" | "prepare_reference" | "register_voice" | "delete_voice" | "separate" | "render_mix";
   provider?: "fake" | "sarvam" | "local" | null;
   source_asset_id?: string | null;
   revision_id?: string | null;
@@ -181,6 +221,7 @@ export interface JobRequest {
   registration_allowance_inr?: number | null;
   reference_reviewed?: boolean;
   transcription_input?: "original" | "dialogue_stem";
+  mix_settings?: MixSettings;
 }
 
 export interface JobEstimate {
@@ -307,4 +348,12 @@ export interface StemReview {
   expected_active_stem_set_id: string | null;
   reviewed_by: string;
   note?: string;
+}
+
+export interface MixReview {
+  status: "approved" | "rejected";
+  expected_version: number;
+  reviewed_by: string;
+  note?: string;
+  listening_confirmed?: boolean;
 }

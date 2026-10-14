@@ -15,6 +15,8 @@ import type {
   ConsentRecord,
   StemSet,
   StemReview,
+  MixRender,
+  MixReview,
 } from "@cinedub/contracts";
 
 export const API_URL = process.env.NEXT_PUBLIC_CINEDUB_API_URL ?? "http://127.0.0.1:8000";
@@ -106,6 +108,9 @@ export const api = {
   capabilities: () => request<CapabilityStatus[]>("/capabilities"),
   diagnostics: () => request<HardwareStatus>("/diagnostics"),
   reviewStems: (id: string, payload: StemReview) => request<StemSet>(`/stem-sets/${id}/review`, {
+    method: "POST", body: JSON.stringify(payload),
+  }),
+  reviewMix: (id: string, payload: MixReview) => request<MixRender>(`/mixes/${id}/review`, {
     method: "POST", body: JSON.stringify(payload),
   }),
 };
