@@ -8,6 +8,9 @@ from .local_asr import LocalTranscriber, availability
 from .local_performance import LocalPerformanceAnalyzer
 from .local_separation import LocalSeparator
 from .local_separation import availability as separator_availability
+from .local_take_analysis import LocalTakeAnalyzer
+from .local_take_analysis import availability as take_analysis_availability
+from .local_target_alignment import availability as target_alignment_availability
 from .sarvam import SarvamProvider
 from .transcription import SarvamTranscriber
 
@@ -93,6 +96,15 @@ class ProviderRegistry:
             raise ValueError("This acoustic performance adapter is not installed")
         return LocalPerformanceAnalyzer()
 
+    def take_analyzer(self, name: str | None = None, options: dict | None = None):
+        if (name or self.settings.performance_analyzer) != "local":
+            raise ValueError("This source/take performance adapter is not installed")
+        values = options or {}
+        return LocalTakeAnalyzer(
+            values.get("threads", self.settings.local_aligner_threads),
+            values.get("timeout_seconds", self.settings.local_take_analyzer_timeout_seconds),
+        )
+
     def capabilities(self) -> list[Capability]:
         sarvam_ready = bool(self.settings.sarvam_api_key)
         values = {
@@ -104,6 +116,7 @@ class ProviderRegistry:
             "performance_analyzer": self.settings.performance_analyzer,
             "stem_separator": self.settings.stem_separator,
             "timing_aligner": self.settings.timing_aligner,
+            "target_timing_aligner": self.settings.target_timing_aligner,
             "media_exporter": "local",
         }
         implemented = {
@@ -122,6 +135,7 @@ class ProviderRegistry:
             ("stem_separator", "local"),
             ("timing_aligner", "local"),
             ("performance_analyzer", "local"),
+            ("target_timing_aligner", "local"),
         }
         result = []
         for capability, provider in values.items():
@@ -136,15 +150,26 @@ class ProviderRegistry:
                 available, reason = availability(self.settings.local_asr_model_dir)
             if capability == "stem_separator" and provider == "local":
                 available, reason = separator_availability(self.settings.local_separator_model_dir)
-            if capability in {"timing_aligner", "performance_analyzer"} and provider == "local":
+            if capability == "timing_aligner" and provider == "local":
                 available, reason = alignment_availability(self.settings.local_aligner_model_dir)
+            if capability == "target_timing_aligner" and provider == "local":
+                available, reason = target_alignment_availability(
+                    self.settings.local_target_aligner_model_dir
+                )
+            if capability == "performance_analyzer" and provider == "local":
+                available = take_analysis_availability()
+                reason = (
+                    None
+                    if available
+                    else "Install the optional local-alignment extra for acoustic analysis"
+                )
             is_implemented = (capability, provider) in implemented
             configured = provider != "sarvam" or sarvam_ready
             if provider == "sarvam" and available:
                 reason = "Configured adapter; live success is recorded per provider job"
             if capability == "performance_analyzer":
                 reason = (
-                    "Pitch/level/energy pauses measured with alignment; not emotion inference"
+                    "Local source/take pitch, level and energy pauses; not emotion inference"
                     if available
                     else reason
                 )

@@ -208,7 +208,7 @@ export interface MixSettings {
 }
 
 export interface JobRequest {
-  stage: "ingest" | "demo_pipeline" | "transcribe" | "translate" | "synthesize" | "export" | "render_preview" | "prepare_reference" | "register_voice" | "delete_voice" | "separate" | "render_mix" | "align";
+  stage: "ingest" | "demo_pipeline" | "transcribe" | "translate" | "synthesize" | "export" | "render_preview" | "prepare_reference" | "register_voice" | "delete_voice" | "separate" | "render_mix" | "align" | "analyze_takes";
   provider?: "fake" | "sarvam" | "local" | null;
   source_asset_id?: string | null;
   revision_id?: string | null;
@@ -222,6 +222,8 @@ export interface JobRequest {
   reference_reviewed?: boolean;
   transcription_input?: "original" | "dialogue_stem";
   mix_settings?: MixSettings;
+  candidate_ids?: Array<string> | null;
+  include_target_alignment?: boolean;
 }
 
 export interface JobEstimate {
@@ -431,4 +433,66 @@ export interface AlignmentApply {
   expected_version: number;
   replace_reviewed_timing?: boolean;
   listening_confirmed?: boolean;
+}
+
+export interface PerformanceComparison {
+  rms_delta_db: number | null;
+  pitch_shift_semitones: number | null;
+  source_active_span_ms: number;
+  target_active_span_ms: number;
+  source_internal_pause_ms: number;
+  target_internal_pause_ms: number;
+  active_span_delta_ms: number;
+  fitted_padding_ms: number;
+}
+
+export interface TakePerformanceLine {
+  segment_id: string;
+  speaker_id: string | null;
+  segment_version: number;
+  candidate_id: string;
+  candidate_sha256: string;
+  source_text: string;
+  translated_text: string;
+  start_ms: number;
+  end_ms: number;
+  voice: Record<string, unknown>;
+  signature: string;
+  demo: boolean;
+  evaluation_fixture: boolean;
+  source_performance: AcousticPerformance;
+  target_performance: AcousticPerformance;
+  comparison: PerformanceComparison;
+  target_alignment: TargetWordAlignment;
+  warnings: Array<string>;
+  stale_reason: string | null;
+}
+
+export interface TargetWordAlignment {
+  status: "not_requested" | "aligned" | "needs_review" | "unalignable";
+  model: string | null;
+  words: Array<AlignedWord>;
+  acoustic_score: number | null;
+  greedy_text: string;
+  text_error_ratio: number | null;
+  warnings: Array<string>;
+}
+
+export interface TakePerformanceReport {
+  schema_version: 1;
+  project_id: string;
+  revision_id: string;
+  source_asset_id: string;
+  source_sha256: string;
+  recognition_artifact_id: string;
+  recognition_sha256: string;
+  stem_set_id: string | null;
+  stem_set_version: number | null;
+  provider: string;
+  model: string;
+  target_language: "en-IN" | "ml-IN";
+  metadata: Record<string, unknown>;
+  lines: Array<TakePerformanceLine>;
+  warnings: Array<string>;
+  stale_reason: string | null;
 }

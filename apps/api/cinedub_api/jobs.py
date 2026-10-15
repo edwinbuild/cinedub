@@ -35,7 +35,12 @@ from .providers.local_asr import MODEL_NAME, availability, read_manifest
 from .providers.local_separation import MODEL_NAME as SEPARATOR_MODEL
 from .providers.local_separation import availability as separator_availability
 from .providers.local_separation import read_manifest as separator_manifest
+from .providers.local_take_analysis import availability as take_analyzer_available
+from .providers.local_target_alignment import MODEL_NAME as TARGET_ALIGNMENT_MODEL
+from .providers.local_target_alignment import availability as target_aligner_available
+from .providers.local_target_alignment import read_manifest as target_aligner_manifest
 from .schemas import JobCreate, JobEstimate
+from .take_analysis import freeze_take_analysis
 from .timeline import revision_segments
 from .voices import candidate_signature
 
@@ -74,6 +79,7 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
         "delete_voice": settings.voice_synthesizer,
         "separate": settings.stem_separator,
         "align": settings.timing_aligner,
+        "analyze_takes": settings.performance_analyzer,
     }
     provider = payload.provider or defaults[payload.stage]
     if payload.stage in {"transcribe", "translate", "synthesize", "register_voice", "delete_voice"}:
@@ -113,10 +119,45 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
     elif provider != defaults[payload.stage]:
         raise HTTPException(422, "Provider is incompatible with this stage")
     inputs = payload.model_dump(exclude={"provider", "force_new"})
+    if payload.stage != "analyze_takes":
+        if payload.candidate_ids is not None or payload.include_target_alignment:
+            raise HTTPException(422, "Take-analysis options require the analyze_takes stage")
+        # Preserve existing paid-job fingerprints when adding independent review options.
+        inputs.pop("candidate_ids")
+        inputs.pop("include_target_alignment")
     inputs.update(
         {"source_language": project.source_language, "target_language": project.target_language}
     )
     cost = 0.0
+    if payload.stage == "analyze_takes":
+        if provider != "local" or not take_analyzer_available():
+            raise HTTPException(422, "Install the optional local acoustic analysis adapter")
+        try:
+            inputs.update(freeze_take_analysis(session, project, payload))
+        except (OSError, ValueError) as exc:
+            raise HTTPException(422, str(exc)) from exc
+        inputs.update(
+            {
+                "model": "acoustic-dsp-v1",
+                "threads": settings.local_aligner_threads,
+                "timeout_seconds": settings.local_take_analyzer_timeout_seconds,
+            }
+        )
+        if payload.include_target_alignment:
+            if settings.target_timing_aligner != "local" or project.target_language != "ml-IN":
+                raise HTTPException(422, "This target-language alignment adapter is not installed")
+            ready, reason = target_aligner_available(settings.local_target_aligner_model_dir)
+            if not ready:
+                raise HTTPException(422, reason)
+            inputs.update(
+                {
+                    "target_alignment_model": TARGET_ALIGNMENT_MODEL,
+                    "target_model_dir": str(settings.local_target_aligner_model_dir.resolve()),
+                    "target_model_manifest": target_aligner_manifest(
+                        settings.local_target_aligner_model_dir
+                    ),
+                }
+            )
     if payload.stage == "align":
         if provider != "local":
             raise HTTPException(422, "This alignment adapter is not installed")

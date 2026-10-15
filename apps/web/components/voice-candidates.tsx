@@ -18,7 +18,7 @@ export function VoiceCandidates({ segment, artifacts, disabled, onSaved }: {
   }
   return <div className="candidateList" aria-label={`Audio candidates for line ${segment.index + 1}`}>
     {candidates.map((candidate, index) => <div key={candidate.id} className="candidateItem">
-      <strong>{candidate.metadata_json.demo ? "Demo tone" : "Voice candidate"} {candidates.length-index}</strong>
+      <strong>{candidate.metadata_json.demo ? "Demo tone" : candidate.metadata_json.evaluation_fixture ? "Synthetic speech fixture" : "Voice candidate"} {candidates.length-index}</strong>
       {!candidate.access_blocked_reason && <audio controls preload="none" src={`${API_URL}${candidate.content_url}`} aria-label={`Candidate ${candidates.length-index} for line ${segment.index + 1}`} />}
       {candidate.access_blocked_reason && <p className="lineWarning">{candidate.access_blocked_reason}</p>}
       <small>{candidate.metadata_json.fit_status === "ready" ? `Fits ${Number(candidate.metadata_json.target_duration_ms) / 1000}s window` : String(candidate.metadata_json.warning ?? "Timing needs review")}</small>

@@ -12,6 +12,7 @@ import { ClonePanel } from "@/components/clone-panel";
 import { StemPanel } from "@/components/stem-panel";
 import { MixPanel } from "@/components/mix-panel";
 import { AlignmentPanel } from "@/components/alignment-panel";
+import { PerformancePanel } from "@/components/performance-panel";
 import { API_URL, api } from "@/lib/api";
 
 export default function ProjectPage() {
@@ -74,6 +75,8 @@ export default function ProjectPage() {
   const cloneCapability = capabilities.find((item) => item.capability === "voice_cloner");
   const separator = capabilities.find((item) => item.capability === "stem_separator");
   const aligner = capabilities.find((item) => item.capability === "timing_aligner");
+  const targetAligner = capabilities.find((item) => item.capability === "target_timing_aligner");
+  const performanceAnalyzer = capabilities.find((item) => item.capability === "performance_analyzer");
   const activeStems = project?.stem_sets.find((stems) => stems.id === project.assets.find((asset) => asset.id === sourceId)?.active_stem_set_id && stems.status === "approved");
   const transcriptionInput = preferDialogue && activeStems ? "dialogue_stem" : "original";
 
@@ -207,6 +210,9 @@ export default function ProjectPage() {
         <AlignmentPanel project={project} disabled={locked} unsaved={dirtyIds.size > 0}
           available={!!aligner?.available} sourceId={sourceId} transcriptionInput={transcriptionInput}
           onRun={run} onSaved={load} onPlayRange={playRange} />
+        <PerformancePanel key={project.active_revision_id ?? "none"} project={project} sourceId={sourceId} disabled={locked} unsaved={dirtyIds.size > 0}
+          available={!!performanceAnalyzer?.available} targetAlignmentAvailable={!!targetAligner?.available}
+          transcriptionInput={transcriptionInput} onRun={run} onPlayRange={playRange} />
         <MixPanel project={project} disabled={locked || !timelineMatches} unsaved={dirtyIds.size > 0} onSaved={load} onRun={run} />
         {voicePreview && <section className="dubPreview" aria-label="Dialogue-only preview"><h2>{voicePreview.metadata_json.demo ? "Demo-tone preview" : "Dialogue-only preview"}</h2>
           <p className="lineWarning">{previewStale ? "Saved preview uses earlier takes. Render again after selecting current audio." : "Original dialogue, music and effects are excluded from this preview."}</p>

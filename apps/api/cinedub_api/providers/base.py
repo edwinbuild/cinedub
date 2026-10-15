@@ -114,3 +114,16 @@ class PerformanceAnalyzer(Protocol):
     name: str
 
     def analyze(self, samples, *, offset_ms: int, word_count: int) -> dict: ...
+
+
+class TakePerformanceAnalyzer(Protocol):
+    name: str
+
+    def compare(
+        self,
+        request: dict,
+        output_dir: Path,
+        *,
+        cancel: Callable[[], None],
+        progress: Callable[[int, int], None],
+    ) -> dict: ...

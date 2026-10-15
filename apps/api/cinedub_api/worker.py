@@ -41,6 +41,7 @@ from .processing import process_transcribe
 from .processing import process_translate as process_real_translate
 from .providers.retry import safe_error
 from .separation_processing import process_separate
+from .take_analysis_processing import process_analyze_takes
 from .voice_processing import process_render_preview
 from .voice_processing import process_synthesize as process_voice_candidates
 
@@ -346,6 +347,7 @@ PROCESSORS = {
     "render_mix": process_render_mix,
     "package_mix": process_package_mix,
     "align": process_align,
+    "analyze_takes": process_analyze_takes,
 }
 
 

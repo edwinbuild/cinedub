@@ -278,3 +278,13 @@ a { color: inherit; text-decoration: none; }
 .alignmentMetrics dd { margin: 4px 0; font-size: 13px; }
 .alignmentWords { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
 .alignmentWords button { display: flex; flex-direction: column; max-width: 100%; overflow-wrap: anywhere; }
+.performancePanel > summary { cursor: pointer; font-weight: 600; }
+.performanceToggle { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0; font-size: 12px; }
+.comparisonTable { max-width: 100%; overflow-x: auto; margin: 12px 0; }
+.comparisonTable table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
+.comparisonTable caption { text-align: left; margin-bottom: 8px; }
+.comparisonTable th, .comparisonTable td { border-bottom: 1px solid var(--line); padding: 8px; overflow-wrap: anywhere; }
+.signalChart { margin: 16px 0; }
+.signalChart figcaption { font-size: 12px; }
+.signalChart svg { display: block; width: 100%; background: var(--panel-soft); margin: 6px 0; }
+.signalChart small { font-size: 11px; color: var(--muted); }

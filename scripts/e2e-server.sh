@@ -1,7 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-test_state=$(mktemp -d /tmp/cinedub-e2e-XXXXXX)
+if [[ -n "${CINEDUB_E2E_STATE_ROOT:-}" ]]; then
+  test_state=$CINEDUB_E2E_STATE_ROOT
+  if [[ ! "$test_state" =~ ^/tmp/cinedub-e2e-[A-Za-z0-9_]+$ || ! -d "$test_state" || -L "$test_state" || -e "$test_state/cinedub.db" ]]; then
+    echo "An explicitly supplied E2E state must be a new empty /tmp/cinedub-e2e-* directory" >&2
+    exit 1
+  fi
+  if [[ -n "$(ls -A "$test_state")" ]]; then
+    echo "The explicit E2E directory must be empty" >&2
+    exit 1
+  fi
+else
+  test_state=$(mktemp -d /tmp/cinedub-e2e-XXXXXX)
+fi
+export CINEDUB_ENV=e2e
 export CINEDUB_DATABASE_URL="sqlite:///$test_state/cinedub.db"
 export CINEDUB_STORAGE_ROOT="$test_state/storage"
 export CINEDUB_TRANSCRIBER=${CINEDUB_E2E_TRANSCRIBER:-fake}

@@ -43,6 +43,7 @@ NAMES = {
     "MixRenderRead": "MixRender",
     "AlignmentReport": "AlignmentReport",
     "AlignmentApply": "AlignmentApply",
+    "TakePerformanceReport": "TakePerformanceReport",
 }
 REQUESTS = {
     "JobCreate",

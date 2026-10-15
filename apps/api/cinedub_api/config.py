@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     performance_analyzer: str = "local"
     stem_separator: str = "local"
     timing_aligner: str = "local"
+    target_timing_aligner: str = "local"
     transcription_model: Literal["saaras:v4", "saaras:v3"] = "saaras:v4"
     translation_model: Literal["mayura:v1", "sarvam-translate:v1"] = "mayura:v1"
     translation_style: Literal[
@@ -52,6 +53,8 @@ class Settings(BaseSettings):
     local_aligner_model_dir: Path = Path("./models/wav2vec2-english")
     local_aligner_threads: int = Field(default=4, ge=1, le=8)
     local_aligner_timeout_seconds: int = Field(default=600, ge=10, le=1800)
+    local_target_aligner_model_dir: Path = Path("./models/wav2vec2-malayalam")
+    local_take_analyzer_timeout_seconds: int = Field(default=900, ge=10, le=1800)
 
     sarvam_api_key: str | None = Field(
         default=None,

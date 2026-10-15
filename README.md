@@ -1,6 +1,6 @@
 # CineDub
 
-A local English → Malayalam cinema dubbing workspace. The current development branch connects media playback, transcription, translation, human review, stock/consented-voice candidates, timing fit and stereo exports with reviewed music/effects. Optional offline models support English transcription, cinematic dialogue/music/effects separation, and English source-word alignment with acoustic measurements. Cloning contracts and consent/reference workflows are connected but not live-verified. Natural Malayalam quality, target-voice alignment and emotion preservation remain unfinished.
+A local English → Malayalam cinema dubbing workspace. The current development branch connects media playback, transcription, translation, human review, stock/consented-voice candidates, timing fit and stereo exports with reviewed music/effects. Optional offline models support English transcription, cinematic separation, English source-word alignment, and experimental Malayalam take-word suggestions. Source/take pitch, energy and pauses can be compared locally. Cloning contracts and consent/reference workflows are connected but not live-verified. Natural Malayalam quality, accurate target-voice alignment and emotion preservation remain unfinished.
 
 `OLD/` remains an ignored reference archive. Nothing in the current application imports or executes it.
 
@@ -97,7 +97,7 @@ The pinned ONNX float32 graph occupies about 361 MiB, runs on CPU with four thre
 
 Restart the app, activate a source-bound transcript and save corrections. **Transcription audio** also selects the analysis input: original audio by default, or an explicitly approved dialogue stem. Open **Source timing & performance**, select **Align source words**, then inspect the saved report. Click a word to audition its suggested range in the scene player. RMS level, estimated pitch, text pace and low-energy pauses describe the analysis signal; they are not emotion, speaker identity or validated speech detection. Detailed curves and provenance are in the evidence JSON.
 
-Listening confirmation is required to apply a suggestion. Applying changes only that line's start/end, preserves its text, clears its selected voice take, and requires approval again. Previously reviewed timing needs explicit replacement confirmation. Weak acoustic/text agreement, unsupported symbols and long phrases stay visible without automatic application. Numbers must be written as spoken English words. Edits, active-revision changes or rejected/replaced dialogue stems invalidate affected suggestions; old reports remain as history. Malayalam synthesized-word alignment and emotion/performance matching remain open.
+Listening confirmation is required to apply a suggestion. Applying changes only that line's start/end, preserves its text, clears its selected voice take, and requires approval again. Previously reviewed timing needs explicit replacement confirmation. Weak acoustic/text agreement, unsupported symbols and long phrases stay visible without automatic application. Numbers must be written as spoken English words. Edits, active-revision changes or rejected/replaced dialogue stems invalidate affected suggestions; old reports remain as history. Accurate Malayalam word timing and emotion/performance matching remain open.
 
 Real-model browser verification and a reproducible two-minute resource check use original synthetic speech, not paid APIs:
 
@@ -107,6 +107,31 @@ PYTHONPATH=apps/api .venv/bin/python scripts/evaluate-local-alignment.py --durat
 ```
 
 Both need eSpeak NG and the installed aligner; the browser test also needs local ASR. The browser check covers explicit application, reload/mobile review, and refusing a script that was not spoken. A harder synthetic phrase remains flagged for manual review. Threshold calibration and manually timed natural speech are still required before accuracy claims.
+
+## Compare source and voice takes
+
+Open **Source versus voice** after generating a timing-ready take. Choose one take to inspect before selection, or analyze the selected takes. The analysis uses **Transcription audio** as its source input and never changes dialogue, timing, approval, voice settings or take selection.
+
+The local `analyze_takes` job measures pitch/energy curves, text pace, energy-active span, internal low-energy pauses and approximate fitting padding. Leading/trailing low-energy regions are excluded from internal-pause totals so padding is not mistaken for an acting pause. Different actors, languages, background audio and input gain can explain the differences; there is no automatic emotion, identity or naturalness score. Measurements require the optional local-alignment dependencies but no model weights or API key.
+
+For experimental Malayalam word suggestions, install the additional pinned ONNX graph and restart:
+
+```bash
+PYTHONPATH=apps/api .venv/bin/python scripts/setup-target-alignment.py
+```
+
+The approximately 340 MiB graph uses CPU, four threads, a disposable 10 GiB address-space-limited process and a 15-minute deadline. A 4.84-second original synthetic utterance used 661 MiB peak child memory and 1.83 seconds for model load/inference/alignment. Its word agreement was weak: this is a smoke test, not an accuracy pass. **Include experimental Malayalam word suggestions** starts unchecked. Suggestions cover takes up to 20 seconds, stay inside their saved scene envelope, and can be auditioned; they cannot automatically change the performance. Demo tones never get invented spoken-word timings. See [decision](docs/decisions/0008-take-performance-review.md) and [evaluation](docs/evaluations/take-performance.md).
+
+Inspect saved comparison reports or download their JSON. Selecting the analyzed take does not invalidate unchanged measurements. Changed dialogue/timing/voice, revised stems or changed media are marked stale. Revoked clone consent quarantines comparison JSON and cancels dependent queued work just as it does for the voice audio.
+
+The real-model browser check uses clearly labelled original synthetic speech in a new isolated test database; it never enrolls a real voice or modifies the user's workspace:
+
+```bash
+test_state=$(mktemp -d /tmp/cinedub-e2e-XXXXXX)
+CINEDUB_E2E_PERFORMANCE=1 CINEDUB_E2E_STATE_ROOT="$test_state" npm run test:e2e -- tests/e2e/performance.spec.ts
+```
+
+It requires eSpeak NG, the optional dependencies and the installed Malayalam graph. The ordinary suite skips it. The test-only seeder refuses workspace databases and symlinked database/storage paths. Natural speech, manually checked word timings and Malayalam-expert listening remain required for quality acceptance.
 
 ## Mix reviewed dialogue with music and effects
 
@@ -181,7 +206,7 @@ This uses temporary projects, no Sarvam key and no model download. The ordinary 
 
 - Live stock-voice listening, Malayalam expert review and timing-quality evaluation.
 - Live consented-cloning acceptance and natural-scene separation/mix listening.
-- Malayalam candidate alignment, acoustic emotion evaluation and performance comparison/preservation.
+- Accurate Malayalam candidate alignment, acoustic emotion evaluation and performance preservation.
 - Broader reliability, editing polish and human quality evaluation before a v1.0 completion claim.
 
 Local models run one at a time and release memory between jobs. The optional models currently use CPU; GPU use requires separate driver, inference and VRAM checks. The target remains a 24 GB RAM laptop. No fine-tuning or full-film processing is included in v0.2.

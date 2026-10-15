@@ -260,6 +260,68 @@ class AlignmentApply(BaseModel):
     listening_confirmed: bool = False
 
 
+class TargetWordAlignment(BaseModel):
+    status: Literal["not_requested", "aligned", "needs_review", "unalignable"]
+    model: str | None = None
+    words: list[AlignedWord] = Field(default_factory=list)
+    acoustic_score: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
+    greedy_text: str = ""
+    text_error_ratio: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class PerformanceComparison(BaseModel):
+    rms_delta_db: float | None = Field(allow_inf_nan=False)
+    pitch_shift_semitones: float | None = Field(allow_inf_nan=False)
+    source_active_span_ms: int = Field(ge=0)
+    target_active_span_ms: int = Field(ge=0)
+    source_internal_pause_ms: int = Field(ge=0)
+    target_internal_pause_ms: int = Field(ge=0)
+    active_span_delta_ms: int
+    fitted_padding_ms: int = Field(ge=0)
+
+
+class TakePerformanceLine(BaseModel):
+    segment_id: str
+    speaker_id: str | None
+    segment_version: int
+    candidate_id: str
+    candidate_sha256: str
+    source_text: str
+    translated_text: str
+    start_ms: int
+    end_ms: int
+    voice: dict
+    signature: str
+    demo: bool
+    evaluation_fixture: bool = False
+    source_performance: AcousticPerformance
+    target_performance: AcousticPerformance
+    comparison: PerformanceComparison
+    target_alignment: TargetWordAlignment
+    warnings: list[str]
+    stale_reason: str | None = None
+
+
+class TakePerformanceReport(BaseModel):
+    schema_version: Literal[1] = 1
+    project_id: str
+    revision_id: str
+    source_asset_id: str
+    source_sha256: str
+    recognition_artifact_id: str
+    recognition_sha256: str
+    stem_set_id: str | None = None
+    stem_set_version: int | None = None
+    provider: str
+    model: str
+    target_language: LanguageCode
+    metadata: dict
+    lines: list[TakePerformanceLine]
+    warnings: list[str]
+    stale_reason: str | None = None
+
+
 class JobCreate(BaseModel):
     stage: Literal[
         "ingest",
@@ -275,6 +337,7 @@ class JobCreate(BaseModel):
         "separate",
         "render_mix",
         "align",
+        "analyze_takes",
     ]
     provider: Literal["fake", "sarvam", "local"] | None = None
     source_asset_id: str | None = None
@@ -291,6 +354,8 @@ class JobCreate(BaseModel):
     reference_reviewed: bool = False
     transcription_input: Literal["original", "dialogue_stem"] = "original"
     mix_settings: MixSettings = Field(default_factory=MixSettings)
+    candidate_ids: list[str] | None = Field(default=None, min_length=1, max_length=100)
+    include_target_alignment: bool = False
 
 
 class JobEstimate(BaseModel):

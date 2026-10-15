@@ -19,6 +19,18 @@ def english_tokens(text, vocab):
     return text, [vocab[char if char != " " else "|"] for char in text]
 
 
+def malayalam_tokens(text, vocab):
+    text = unicodedata.normalize("NFC", text)
+    text = "".join(" " if unicodedata.category(char).startswith("P") else char for char in text)
+    text = " ".join(text.split())
+    if not text or len(text) > 1000:
+        raise ValueError("Use a non-empty Malayalam phrase of at most 1000 characters")
+    unsupported = sorted({char for char in text if char != " " and char not in vocab})
+    if unsupported:
+        raise ValueError("Unsupported Malayalam characters: " + " ".join(unsupported))
+    return text, [vocab[char if char != " " else "|"] for char in text]
+
+
 def text_error_ratio(actual, expected):
     actual, expected = actual.replace(" ", ""), expected.replace(" ", "")
     previous = list(range(len(expected) + 1))
@@ -47,11 +59,13 @@ def force_align(logits, tokens, normalized, vocab, *, offset_ms, duration_ms):
         raise ValueError("Invalid CTC emissions or transcript")
     if logits.shape[0] > 1100 or len(tokens) > 1000:
         raise ValueError("Alignment window exceeds the bounded laptop profile")
-    if logits.shape[1] != len(vocab) or any(token >= logits.shape[1] for token in tokens):
+    if logits.shape[1] != len(vocab) or any(not 0 <= token < logits.shape[1] for token in tokens):
         raise ValueError("CTC vocabulary does not match emissions")
     logits -= np.max(logits, axis=1, keepdims=True)
     logp = logits - np.log(np.exp(logits).sum(axis=1, keepdims=True))
-    blank = vocab["<pad>"]
+    blank = vocab.get("<pad>", vocab.get("[PAD]"))
+    if blank is None:
+        raise ValueError("CTC vocabulary has no known blank token")
     labels = np.full(2 * len(tokens) + 1, blank, dtype=np.int32)
     labels[1::2] = tokens
     skip = np.zeros(len(labels), dtype=bool)
