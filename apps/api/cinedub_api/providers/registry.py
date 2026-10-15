@@ -2,7 +2,10 @@ from dataclasses import dataclass
 
 from ..config import Settings
 from .fake import FakeProvider
+from .local_alignment import LocalAligner
+from .local_alignment import availability as alignment_availability
 from .local_asr import LocalTranscriber, availability
+from .local_performance import LocalPerformanceAnalyzer
 from .local_separation import LocalSeparator
 from .local_separation import availability as separator_availability
 from .sarvam import SarvamProvider
@@ -75,6 +78,21 @@ class ProviderRegistry:
             )
         raise ValueError(f"Batch transcription provider '{selected}' is unavailable")
 
+    def aligner(self, name: str | None = None, options: dict | None = None):
+        if (name or self.settings.timing_aligner) != "local":
+            raise ValueError("This alignment adapter is not installed")
+        values = options or {}
+        return LocalAligner(
+            values.get("model_dir", self.settings.local_aligner_model_dir),
+            values.get("threads", self.settings.local_aligner_threads),
+            values.get("timeout_seconds", self.settings.local_aligner_timeout_seconds),
+        )
+
+    def performance_analyzer(self, name: str | None = None):
+        if (name or self.settings.performance_analyzer) != "local":
+            raise ValueError("This acoustic performance adapter is not installed")
+        return LocalPerformanceAnalyzer()
+
     def capabilities(self) -> list[Capability]:
         sarvam_ready = bool(self.settings.sarvam_api_key)
         values = {
@@ -102,6 +120,8 @@ class ProviderRegistry:
             ("voice_cloner", "sarvam"),
             ("media_exporter", "local"),
             ("stem_separator", "local"),
+            ("timing_aligner", "local"),
+            ("performance_analyzer", "local"),
         }
         result = []
         for capability, provider in values.items():
@@ -116,12 +136,18 @@ class ProviderRegistry:
                 available, reason = availability(self.settings.local_asr_model_dir)
             if capability == "stem_separator" and provider == "local":
                 available, reason = separator_availability(self.settings.local_separator_model_dir)
+            if capability in {"timing_aligner", "performance_analyzer"} and provider == "local":
+                available, reason = alignment_availability(self.settings.local_aligner_model_dir)
             is_implemented = (capability, provider) in implemented
             configured = provider != "sarvam" or sarvam_ready
             if provider == "sarvam" and available:
                 reason = "Configured adapter; live success is recorded per provider job"
             if capability == "performance_analyzer":
-                reason = "Not implemented; demo emotion values are fixtures"
+                reason = (
+                    "Pitch/level/energy pauses measured with alignment; not emotion inference"
+                    if available
+                    else reason
+                )
             if capability == "speaker_diarizer" and available:
                 reason = "Diarization is part of the selected batch transcriber"
             if capability == "voice_synthesizer" and provider == "sarvam" and available:

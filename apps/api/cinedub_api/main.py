@@ -37,6 +37,7 @@ from .models import (
     new_id,
 )
 from .providers import ProviderRegistry
+from .routes.alignment import router as alignment_router
 from .routes.mixes import router as mixes_router
 from .routes.stems import router as stems_router
 from .routes.voices import router as voices_router
@@ -89,6 +90,7 @@ app.add_middleware(
 app.include_router(voices_router)
 app.include_router(stems_router)
 app.include_router(mixes_router)
+app.include_router(alignment_router)
 
 
 def artifact_read(artifact: Artifact, session: Session | None = None) -> ArtifactRead:

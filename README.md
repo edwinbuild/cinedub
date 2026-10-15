@@ -1,6 +1,6 @@
 # CineDub
 
-A local English → Malayalam cinema dubbing workspace. The current development branch connects media playback, transcription, translation, human review, stock/consented-voice candidates, timing fit and stereo exports with reviewed music/effects. Optional offline models support English transcription and cinematic dialogue/music/effects separation. Cloning contracts and consent/reference workflows are connected but not live-verified. Natural Malayalam quality, forced alignment and emotion preservation remain unfinished.
+A local English → Malayalam cinema dubbing workspace. The current development branch connects media playback, transcription, translation, human review, stock/consented-voice candidates, timing fit and stereo exports with reviewed music/effects. Optional offline models support English transcription, cinematic dialogue/music/effects separation, and English source-word alignment with acoustic measurements. Cloning contracts and consent/reference workflows are connected but not live-verified. Natural Malayalam quality, target-voice alignment and emotion preservation remain unfinished.
 
 `OLD/` remains an ignored reference archive. Nothing in the current application imports or executes it.
 
@@ -46,7 +46,7 @@ Each transcription creates a revision. The first becomes active automatically; l
 
 Candidate generation preserves text approvals. Changes to dialogue, speaker, timing or voice settings invalidate selected takes; old audio remains available as history. Short takes are padded with silence. Long takes may be sped up by at most 15% by default; unsafe takes are rejected rather than clipped. Silence padding is not a replacement for natural performance adaptation or lip sync.
 
-Sarvam provides phrase timings. Word alignment, acoustic emotion analysis and performance-preserving voice generation are not claimed in this milestone.
+Sarvam provides phrase timings. The optional local aligner below can suggest English source-word timings independently of the transcriber. Acoustic emotion inference and performance-preserving voice generation remain unfinished.
 
 ## Optional offline English transcription
 
@@ -83,6 +83,30 @@ CINEDUB_E2E_SEPARATOR=1 CINEDUB_E2E_TRANSCRIBER=local npm run test:e2e -- tests/
 ```
 
 This uses isolated temporary projects and original synthetic media, not paid APIs or actor recordings. The default suite skips this optional inference test.
+
+## Optional source alignment and acoustic measurements
+
+Install the English source aligner if needed, preserving any other extras you use:
+
+```bash
+uv sync --extra local-asr --extra local-separation --extra local-alignment --group dev
+PYTHONPATH=apps/api .venv/bin/python scripts/setup-local-alignment.py
+```
+
+The pinned ONNX float32 graph occupies about 361 MiB, runs on CPU with four threads, and requires no PyTorch or GPU. A disposable process enforces a 10 GiB address-space ceiling and a ten-minute deadline. Each phrase uses at most 20 seconds of audio including context; split longer phrases before alignment. On a two-minute synthetic clip, inference took 10.1 seconds and about 1.0 GiB peak child-process RAM. This is a throughput check, not a natural-scene accuracy score. The smaller quantized conversion failed the speech smoke check and is not the supported model. See [model choice and contracts](docs/decisions/0007-source-alignment.md) and [evaluation](docs/evaluations/source-alignment.md).
+
+Restart the app, activate a source-bound transcript and save corrections. **Transcription audio** also selects the analysis input: original audio by default, or an explicitly approved dialogue stem. Open **Source timing & performance**, select **Align source words**, then inspect the saved report. Click a word to audition its suggested range in the scene player. RMS level, estimated pitch, text pace and low-energy pauses describe the analysis signal; they are not emotion, speaker identity or validated speech detection. Detailed curves and provenance are in the evidence JSON.
+
+Listening confirmation is required to apply a suggestion. Applying changes only that line's start/end, preserves its text, clears its selected voice take, and requires approval again. Previously reviewed timing needs explicit replacement confirmation. Weak acoustic/text agreement, unsupported symbols and long phrases stay visible without automatic application. Numbers must be written as spoken English words. Edits, active-revision changes or rejected/replaced dialogue stems invalidate affected suggestions; old reports remain as history. Malayalam synthesized-word alignment and emotion/performance matching remain open.
+
+Real-model browser verification and a reproducible two-minute resource check use original synthetic speech, not paid APIs:
+
+```bash
+CINEDUB_E2E_ALIGNMENT=1 CINEDUB_E2E_TRANSCRIBER=local npm run test:e2e -- tests/e2e/alignment.spec.ts
+PYTHONPATH=apps/api .venv/bin/python scripts/evaluate-local-alignment.py --duration-seconds 120
+```
+
+Both need eSpeak NG and the installed aligner; the browser test also needs local ASR. The browser check covers explicit application, reload/mobile review, and refusing a script that was not spoken. A harder synthetic phrase remains flagged for manual review. Threshold calibration and manually timed natural speech are still required before accuracy claims.
 
 ## Mix reviewed dialogue with music and effects
 
@@ -157,9 +181,9 @@ This uses temporary projects, no Sarvam key and no model download. The ordinary 
 
 - Live stock-voice listening, Malayalam expert review and timing-quality evaluation.
 - Live consented-cloning acceptance and natural-scene separation/mix listening.
-- Forced alignment and measured performance/emotion analysis.
+- Malayalam candidate alignment, acoustic emotion evaluation and performance comparison/preservation.
 - Broader reliability, editing polish and human quality evaluation before a v1.0 completion claim.
 
-Local GPU models are installed one at a time after driver, real inference, RAM/VRAM and disk checks. The target remains a 24 GB RAM laptop. No fine-tuning or full-film processing is included in v0.2.
+Local models run one at a time and release memory between jobs. The optional models currently use CPU; GPU use requires separate driver, inference and VRAM checks. The target remains a 24 GB RAM laptop. No fine-tuning or full-film processing is included in v0.2.
 
 The full implementation/acceptance scope is tracked in the [completion ledger](docs/roadmap.md).

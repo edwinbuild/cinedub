@@ -11,6 +11,7 @@ import { VoicePanel } from "@/components/voice-panel";
 import { ClonePanel } from "@/components/clone-panel";
 import { StemPanel } from "@/components/stem-panel";
 import { MixPanel } from "@/components/mix-panel";
+import { AlignmentPanel } from "@/components/alignment-panel";
 import { API_URL, api } from "@/lib/api";
 
 export default function ProjectPage() {
@@ -72,6 +73,7 @@ export default function ProjectPage() {
   const voiceCapability = capabilities.find((item) => item.capability === "voice_synthesizer");
   const cloneCapability = capabilities.find((item) => item.capability === "voice_cloner");
   const separator = capabilities.find((item) => item.capability === "stem_separator");
+  const aligner = capabilities.find((item) => item.capability === "timing_aligner");
   const activeStems = project?.stem_sets.find((stems) => stems.id === project.assets.find((asset) => asset.id === sourceId)?.active_stem_set_id && stems.status === "approved");
   const transcriptionInput = preferDialogue && activeStems ? "dialogue_stem" : "original";
 
@@ -109,9 +111,12 @@ export default function ProjectPage() {
     finally { setBusy(null); }
   }
   async function playLine(line: Segment) {
+    await playRange(line.start_ms, line.end_ms);
+  }
+  async function playRange(start: number, end: number) {
     const player = mediaRef.current; if (!player) return;
-    try { player.currentTime = line.start_ms / 1000;
-      await player.play(); setStopAt(line.end_ms); }
+    try { player.currentTime = start / 1000;
+      await player.play(); setStopAt(end); }
     catch { setError("Playback could not start. Use the media player's play control first."); }
   }
   async function rename(speakerId: string, oldName: string) {
@@ -199,6 +204,9 @@ export default function ProjectPage() {
       <section className="timelinePanel">
         <ScenePlayer artifacts={project.artifacts} sourceId={sourceId} mediaRef={mediaRef} onTime={onTime} stopAt={stopAt} onStop={onStop} />
         <StemPanel project={project} sourceId={sourceId} disabled={locked} onSaved={load} />
+        <AlignmentPanel project={project} disabled={locked} unsaved={dirtyIds.size > 0}
+          available={!!aligner?.available} sourceId={sourceId} transcriptionInput={transcriptionInput}
+          onRun={run} onSaved={load} onPlayRange={playRange} />
         <MixPanel project={project} disabled={locked || !timelineMatches} unsaved={dirtyIds.size > 0} onSaved={load} onRun={run} />
         {voicePreview && <section className="dubPreview" aria-label="Dialogue-only preview"><h2>{voicePreview.metadata_json.demo ? "Demo-tone preview" : "Dialogue-only preview"}</h2>
           <p className="lineWarning">{previewStale ? "Saved preview uses earlier takes. Render again after selecting current audio." : "Original dialogue, music and effects are excluded from this preview."}</p>

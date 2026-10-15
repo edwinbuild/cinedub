@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from sqlalchemy import case, select, update
 from sqlalchemy.orm import Session
 
+from .alignment_processing import process_align
 from .clone_processing import (
     process_delete_voice,
     process_prepare_reference,
@@ -19,6 +20,7 @@ from .media import (
     copy_reference_video,
     create_preview_proxy,
     extract_audio,
+    file_digest,
     run_ffmpeg,
     write_srt,
     write_waveform,
@@ -238,7 +240,13 @@ def process_ingest(session: Session, job: Job) -> dict:
             path=str(recognition_path.resolve()),
             filename=recognition_path.name,
             media_type="audio/wav",
-            metadata_json={"sample_rate": 16000, "channels": 1, "source_asset_id": source.id},
+            metadata_json={
+                "sample_rate": 16000,
+                "channels": 1,
+                "source_asset_id": source.id,
+                "timeline_mapping_version": 2,
+                "sha256": file_digest(recognition_path),
+            },
         ),
     ]
     streams = source.metadata_json.get("streams", [])
@@ -337,6 +345,7 @@ PROCESSORS = {
     "separate": process_separate,
     "render_mix": process_render_mix,
     "package_mix": process_package_mix,
+    "align": process_align,
 }
 
 

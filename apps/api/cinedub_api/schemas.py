@@ -184,6 +184,82 @@ class SegmentUpdate(BaseModel):
     expected_version: int = Field(ge=1)
 
 
+class AlignedWord(BaseModel):
+    text: str
+    start_ms: int = Field(ge=0)
+    end_ms: int = Field(gt=0)
+    acoustic_score: float = Field(ge=0, le=1, allow_inf_nan=False)
+
+
+class AcousticFrame(BaseModel):
+    time_ms: int = Field(ge=0)
+    rms_dbfs: float | None = Field(allow_inf_nan=False)
+    pitch_hz: float | None = Field(allow_inf_nan=False)
+
+
+class AcousticPause(BaseModel):
+    start_ms: int = Field(ge=0)
+    end_ms: int = Field(gt=0)
+
+
+class AcousticPerformance(BaseModel):
+    method: Literal["acoustic-dsp-v1"] = "acoustic-dsp-v1"
+    rms_dbfs: float | None = Field(allow_inf_nan=False)
+    peak_dbfs: float | None = Field(allow_inf_nan=False)
+    pitch_median_hz: float | None = Field(allow_inf_nan=False)
+    pitch_p10_hz: float | None = Field(allow_inf_nan=False)
+    pitch_p90_hz: float | None = Field(allow_inf_nan=False)
+    energy_active_ratio: float = Field(ge=0, le=1, allow_inf_nan=False)
+    activity_threshold_dbfs: float = Field(allow_inf_nan=False)
+    words_per_minute: float = Field(ge=0, allow_inf_nan=False)
+    pauses: list[AcousticPause]
+    frames: list[AcousticFrame]
+    warnings: list[str]
+
+
+class LineAlignment(BaseModel):
+    segment_id: str
+    segment_version: int
+    source_text: str
+    original_start_ms: int
+    original_end_ms: int
+    status: Literal["aligned", "needs_review", "unalignable"]
+    words: list[AlignedWord]
+    acoustic_score: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
+    greedy_text: str = ""
+    text_error_ratio: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    performance: AcousticPerformance
+    warnings: list[str]
+    stale_reason: str | None = None
+
+
+class AlignmentReport(BaseModel):
+    schema_version: Literal[1] = 1
+    project_id: str
+    revision_id: str
+    source_asset_id: str
+    source_sha256: str
+    recognition_artifact_id: str
+    recognition_sha256: str
+    stem_set_id: str | None = None
+    stem_set_version: int | None = None
+    provider: str
+    model: str
+    language: LanguageCode
+    metadata: dict
+    lines: list[LineAlignment]
+    warnings: list[str]
+    stale_reason: str | None = None
+
+
+class AlignmentApply(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    segment_id: str
+    expected_version: int = Field(ge=1)
+    replace_reviewed_timing: bool = False
+    listening_confirmed: bool = False
+
+
 class JobCreate(BaseModel):
     stage: Literal[
         "ingest",
@@ -198,6 +274,7 @@ class JobCreate(BaseModel):
         "delete_voice",
         "separate",
         "render_mix",
+        "align",
     ]
     provider: Literal["fake", "sarvam", "local"] | None = None
     source_asset_id: str | None = None

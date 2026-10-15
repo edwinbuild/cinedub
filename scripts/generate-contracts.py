@@ -41,6 +41,8 @@ NAMES = {
     "MixReview": "MixReview",
     "MixReviewRecordRead": "MixReviewRecord",
     "MixRenderRead": "MixRender",
+    "AlignmentReport": "AlignmentReport",
+    "AlignmentApply": "AlignmentApply",
 }
 REQUESTS = {
     "JobCreate",
@@ -58,6 +60,7 @@ REQUESTS = {
     "StemReview",
     "MixReview",
     "MixSettings",
+    "AlignmentApply",
 }
 
 

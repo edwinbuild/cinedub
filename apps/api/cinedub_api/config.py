@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     local_separator_model_dir: Path = Path("./models/mrx")
     local_separator_threads: int = Field(default=4, ge=1, le=8)
     local_separator_timeout_seconds: int = Field(default=900, ge=10, le=1800)
+    local_aligner_model_dir: Path = Path("./models/wav2vec2-english")
+    local_aligner_threads: int = Field(default=4, ge=1, le=8)
+    local_aligner_timeout_seconds: int = Field(default=600, ge=10, le=1800)
 
     sarvam_api_key: str | None = Field(
         default=None,

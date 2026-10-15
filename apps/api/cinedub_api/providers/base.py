@@ -92,3 +92,25 @@ class StemSeparator(Protocol):
         cancel: Callable[[], None],
         progress: Callable[[int, int], None],
     ) -> dict: ...
+
+
+class Aligner(Protocol):
+    name: str
+
+    def align(
+        self,
+        audio_path: Path,
+        output_dir: Path,
+        *,
+        lines: list[dict],
+        duration_ms: int,
+        language: str,
+        cancel: Callable[[], None],
+        progress: Callable[[int, int], None],
+    ) -> dict: ...
+
+
+class PerformanceAnalyzer(Protocol):
+    name: str
+
+    def analyze(self, samples, *, offset_ms: int, word_count: int) -> dict: ...

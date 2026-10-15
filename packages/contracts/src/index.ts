@@ -208,7 +208,7 @@ export interface MixSettings {
 }
 
 export interface JobRequest {
-  stage: "ingest" | "demo_pipeline" | "transcribe" | "translate" | "synthesize" | "export" | "render_preview" | "prepare_reference" | "register_voice" | "delete_voice" | "separate" | "render_mix";
+  stage: "ingest" | "demo_pipeline" | "transcribe" | "translate" | "synthesize" | "export" | "render_preview" | "prepare_reference" | "register_voice" | "delete_voice" | "separate" | "render_mix" | "align";
   provider?: "fake" | "sarvam" | "local" | null;
   source_asset_id?: string | null;
   revision_id?: string | null;
@@ -355,5 +355,80 @@ export interface MixReview {
   expected_version: number;
   reviewed_by: string;
   note?: string;
+  listening_confirmed?: boolean;
+}
+
+export interface AcousticFrame {
+  time_ms: number;
+  rms_dbfs: number | null;
+  pitch_hz: number | null;
+}
+
+export interface AcousticPause {
+  start_ms: number;
+  end_ms: number;
+}
+
+export interface AcousticPerformance {
+  method: "acoustic-dsp-v1";
+  rms_dbfs: number | null;
+  peak_dbfs: number | null;
+  pitch_median_hz: number | null;
+  pitch_p10_hz: number | null;
+  pitch_p90_hz: number | null;
+  energy_active_ratio: number;
+  activity_threshold_dbfs: number;
+  words_per_minute: number;
+  pauses: Array<AcousticPause>;
+  frames: Array<AcousticFrame>;
+  warnings: Array<string>;
+}
+
+export interface AlignedWord {
+  text: string;
+  start_ms: number;
+  end_ms: number;
+  acoustic_score: number;
+}
+
+export interface LineAlignment {
+  segment_id: string;
+  segment_version: number;
+  source_text: string;
+  original_start_ms: number;
+  original_end_ms: number;
+  status: "aligned" | "needs_review" | "unalignable";
+  words: Array<AlignedWord>;
+  acoustic_score: number | null;
+  greedy_text: string;
+  text_error_ratio: number | null;
+  performance: AcousticPerformance;
+  warnings: Array<string>;
+  stale_reason: string | null;
+}
+
+export interface AlignmentReport {
+  schema_version: 1;
+  project_id: string;
+  revision_id: string;
+  source_asset_id: string;
+  source_sha256: string;
+  recognition_artifact_id: string;
+  recognition_sha256: string;
+  stem_set_id: string | null;
+  stem_set_version: number | null;
+  provider: string;
+  model: string;
+  language: "en-IN" | "ml-IN";
+  metadata: Record<string, unknown>;
+  lines: Array<LineAlignment>;
+  warnings: Array<string>;
+  stale_reason: string | null;
+}
+
+export interface AlignmentApply {
+  segment_id: string;
+  expected_version: number;
+  replace_reviewed_timing?: boolean;
   listening_confirmed?: boolean;
 }

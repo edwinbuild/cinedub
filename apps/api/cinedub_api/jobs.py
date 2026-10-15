@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from .alignment import freeze_alignment_audio
 from .config import get_settings
 from .consent import (
     approved_consent,
@@ -27,6 +28,9 @@ from .models import (
     VoiceProfile,
 )
 from .providers import ProviderRegistry
+from .providers.local_alignment import MODEL_NAME as ALIGNMENT_MODEL
+from .providers.local_alignment import availability as alignment_availability
+from .providers.local_alignment import read_manifest as alignment_manifest
 from .providers.local_asr import MODEL_NAME, availability, read_manifest
 from .providers.local_separation import MODEL_NAME as SEPARATOR_MODEL
 from .providers.local_separation import availability as separator_availability
@@ -69,6 +73,7 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
         "register_voice": settings.voice_synthesizer,
         "delete_voice": settings.voice_synthesizer,
         "separate": settings.stem_separator,
+        "align": settings.timing_aligner,
     }
     provider = payload.provider or defaults[payload.stage]
     if payload.stage in {"transcribe", "translate", "synthesize", "register_voice", "delete_voice"}:
@@ -112,6 +117,58 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
         {"source_language": project.source_language, "target_language": project.target_language}
     )
     cost = 0.0
+    if payload.stage == "align":
+        if provider != "local":
+            raise HTTPException(422, "This alignment adapter is not installed")
+        if settings.performance_analyzer != "local":
+            raise HTTPException(
+                422, "This combined source-analysis job requires the local acoustic adapter"
+            )
+        ready, reason = alignment_availability(settings.local_aligner_model_dir)
+        if not ready:
+            raise HTTPException(422, reason)
+        if project.source_language != "en-IN":
+            raise HTTPException(422, "The installed aligner supports English source audio only")
+        revision_id = payload.revision_id or project.active_revision_id
+        try:
+            inputs.update(
+                freeze_alignment_audio(session, project, revision_id, payload.transcription_input)
+            )
+        except (OSError, ValueError) as exc:
+            raise HTTPException(422, str(exc)) from exc
+        if payload.source_asset_id and payload.source_asset_id != inputs["source_asset_id"]:
+            raise HTTPException(422, "Selected source does not match the transcript revision")
+        segments = revision_segments(session, project.id, revision_id)
+        if payload.segment_ids is not None:
+            ids = set(payload.segment_ids)
+            if not ids or not ids.issubset({line.id for line in segments}):
+                raise HTTPException(422, "Selected lines do not belong to this revision")
+            segments = [line for line in segments if line.id in ids]
+        if not segments or len(segments) > 500:
+            raise HTTPException(422, "Alignment requires 1–500 saved dialogue lines")
+        inputs.update(
+            {
+                "project_id": project.id,
+                "performance_provider": settings.performance_analyzer,
+                "performance_model": "acoustic-dsp-v1",
+                "model": ALIGNMENT_MODEL,
+                "model_dir": str(settings.local_aligner_model_dir.resolve()),
+                "model_manifest": alignment_manifest(settings.local_aligner_model_dir),
+                "threads": settings.local_aligner_threads,
+                "timeout_seconds": settings.local_aligner_timeout_seconds,
+                "segments": [
+                    {
+                        "id": line.id,
+                        "version": line.version,
+                        "source_text": line.source_text,
+                        "start_ms": line.start_ms,
+                        "end_ms": line.end_ms,
+                        "speaker_id": line.speaker_id,
+                    }
+                    for line in segments
+                ],
+            }
+        )
     if payload.stage == "separate":
         if provider != "local":
             raise HTTPException(422, "This separator adapter is not installed")
