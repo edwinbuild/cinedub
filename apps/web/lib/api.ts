@@ -20,6 +20,9 @@ import type {
   AlignmentReport,
   AlignmentApply,
   TakePerformanceReport,
+  DialogueBrief,
+  DialogueBriefUpdate,
+  DialogueReviewReport,
 } from "@cinedub/contracts";
 
 export const API_URL = process.env.NEXT_PUBLIC_CINEDUB_API_URL ?? "http://127.0.0.1:8000";
@@ -112,6 +115,11 @@ export const api = {
   diagnostics: () => request<HardwareStatus>("/diagnostics"),
   alignmentReport: (id: string) => request<AlignmentReport>(`/alignment-reports/${id}`),
   takeAnalysisReport: (id: string) => request<TakePerformanceReport>(`/take-analysis-reports/${id}`),
+  saveDialogueBrief: (projectId: string, revisionId: string, payload: DialogueBriefUpdate) =>
+    request<DialogueBrief>(`/projects/${projectId}/revisions/${revisionId}/dialogue-brief`, {
+      method: "POST", body: JSON.stringify(payload),
+    }),
+  dialogueReviewReport: (id: string) => request<DialogueReviewReport>(`/dialogue-review-reports/${id}`),
   applyAlignment: (id: string, payload: AlignmentApply) => request<Segment>(`/alignment-reports/${id}/apply`, {
     method: "POST", body: JSON.stringify(payload),
   }),

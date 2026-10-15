@@ -25,7 +25,7 @@ PORT=3001 npm run dev
 
 Open <http://127.0.0.1:3001>. The launcher derives the allowed browser origin from this port and passes an explicit port to Next.js rather than silently moving to a different origin. Run only one API and worker against a local workspace. The worker holds an exclusive SQLite-database lock (or a storage-directory lock for other databases).
 
-SQLite, local filesystem artifacts and a separate database-backed worker are the development defaults. Before upgrading a previous schema, application startup creates a consistent sibling `.v01-*.bak`, `.v02-*.bak`, `.v02-voices-*.bak`, `.v02-consent-*.bak` or `.v02-stems-*.bak` backup. Migration 0002 preserves existing dialogue and approvals in a legacy/demo revision; 0003 adds candidates; 0004 adds scoped clone consent and explicit speaker voice selection; 0005 adds reviewed source-bound stems; 0006 adds mix renders and listening acceptance history. Stock choices survive upgrade; legacy generic clone approvals require new scoped consent. To return to an older schema, stop all processes and restore its backup; dropping history through a downgrade is intentionally unsupported.
+SQLite, local filesystem artifacts and a separate database-backed worker are the development defaults. Before upgrading a previous schema, application startup creates a consistent sibling `.v01-*.bak`, `.v02-*.bak`, `.v02-voices-*.bak`, `.v02-consent-*.bak`, `.v02-stems-*.bak` or `.v02-mixes-*.bak` backup. Migration 0002 preserves existing dialogue and approvals in a legacy/demo revision; 0003 adds candidates; 0004 adds scoped clone consent and explicit speaker voice selection; 0005 adds reviewed source-bound stems; 0006 adds mix renders and listening acceptance history; 0007 adds immutable dialogue briefs. Stock choices survive upgrade; legacy generic clone approvals require new scoped consent. To return to an older schema, stop all processes and restore its backup; dropping history through a downgrade is intentionally unsupported.
 
 ## Use real Sarvam processing
 
@@ -47,6 +47,10 @@ Each transcription creates a revision. The first becomes active automatically; l
 Candidate generation preserves text approvals. Changes to dialogue, speaker, timing or voice settings invalidate selected takes; old audio remains available as history. Short takes are padded with silence. Long takes may be sped up by at most 15% by default; unsafe takes are rejected rather than clipped. Silence padding is not a replacement for natural performance adaptation or lip sync.
 
 Sarvam provides phrase timings. The optional local aligner below can suggest English source-word timings independently of the transcriber. Acoustic emotion inference and performance-preserving voice generation remain unfinished.
+
+## Dialogue brief and local editorial checks
+
+Before generating voices, open **Dialogue brief & editorial checks**. Save scene/adaptation notes, character intent and preferred Malayalam names or terms, then **Check saved dialogue** and inspect the result. These local checks show missing translations, preferred-text omissions, surrounding dialogue and saved time windows without replacing text or changing approvals. Refresh preserves drafts; a newer saved brief requires an explicit reload. Historical reports become stale when their context changes. Current translation models do not receive this brief, and no speech-duration estimate or emotion/quality score is invented. [Context and adapter boundary](docs/decisions/0009-dialogue-briefs.md).
 
 ## Optional offline English transcription
 

@@ -13,6 +13,7 @@ import { StemPanel } from "@/components/stem-panel";
 import { MixPanel } from "@/components/mix-panel";
 import { AlignmentPanel } from "@/components/alignment-panel";
 import { PerformancePanel } from "@/components/performance-panel";
+import { DialogueBriefPanel } from "@/components/dialogue-brief-panel";
 import { API_URL, api } from "@/lib/api";
 
 export default function ProjectPage() {
@@ -207,6 +208,9 @@ export default function ProjectPage() {
       <section className="timelinePanel">
         <ScenePlayer artifacts={project.artifacts} sourceId={sourceId} mediaRef={mediaRef} onTime={onTime} stopAt={stopAt} onStop={onStop} />
         <StemPanel project={project} sourceId={sourceId} disabled={locked} onSaved={load} />
+        {project.active_revision_id && <DialogueBriefPanel key={`brief:${project.active_revision_id}`} project={project}
+          disabled={locked} unsaved={dirtyIds.size > 0} onRun={run} onSaved={load} onDirty={onDirty}
+          onPlayRange={playRange} canPlay={!!sourceReady && timelineMatches} />}
         <AlignmentPanel project={project} disabled={locked} unsaved={dirtyIds.size > 0}
           available={!!aligner?.available} sourceId={sourceId} transcriptionInput={transcriptionInput}
           onRun={run} onSaved={load} onPlayRange={playRange} />

@@ -44,6 +44,10 @@ NAMES = {
     "AlignmentReport": "AlignmentReport",
     "AlignmentApply": "AlignmentApply",
     "TakePerformanceReport": "TakePerformanceReport",
+    "DialogueBriefRead": "DialogueBrief",
+    "DialogueBriefUpdate": "DialogueBriefUpdate",
+    "DialogueBriefContent": "DialogueBriefContent",
+    "DialogueReviewReport": "DialogueReviewReport",
 }
 REQUESTS = {
     "JobCreate",
@@ -62,6 +66,7 @@ REQUESTS = {
     "MixReview",
     "MixSettings",
     "AlignmentApply",
+    "DialogueBriefUpdate",
 }
 
 

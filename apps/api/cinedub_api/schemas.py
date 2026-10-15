@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 LanguageCode = Literal["en-IN", "ml-IN"]
 ProjectStatus = Literal["draft", "processing", "review", "ready", "failed"]
@@ -184,6 +184,102 @@ class SegmentUpdate(BaseModel):
     expected_version: int = Field(ge=1)
 
 
+class GlossaryTerm(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    source: str = Field(min_length=1, max_length=120)
+    preferred_target: str = Field(min_length=1, max_length=120)
+    note: str = Field(default="", max_length=500)
+
+
+class CharacterDirection(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    speaker_id: str = Field(min_length=1, max_length=36)
+    intent: str = Field(default="", max_length=1000)
+    delivery_notes: str = Field(default="", max_length=1000)
+
+
+class DialogueBriefContent(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    scene_summary: str = Field(default="", max_length=4000)
+    adaptation_notes: str = Field(default="", max_length=4000)
+    glossary: list[GlossaryTerm] = Field(default_factory=list, max_length=80)
+    characters: list[CharacterDirection] = Field(default_factory=list, max_length=20)
+
+    @model_validator(mode="after")
+    def unique_entries(self):
+        import unicodedata
+
+        terms = [unicodedata.normalize("NFC", term.source).casefold() for term in self.glossary]
+        speakers = [item.speaker_id for item in self.characters]
+        if len(terms) != len(set(terms)) or len(speakers) != len(set(speakers)):
+            raise ValueError("Use one glossary entry per source term and one direction per speaker")
+        return self
+
+    @field_validator("scene_summary", "adaptation_notes")
+    @classmethod
+    def no_null_bytes(cls, value):
+        if "\x00" in value:
+            raise ValueError("Notes cannot contain null bytes")
+        return value
+
+
+class DialogueBriefUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_version: int = Field(ge=0)
+    content: DialogueBriefContent
+
+
+class DialogueBriefRead(BaseModel):
+    id: str | None
+    project_id: str
+    revision_id: str
+    version: int
+    content: DialogueBriefContent
+
+
+class DialogueContextLine(BaseModel):
+    segment_id: str
+    source_text: str
+    translated_text: str
+    speaker_id: str | None
+    speaker_name: str | None
+    start_ms: int
+    end_ms: int
+
+
+class DialogueFinding(BaseModel):
+    code: Literal["missing_translation", "missing_preferred_term", "unassigned_speaker"]
+    message: str
+    source_term: str | None = None
+    preferred_target: str | None = None
+
+
+class DialogueReviewLine(DialogueContextLine):
+    segment_version: int
+    slot_duration_ms: int
+    target_character_count: int
+    previous_line: DialogueContextLine | None
+    next_line: DialogueContextLine | None
+    character_direction: CharacterDirection | None
+    matched_glossary: list[GlossaryTerm]
+    findings: list[DialogueFinding]
+
+
+class DialogueReviewReport(BaseModel):
+    schema_version: Literal[1] = 1
+    method: Literal["dialogue-review-v1"] = "dialogue-review-v1"
+    project_id: str
+    revision_id: str
+    source_language: LanguageCode
+    target_language: LanguageCode
+    brief: DialogueBriefRead
+    context_lines: list[DialogueContextLine]
+    context_applied_by_model: Literal[False] = False
+    lines: list[DialogueReviewLine]
+    warnings: list[str]
+    stale_reason: str | None = None
+
+
 class AlignedWord(BaseModel):
     text: str
     start_ms: int = Field(ge=0)
@@ -338,6 +434,7 @@ class JobCreate(BaseModel):
         "render_mix",
         "align",
         "analyze_takes",
+        "review_translation",
     ]
     provider: Literal["fake", "sarvam", "local"] | None = None
     source_asset_id: str | None = None
@@ -403,6 +500,7 @@ class ArtifactRead(ORMModel):
 
 
 class ProjectDetail(ProjectRead):
+    dialogue_brief: DialogueBriefRead | None
     assets: list[MediaAssetRead]
     speakers: list[SpeakerRead]
     segments: list[SegmentRead]

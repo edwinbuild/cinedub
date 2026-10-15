@@ -32,7 +32,7 @@ def test_fresh_and_upgrade_paths_preserve_legacy_edits(tmp_path):
     with sqlite3.connect(fresh) as connection:
         assert (
             connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
-            == "0006_reviewed_mixes"
+            == "0007_dialogue_briefs"
         )
         fresh_columns = {row[1] for row in connection.execute("PRAGMA table_info(segments)")}
     legacy = tmp_path / "legacy.db"
@@ -222,3 +222,52 @@ def test_reviewed_stems_survive_mix_upgrade_and_backup(tmp_path):
             == "Preserve review history"
         )
         assert connection.execute("SELECT COUNT(*) FROM mix_renders").fetchone()[0] == 0
+
+
+def test_brief_upgrade_backs_up_and_preserves_existing_mix_acceptance(tmp_path):
+    database = tmp_path / "mixes.db"
+    environment = migrate(database, "0006_reviewed_mixes")
+    now = "2026-10-15 00:00:00"
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "INSERT INTO mix_renders VALUES "
+            "('mix','p','j','r','a','stems','approved',2,'{}','{}','{}',?,?)",
+            (now, now),
+        )
+        connection.execute(
+            "INSERT INTO mix_review_records VALUES "
+            "('review','mix',2,'approved','Synthetic reviewer','Keep listening acceptance',"
+            "'certificate','bundle',?)",
+            (now,),
+        )
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from cinedub_api.database import create_database; create_database()",
+        ],
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+    )
+    backups = list(tmp_path.glob("mixes.db.v02-mixes-*.bak"))
+    assert len(backups) == 1
+    with sqlite3.connect(backups[0]) as connection:
+        assert (
+            connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
+            == "0006_reviewed_mixes"
+        )
+        assert connection.execute("SELECT status FROM mix_renders").fetchone()[0] == "approved"
+    with sqlite3.connect(database) as connection:
+        assert connection.execute("SELECT status,version FROM mix_renders").fetchone() == (
+            "approved",
+            2,
+        )
+        assert (
+            connection.execute("SELECT note FROM mix_review_records").fetchone()[0]
+            == "Keep listening acceptance"
+        )
+        assert connection.execute("SELECT COUNT(*) FROM dialogue_briefs").fetchone()[0] == 0

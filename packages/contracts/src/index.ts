@@ -97,6 +97,33 @@ export interface Artifact {
   access_blocked_reason: string | null;
 }
 
+export interface CharacterDirection {
+  speaker_id: string;
+  intent: string;
+  delivery_notes: string;
+}
+
+export interface DialogueBriefContent {
+  scene_summary: string;
+  adaptation_notes: string;
+  glossary: Array<GlossaryTerm>;
+  characters: Array<CharacterDirection>;
+}
+
+export interface DialogueBrief {
+  id: string | null;
+  project_id: string;
+  revision_id: string;
+  version: number;
+  content: DialogueBriefContent;
+}
+
+export interface GlossaryTerm {
+  source: string;
+  preferred_target: string;
+  note: string;
+}
+
 export interface MixRender {
   id: string;
   job_id: string;
@@ -182,6 +209,7 @@ export interface ProjectDetail {
   updated_at: string;
   active_revision_id: string | null;
   budget_inr: number;
+  dialogue_brief: DialogueBrief | null;
   assets: Array<MediaAsset>;
   speakers: Array<Speaker>;
   segments: Array<Segment>;
@@ -208,7 +236,7 @@ export interface MixSettings {
 }
 
 export interface JobRequest {
-  stage: "ingest" | "demo_pipeline" | "transcribe" | "translate" | "synthesize" | "export" | "render_preview" | "prepare_reference" | "register_voice" | "delete_voice" | "separate" | "render_mix" | "align" | "analyze_takes";
+  stage: "ingest" | "demo_pipeline" | "transcribe" | "translate" | "synthesize" | "export" | "render_preview" | "prepare_reference" | "register_voice" | "delete_voice" | "separate" | "render_mix" | "align" | "analyze_takes" | "review_translation";
   provider?: "fake" | "sarvam" | "local" | null;
   source_asset_id?: string | null;
   revision_id?: string | null;
@@ -493,6 +521,61 @@ export interface TakePerformanceReport {
   target_language: "en-IN" | "ml-IN";
   metadata: Record<string, unknown>;
   lines: Array<TakePerformanceLine>;
+  warnings: Array<string>;
+  stale_reason: string | null;
+}
+
+export interface DialogueBriefUpdate {
+  expected_version: number;
+  content: DialogueBriefContent;
+}
+
+export interface DialogueContextLine {
+  segment_id: string;
+  source_text: string;
+  translated_text: string;
+  speaker_id: string | null;
+  speaker_name: string | null;
+  start_ms: number;
+  end_ms: number;
+}
+
+export interface DialogueFinding {
+  code: "missing_translation" | "missing_preferred_term" | "unassigned_speaker";
+  message: string;
+  source_term: string | null;
+  preferred_target: string | null;
+}
+
+export interface DialogueReviewLine {
+  segment_id: string;
+  source_text: string;
+  translated_text: string;
+  speaker_id: string | null;
+  speaker_name: string | null;
+  start_ms: number;
+  end_ms: number;
+  segment_version: number;
+  slot_duration_ms: number;
+  target_character_count: number;
+  previous_line: DialogueContextLine | null;
+  next_line: DialogueContextLine | null;
+  character_direction: CharacterDirection | null;
+  matched_glossary: Array<GlossaryTerm>;
+  findings: Array<DialogueFinding>;
+}
+
+export interface DialogueReviewReport {
+  schema_version: 1;
+  method: "dialogue-review-v1";
+  project_id: string;
+  revision_id: string;
+  source_language: "en-IN" | "ml-IN";
+  target_language: "en-IN" | "ml-IN";
+  brief: DialogueBrief;
+  context_lines: Array<DialogueContextLine>;
+  context_applied_by_model: false;
+  lines: Array<DialogueReviewLine>;
   warnings: Array<string>;
   stale_reason: string | null;
 }

@@ -44,6 +44,7 @@ def create_database() -> None:
                     "0003_voice_candidates",
                     "0004_consented_clones",
                     "0005_reviewed_stems",
+                    "0006_reviewed_mixes",
                 }:
                     label = {
                         "0001_initial_schema": "v01",
@@ -51,6 +52,7 @@ def create_database() -> None:
                         "0003_voice_candidates": "v02-voices",
                         "0004_consented_clones": "v02-consent",
                         "0005_reviewed_stems": "v02-stems",
+                        "0006_reviewed_mixes": "v02-mixes",
                     }[current[0]]
                     backup = path.with_name(
                         f"{path.name}.{label}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S%f')}.bak"

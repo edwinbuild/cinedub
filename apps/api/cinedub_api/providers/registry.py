@@ -118,6 +118,8 @@ class ProviderRegistry:
             "timing_aligner": self.settings.timing_aligner,
             "target_timing_aligner": self.settings.target_timing_aligner,
             "media_exporter": "local",
+            "translation_reviewer": "local",
+            "dialogue_adapter": "local",
         }
         implemented = {
             ("transcriber", "fake"),
@@ -136,6 +138,7 @@ class ProviderRegistry:
             ("timing_aligner", "local"),
             ("performance_analyzer", "local"),
             ("target_timing_aligner", "local"),
+            ("translation_reviewer", "local"),
         }
         result = []
         for capability, provider in values.items():
@@ -186,6 +189,16 @@ class ProviderRegistry:
             if capability == "media_exporter":
                 reason = (
                     "Subtitles, dialogue previews and reviewed stereo music/effects mix exports"
+                )
+            if capability == "translation_reviewer":
+                reason = (
+                    "Local glossary and saved-context checks; "
+                    "no AI rewriting or speech-duration estimate"
+                )
+            if capability == "dialogue_adapter":
+                reason = (
+                    "Context-capable dialogue adaptation is not connected; "
+                    "briefs support manual review only"
                 )
             result.append(
                 Capability(

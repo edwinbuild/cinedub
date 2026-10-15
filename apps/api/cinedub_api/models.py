@@ -1,7 +1,17 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -45,6 +55,20 @@ class TimelineRevision(Base, TimestampMixin):
     provider: Mapped[str] = mapped_column(String(48))
     model: Mapped[str] = mapped_column(String(120))
     warnings_json: Mapped[list] = mapped_column(JSON, default=list)
+
+
+class DialogueBrief(Base):
+    """Append-only editorial context, scoped to one source-bound timeline revision."""
+
+    __tablename__ = "dialogue_briefs"
+    __table_args__ = (UniqueConstraint("revision_id", "version"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    revision_id: Mapped[str] = mapped_column(ForeignKey("timeline_revisions.id"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    content_json: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class MediaAsset(Base, TimestampMixin):

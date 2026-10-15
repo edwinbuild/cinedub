@@ -16,6 +16,7 @@ from .clone_processing import (
 )
 from .config import get_settings
 from .database import SessionLocal, create_database
+from .dialogue_processing import process_review_translation
 from .media import (
     copy_reference_video,
     create_preview_proxy,
@@ -348,6 +349,7 @@ PROCESSORS = {
     "package_mix": process_package_mix,
     "align": process_align,
     "analyze_takes": process_analyze_takes,
+    "review_translation": process_review_translation,
 }
 
 

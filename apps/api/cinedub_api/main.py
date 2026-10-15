@@ -18,6 +18,7 @@ from .consent import artifact_block_reason
 from .database import SessionLocal, create_database
 from .dependencies import SessionDep, require_project
 from .diagnostics import hardware_diagnostics
+from .dialogue_review import latest_brief
 from .jobs import ACTIVE, budget_totals, estimate_job, prepare_job, write_lock
 from .media import MediaError, probe_media, safe_filename
 from .mixes import mix_read
@@ -38,6 +39,7 @@ from .models import (
 )
 from .providers import ProviderRegistry
 from .routes.alignment import router as alignment_router
+from .routes.dialogue import router as dialogue_router
 from .routes.mixes import router as mixes_router
 from .routes.stems import router as stems_router
 from .routes.take_analysis import router as take_analysis_router
@@ -93,6 +95,7 @@ app.include_router(stems_router)
 app.include_router(mixes_router)
 app.include_router(alignment_router)
 app.include_router(take_analysis_router)
+app.include_router(dialogue_router)
 
 
 def artifact_read(artifact: Artifact, session: Session | None = None) -> ArtifactRead:
@@ -133,6 +136,11 @@ def project_detail(session: Session, project: Project) -> ProjectDetail:
     ).all()
     return ProjectDetail(
         **ProjectRead.model_validate(project).model_dump(),
+        dialogue_brief=(
+            latest_brief(session, project.id, project.active_revision_id)
+            if project.active_revision_id
+            else None
+        ),
         assets=[MediaAssetRead.model_validate(item) for item in assets],
         speakers=[SpeakerRead.model_validate(item) for item in speakers],
         segments=[SegmentRead.model_validate(item) for item in segments],

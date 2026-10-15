@@ -16,6 +16,7 @@ from .consent import (
     profile_is_selected,
     validate_voice_use,
 )
+from .dialogue_review import freeze_dialogue_review
 from .mixes import freeze_background
 from .models import (
     Artifact,
@@ -80,6 +81,7 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
         "separate": settings.stem_separator,
         "align": settings.timing_aligner,
         "analyze_takes": settings.performance_analyzer,
+        "review_translation": "local",
     }
     provider = payload.provider or defaults[payload.stage]
     if payload.stage in {"transcribe", "translate", "synthesize", "register_voice", "delete_voice"}:
@@ -129,6 +131,11 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
         {"source_language": project.source_language, "target_language": project.target_language}
     )
     cost = 0.0
+    if payload.stage == "review_translation":
+        try:
+            inputs.update(freeze_dialogue_review(session, project, payload))
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
     if payload.stage == "analyze_takes":
         if provider != "local" or not take_analyzer_available():
             raise HTTPException(422, "Install the optional local acoustic analysis adapter")
