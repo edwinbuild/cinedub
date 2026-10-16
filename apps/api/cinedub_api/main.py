@@ -10,7 +10,7 @@ from typing import Annotated
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .config import get_settings
@@ -21,6 +21,7 @@ from .diagnostics import hardware_diagnostics
 from .dialogue_review import latest_brief
 from .dialogue_review import stale_reason as dialogue_context_stale_reason
 from .jobs import ACTIVE, budget_totals, estimate_job, prepare_job, write_lock
+from .line_editing import apply_line_edit
 from .media import MediaError, probe_media, safe_filename
 from .mixes import mix_read
 from .models import (
@@ -31,7 +32,6 @@ from .models import (
     Project,
     ProviderRun,
     Segment,
-    SegmentEdit,
     Speaker,
     StemSet,
     TimelineRevision,
@@ -43,6 +43,7 @@ from .routes.adaptation import router as adaptation_router
 from .routes.alignment import router as alignment_router
 from .routes.dialogue import router as dialogue_router
 from .routes.emotion import router as emotion_router
+from .routes.history import router as history_router
 from .routes.mixes import router as mixes_router
 from .routes.stems import router as stems_router
 from .routes.take_analysis import router as take_analysis_router
@@ -101,6 +102,7 @@ app.include_router(take_analysis_router)
 app.include_router(dialogue_router)
 app.include_router(adaptation_router)
 app.include_router(emotion_router)
+app.include_router(history_router)
 
 
 def artifact_read(artifact: Artifact, session: Session | None = None) -> ArtifactRead:
@@ -349,74 +351,7 @@ async def update_segment(
     segment = session.get(Segment, segment_id)
     if not segment:
         raise HTTPException(status_code=404, detail="Segment not found")
-    if segment.version != payload.expected_version:
-        raise HTTPException(status_code=409, detail="Segment changed; refresh before saving")
-    values = payload.model_dump(exclude={"expected_version"}, exclude_unset=True)
-    for field in ("source_text", "translated_text", "start_ms", "end_ms", "status"):
-        if field in values and values[field] is None:
-            raise HTTPException(422, f"{field} cannot be null")
-    if "source_text" in values and not values["source_text"].strip():
-        raise HTTPException(422, "English dialogue must not be blank")
-    if values.get("speaker_id"):
-        speaker = session.get(Speaker, values["speaker_id"])
-        if (
-            not speaker
-            or speaker.project_id != segment.project_id
-            or speaker.revision_id != segment.revision_id
-        ):
-            raise HTTPException(status_code=422, detail="Speaker does not belong to this project")
-    start = values.get("start_ms", segment.start_ms)
-    end = values.get("end_ms", segment.end_ms)
-    revision = session.get(TimelineRevision, segment.revision_id) if segment.revision_id else None
-    source = (
-        session.get(MediaAsset, revision.source_asset_id)
-        if revision and revision.source_asset_id
-        else None
-    )
-    if end <= start or (source and end > source.duration_ms):
-        raise HTTPException(422, "Line timing must satisfy 0 ≤ start < end ≤ scene duration")
-    changed = any(
-        values.get(field, getattr(segment, field)) != getattr(segment, field)
-        for field in ("source_text", "translated_text", "speaker_id", "start_ms", "end_ms")
-    )
-    if changed:
-        values.update(
-            {"human_edited": True, "status": "needs_review", "selected_candidate_id": None}
-        )
-    if "speaker_id" in values:
-        values["warnings_json"] = [
-            warning
-            for warning in segment.warnings_json
-            if warning != "Speaker unassigned; review this line"
-        ]
-        if values["speaker_id"] is None:
-            values["warnings_json"].append("Speaker unassigned; review this line")
-    if (
-        values.get("status") == "approved"
-        and not values.get("translated_text", segment.translated_text).strip()
-    ):
-        raise HTTPException(422, "Add a Malayalam translation before approving this line")
-    before = SegmentRead.model_validate(segment).model_dump(mode="json")
-    result = session.execute(
-        update(Segment)
-        .where(Segment.id == segment_id, Segment.version == payload.expected_version)
-        .values(**values, version=payload.expected_version + 1)
-    )
-    if result.rowcount != 1:
-        session.rollback()
-        raise HTTPException(409, "Segment changed; refresh before saving")
-    session.refresh(segment)
-    session.add(
-        SegmentEdit(
-            segment_id=segment.id,
-            version=segment.version,
-            before_json=before,
-            after_json=SegmentRead.model_validate(segment).model_dump(mode="json"),
-        )
-    )
-    session.commit()
-    session.refresh(segment)
-    return segment
+    return apply_line_edit(session, segment, payload)
 
 
 @app.post("/projects/{project_id}/speakers", response_model=SpeakerRead, status_code=201)

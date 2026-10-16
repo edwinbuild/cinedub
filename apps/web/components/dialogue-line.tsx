@@ -4,6 +4,7 @@ import type { Artifact, Segment, Speaker } from "@cinedub/contracts";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { VoiceCandidates } from "@/components/voice-candidates";
+import { LineHistory } from "@/components/line-history";
 
 function draft(line: Segment) {
   return { source_text: line.source_text, translated_text: line.translated_text,
@@ -20,9 +21,10 @@ export function DialogueLine({ segment, speakers, artifacts, disabled, active, c
   const [base, setBase] = useState(segment);
   const [values, setValues] = useState(() => draft(segment));
   const [saving, setSaving] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dirty = JSON.stringify(values) !== JSON.stringify(draft(base));
-  const stale = segment.version !== base.version;
+  const stale = segment.version > base.version;
 
   useEffect(() => {
     if (dirty || !stale) return;
@@ -45,7 +47,14 @@ export function DialogueLine({ segment, speakers, artifacts, disabled, active, c
     finally { setSaving(false); }
   }
 
-  return <article hidden={hidden} className={`dialogueLine ${active ? "playing" : ""}`} aria-label={`Dialogue line ${segment.index + 1}`}>
+  return <article hidden={hidden} tabIndex={-1} data-dialogue-line className={`dialogueLine ${active ? "playing" : ""}`} aria-label={`Dialogue line ${segment.index + 1}`}
+    onKeyDown={(event) => {
+      if (!event.nativeEvent.isComposing && !event.repeat && (event.ctrlKey || event.metaKey) && !event.altKey && event.key === "Enter") {
+        event.preventDefault();
+        if (dirty && !saving && !restoring && !stale) void save();
+      }
+    }}>
+    <fieldset className="lineFields" disabled={saving || restoring} aria-label={`Editable fields for line ${segment.index + 1}`}>
     <div className="lineHeader"><strong>Line {segment.index + 1}</strong>
       <button className="smallButton" onClick={() => onPlay(segment)} disabled={!canPlay}>Play this line</button>
       <label>Speaker<select aria-label={`Speaker for line ${segment.index + 1}`} value={values.speaker_id ?? ""}
@@ -70,8 +79,9 @@ export function DialogueLine({ segment, speakers, artifacts, disabled, active, c
         <option value="voiced">Voiced</option></select></label>
       <button className="smallButton" onClick={() => onRegenerate(segment.id)} disabled={dirty || saving}>Regenerate translation</button>
       <button className="smallButton" onClick={() => onGenerate(segment.id)} disabled={disabled || dirty || saving || segment.status !== "approved"}>Generate voice</button>
-      <button className="smallButton" onClick={save} disabled={!dirty || saving || stale}>{saving ? "Saving…" : "Save line"}</button>
+      <button className="smallButton" aria-keyshortcuts="Control+Enter Meta+Enter" onClick={save} disabled={!dirty || saving || stale}>{saving ? "Saving…" : "Save line"}</button>
     </div>
+    </fieldset>
     {segment.warnings_json.map((warning) => <p className="lineWarning" key={warning}>{warning}</p>)}
     {stale && dirty && <p className="lineWarning">This line changed on the server. Your draft is preserved.
       <button className="smallButton" onClick={() => { if (window.confirm("Discard your unsaved draft and load the saved line?")) {
@@ -79,6 +89,9 @@ export function DialogueLine({ segment, speakers, artifacts, disabled, active, c
       } }}>Load saved line</button></p>}
     {dirty && <small className="muted">Unsaved changes. Changing dialogue or timing requires approval again.</small>}
     {error && <p className="inlineError" role="alert">{error}</p>}
-    <VoiceCandidates segment={segment} artifacts={artifacts} disabled={disabled || dirty || saving || stale} onSaved={onSaved} />
+    <LineHistory segment={segment} disabled={disabled || dirty || saving || restoring || stale} onRestoring={setRestoring} onRestored={(saved) => {
+      setBase(saved); setValues(draft(saved)); onDirty(segment.id, false); onSaved();
+    }} />
+    <VoiceCandidates segment={segment} artifacts={artifacts} disabled={disabled || dirty || saving || restoring || stale} onSaved={onSaved} />
   </article>;
 }

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { DialogueLine } from "@/components/dialogue-line";
+import { DialogueTimeline } from "@/components/dialogue-timeline";
 import { ScenePlayer } from "@/components/scene-player";
 import { VoicePanel } from "@/components/voice-panel";
 import { ClonePanel } from "@/components/clone-panel";
@@ -245,7 +246,7 @@ export default function ProjectPage() {
           disabled={locked} onSaved={load} onRun={run} />}
         <div className="reviewFilters" role="group" aria-label="Filter dialogue">{["all", "untranslated", "edited", "approved", "warnings"].map((value) =>
           <button key={value} className={`smallButton ${filter === value ? "selected" : ""}`} aria-pressed={filter === value} onClick={() => setFilter(value)}>{value}</button>)}</div>
-        <div className="segments">{project.segments.map((line) => <DialogueLine key={line.id} segment={line} speakers={project.speakers} artifacts={project.artifacts}
+        <DialogueTimeline>{project.segments.map((line) => <DialogueLine key={line.id} segment={line} speakers={project.speakers} artifacts={project.artifacts}
           disabled={locked} onGenerate={(lineId) => run({ stage: "synthesize", revision_id: revisionId, segment_ids: [lineId], force_new: true })}
           active={timelineMatches && time >= line.start_ms && time < line.end_ms} hidden={hidden(line)} canPlay={!!sourceReady && timelineMatches}
           onPlay={playLine} onSaved={load} onDirty={onDirty} onRegenerate={(lineId) => {
@@ -253,7 +254,7 @@ export default function ProjectPage() {
               void run({ stage: "translate", revision_id: revisionId, segment_ids: [lineId], regenerate: true });
           }} />)}
           {!project.segments.length && <div className="timelineEmpty"><strong>{activeRevision ? "No speech detected" : "Your dialogue will appear here"}</strong>
-            <span>{activeRevision ? "Try a clearer source or retranscribe into a new revision." : "Import a scene, wait for preparation, then transcribe it."}</span></div>}</div>
+            <span>{activeRevision ? "Try a clearer source or retranscribe into a new revision." : "Import a scene, wait for preparation, then transcribe it."}</span></div>}</DialogueTimeline>
       </section>
       <aside className="rightRail"><div className="metricCard"><div><span>Review</span><strong>{project.segments.filter((line) => line.status === "approved").length}/{project.segments.length} approved</strong></div></div>
         <div className="metricCard"><div><span>Estimated processing budget</span><strong>₹{project.spent_estimate_inr.toFixed(2)} / ₹{project.budget_inr.toFixed(2)}</strong>

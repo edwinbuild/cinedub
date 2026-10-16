@@ -5,6 +5,8 @@ import type {
   ProjectDetail,
   ProjectSummary,
   Segment,
+  SegmentHistory,
+  SegmentHistoryAction,
   JobRequest,
   JobEstimate,
   Speaker,
@@ -108,6 +110,8 @@ export const api = {
     method: "POST", body: JSON.stringify({ artifact_id: artifactId, expected_version: line.version }),
   }),
   cancelJob: (jobId: string) => request<Job>(`/jobs/${jobId}/cancel`, { method: "POST" }),
+  segmentHistory: (id: string) => request<SegmentHistory>(`/segments/${id}/history`),
+  restoreSegmentHistory: (id: string, payload: SegmentHistoryAction) => request<Segment>(`/segments/${id}/history`, { method: "POST", body: JSON.stringify(payload) }),
   updateSegment: (
     segment: Segment,
     changes: Partial<Pick<Segment, "source_text" | "translated_text" | "start_ms" | "end_ms" | "speaker_id" | "status">>,

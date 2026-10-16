@@ -297,6 +297,41 @@ export interface SegmentUpdate {
   expected_version: number;
 }
 
+export interface SegmentContent {
+  source_text: string;
+  translated_text: string;
+  start_ms: number;
+  end_ms: number;
+  speaker_id: string | null;
+}
+
+export interface SegmentHistoryEntry {
+  id: string;
+  version: number;
+  action: "edit" | "undo" | "redo";
+  target_edit_id: string | null;
+  before: SegmentContent | null;
+  after: SegmentContent | null;
+  created_at: string;
+}
+
+export interface SegmentHistory {
+  segment_id: string;
+  version: number;
+  undo_edit_id: string | null;
+  redo_edit_id: string | null;
+  unavailable_reason: string | null;
+  entries: Array<SegmentHistoryEntry>;
+  total_entries: number;
+}
+
+export interface SegmentHistoryAction {
+  expected_version: number;
+  expected_edit_id: string;
+  action: "undo" | "redo";
+  restoration_confirmed?: boolean;
+}
+
 export interface SpeakerUpdate {
   display_name: string;
 }

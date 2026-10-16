@@ -301,6 +301,12 @@ a { color: inherit; text-decoration: none; }
 .dialogueAdaptationPanel p { font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .emotionPanel p { font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .emotionPanel fieldset { min-width: 0; }
+.dialogueLine:focus { outline: 2px solid var(--cyan); outline-offset: 3px; }
+.lineFields { border: 0; margin: 0; padding: 0; min-width: 0; }
+.lineHistory { margin: 12px 0; font-size: 12px; }
+.lineHistory summary { cursor: pointer; }
+.lineHistory p { line-height: 1.6; overflow-wrap: anywhere; }
+.historySnapshot { border-left: 2px solid var(--line); padding-left: 12px; }
 .adaptationOptions { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin: 14px 0; }
 .adaptationOption { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
 .adaptationOption h4 { margin: 0 0 8px; font-size: 13px; }

@@ -21,6 +21,8 @@ NAMES = {
     "CapabilityRead": "CapabilityStatus",
     "HardwareRead": "HardwareStatus",
     "SegmentUpdate": "SegmentUpdate",
+    "SegmentHistory": "SegmentHistory",
+    "SegmentHistoryAction": "SegmentHistoryAction",
     "SpeakerUpdate": "SpeakerUpdate",
     "SpeakerCreate": "SpeakerCreate",
     "BudgetUpdate": "BudgetUpdate",
@@ -56,6 +58,7 @@ NAMES = {
 REQUESTS = {
     "JobCreate",
     "SegmentUpdate",
+    "SegmentHistoryAction",
     "SpeakerUpdate",
     "SpeakerCreate",
     "BudgetUpdate",

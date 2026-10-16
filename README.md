@@ -217,6 +217,12 @@ CINEDUB_E2E_TRANSCRIBER=local npm run test:e2e -- tests/e2e/local-asr.spec.ts
 
 This uses temporary projects, no Sarvam key and no model download. The ordinary browser suite skips this opt-in test.
 
+## Saved edits and keyboard navigation
+
+Open a dialogue line's **Saved edit history** to inspect its recent before/after records and undo or redo saved text, speaker or timing changes. Acknowledged restoration requires approval again and clears selected voice audio; it never restores old consent, voices or emotion settings. Save or explicitly discard drafts before restoring. History survives reload and detects conflicts with other tabs or provider changes. See [history rules and remaining editor scope](docs/decisions/0012-saved-line-history.md).
+
+Alt+↑/↓ moves between visible lines; **Previous line** and **Next line** do the same. Ctrl/⌘+Enter saves the focused line. Native text undo stays available inside text boxes; saved undo/redo uses the history buttons.
+
 ## Optional speech emotion hints
 
 Install the `local-emotion` extra alongside your existing extras, then run `PYTHONPATH=apps/api .venv/bin/python scripts/setup-local-emotion.py`. Restart the API and worker to refresh availability. The editor's **Speech-emotion hints** panel runs an offline English audio classifier with a speech-presence guard. Its four classes are experimental, uncalibrated hints; explicit human reviews are saved separately and never change translations, timing, voice settings or approvals. About 381 MB of graphs are downloaded only during setup. See [setup, measurements and limitations](docs/evaluations/speech-emotion.md).

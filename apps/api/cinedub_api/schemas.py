@@ -184,6 +184,42 @@ class SegmentUpdate(BaseModel):
     expected_version: int = Field(ge=1)
 
 
+class SegmentContent(BaseModel):
+    source_text: str = Field(min_length=1, max_length=4000)
+    translated_text: str = Field(max_length=4000)
+    start_ms: int = Field(ge=0)
+    end_ms: int = Field(gt=0)
+    speaker_id: str | None
+
+
+class SegmentHistoryEntry(BaseModel):
+    id: str
+    version: int
+    action: Literal["edit", "undo", "redo"]
+    target_edit_id: str | None
+    before: SegmentContent | None
+    after: SegmentContent | None
+    created_at: datetime
+
+
+class SegmentHistory(BaseModel):
+    segment_id: str
+    version: int
+    undo_edit_id: str | None
+    redo_edit_id: str | None
+    unavailable_reason: str | None
+    entries: list[SegmentHistoryEntry]
+    total_entries: int
+
+
+class SegmentHistoryAction(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_version: int = Field(ge=1)
+    expected_edit_id: str = Field(min_length=1, max_length=36)
+    action: Literal["undo", "redo"]
+    restoration_confirmed: bool = False
+
+
 class GlossaryTerm(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     source: str = Field(min_length=1, max_length=120)
