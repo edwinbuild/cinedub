@@ -223,6 +223,10 @@ Open a dialogue line's **Saved edit history** to inspect its recent before/after
 
 Alt+↑/↓ moves between visible lines; **Previous line** and **Next line** do the same. Ctrl/⌘+Enter saves the focused line. Native text undo stays available inside text boxes; saved undo/redo uses the history buttons.
 
+The **Split, merge & structural history** panel below the timeline can divide a saved line at a manually chosen time or combine adjacent lines assigned to the same speaker. Enter the intended text explicitly and confirm replacement. Originals and artifacts stay historical; changed lines require review and new take selection. Structural history offers guarded reversal, including reversal of a reversal, while refusing to overwrite later edits. Unsaved forms survive refresh/conflicts. See [structural editing and migration rules](docs/decisions/0013-timeline-structure.md).
+
+If another tab removes a line you are editing, its unsaved dialogue stays visible as a preserved draft. Download or copy it before explicitly discarding it; it will not be applied automatically to replacement lines.
+
 ## Optional speech emotion hints
 
 Install the `local-emotion` extra alongside your existing extras, then run `PYTHONPATH=apps/api .venv/bin/python scripts/setup-local-emotion.py`. Restart the API and worker to refresh availability. The editor's **Speech-emotion hints** panel runs an offline English audio classifier with a speech-presence guard. Its four classes are experimental, uncalibrated hints; explicit human reviews are saved separately and never change translations, timing, voice settings or approvals. About 381 MB of graphs are downloaded only during setup. See [setup, measurements and limitations](docs/evaluations/speech-emotion.md).

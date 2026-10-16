@@ -169,6 +169,7 @@ class SegmentRead(ORMModel):
     human_edited: bool
     warnings_json: list[str]
     selected_candidate_id: str | None
+    retired: bool = False
 
 
 class SegmentUpdate(BaseModel):
@@ -217,6 +218,51 @@ class SegmentHistoryAction(BaseModel):
     expected_version: int = Field(ge=1)
     expected_edit_id: str = Field(min_length=1, max_length=36)
     action: Literal["undo", "redo"]
+    restoration_confirmed: bool = False
+
+
+class SplitLinePart(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    source_text: str = Field(min_length=1, max_length=4000)
+    translated_text: str = Field(default="", max_length=4000)
+
+
+class SegmentSplit(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    revision_id: str
+    expected_version: int = Field(ge=1)
+    split_ms: int = Field(gt=0)
+    first: SplitLinePart
+    second: SplitLinePart
+    replacement_confirmed: bool = False
+
+
+class SegmentMerge(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    revision_id: str
+    next_segment_id: str
+    expected_version: int = Field(ge=1)
+    expected_next_version: int = Field(ge=1)
+    text: SplitLinePart
+    replacement_confirmed: bool = False
+
+
+class TimelineStructureEditRead(BaseModel):
+    id: str
+    revision_id: str
+    action: Literal["split", "merge", "restore"]
+    parent_edit_id: str | None
+    before: list[SegmentRead]
+    after: list[SegmentRead]
+    created_at: datetime
+    restorable: bool
+    unavailable_reason: str | None
+
+
+class TimelineStructureRestore(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    revision_id: str
+    expected_versions: dict[str, int]
     restoration_confirmed: bool = False
 
 

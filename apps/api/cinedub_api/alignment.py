@@ -107,6 +107,7 @@ def validate_alignment_lines(session, project_id, revision_id, snapshots):
         line = session.get(Segment, snapshot["id"])
         if (
             not line
+            or line.retired
             or line.project_id != project_id
             or line.revision_id != revision_id
             or line.version != snapshot["version"]
@@ -134,6 +135,7 @@ def read_alignment_report(session, artifact):
         line = session.get(Segment, evidence.segment_id)
         if (
             not line
+            or line.retired
             or line.project_id != report.project_id
             or line.revision_id != report.revision_id
             or line.version != evidence.segment_version

@@ -70,6 +70,9 @@ def history_state(session, segment):
     if current is None or (records and previous != current):
         undo, redo = [], []
         reason = "Line content changed outside the saved edit chain; older history is read-only"
+    if segment.retired:
+        undo, redo = [], []
+        reason = "This replaced line is read-only; use structural history"
     result = SegmentHistory(
         segment_id=segment.id,
         version=segment.version,

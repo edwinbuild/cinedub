@@ -42,6 +42,7 @@ def process_synthesize(session, job):
         profile = session.get(VoiceProfile, voice["profile_id"])
         if (
             not line
+            or line.retired
             or line.version != snapshot["version"]
             or not profile
             or profile.version != voice["profile_version"]
@@ -68,6 +69,7 @@ def process_synthesize(session, job):
                 current = session.get(Segment, snapshot["id"])
                 if (
                     not current
+                    or current.retired
                     or current.version != snapshot["version"]
                     or profile.version != voice["profile_version"]
                     or not profile_is_selected(session, profile)

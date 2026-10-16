@@ -62,7 +62,9 @@ def validate_mix_snapshot(session, inputs):
     current_ids = set(
         session.scalars(
             select(Segment.id).where(
-                Segment.project_id == project.id, Segment.revision_id == inputs["revision_id"]
+                Segment.project_id == project.id,
+                Segment.revision_id == inputs["revision_id"],
+                Segment.retired.is_(False),
             )
         )
     )
@@ -80,6 +82,7 @@ def validate_mix_snapshot(session, inputs):
         line = session.get(Segment, snapshot["id"])
         if (
             not line
+            or line.retired
             or line.version != snapshot["version"]
             or line.status != "approved"
             or line.selected_candidate_id != inputs["candidates"][line.id]

@@ -272,7 +272,11 @@ def process_translate(session: Session, job: Job) -> dict:
             translated += 1
             continue
         # Never dispatch paid work for a line that was edited after scheduling.
-        if not line or (line.version != snapshot["version"] and snapshot["id"] not in results):
+        if (
+            not line
+            or line.retired
+            or (line.version != snapshot["version"] and snapshot["id"] not in results)
+        ):
             preserved += 1
             continue
         if snapshot["id"] not in results:

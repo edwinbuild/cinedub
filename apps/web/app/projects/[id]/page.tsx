@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { DialogueLine } from "@/components/dialogue-line";
 import { DialogueTimeline } from "@/components/dialogue-timeline";
+import { StructurePanel } from "@/components/structure-panel";
 import { ScenePlayer } from "@/components/scene-player";
 import { VoicePanel } from "@/components/voice-panel";
 import { ClonePanel } from "@/components/clone-panel";
@@ -34,12 +35,24 @@ export default function ProjectPage() {
   const [time, setTime] = useState(0);
   const [stopAt, setStopAt] = useState<number | null>(null);
   const [dirtyIds, setDirtyIds] = useState<Set<string>>(() => new Set());
+  const [structureDirty, setStructureDirty] = useState(false);
+  const [preservedDrafts, setPreservedDrafts] = useState<Segment[]>([]);
+  const dirtyRef = useRef<Set<string>>(new Set());
+  const lineCache = useRef<Map<string, Segment>>(new Map());
   const mediaRef = useRef<HTMLMediaElement | null>(null);
   const loadSequence = useRef(0);
   const load = useCallback(async () => {
     const sequence = ++loadSequence.current;
     try { const detail = await api.project(id);
-      if (sequence === loadSequence.current) { setProject(detail); setError(null); } }
+      if (sequence === loadSequence.current) {
+        const current = new Map(detail.segments.map((line) => [line.id, line]));
+        const displaced = Array.from(dirtyRef.current).flatMap((lineId) => {
+          const previous = lineCache.current.get(lineId);
+          return !current.has(lineId) && previous ? [{ ...previous, retired: true }] : [];
+        });
+        lineCache.current = new Map([...current, ...displaced.map((line) => [line.id, line] as const)]);
+        setPreservedDrafts(displaced); setProject(detail); setError(null);
+      } }
     catch (cause) { if (sequence === loadSequence.current)
       setError(cause instanceof Error ? cause.message : "Could not load project"); }
   }, [id]);
@@ -58,13 +71,15 @@ export default function ProjectPage() {
     const timer = window.setInterval(load, 1500); return () => window.clearInterval(timer);
   }, [hasJobs, load]);
   useEffect(() => {
-    if (!dirtyIds.size) return;
+    if (!dirtyIds.size && !structureDirty) return;
     function warn(event: BeforeUnloadEvent) { event.preventDefault(); event.returnValue = ""; }
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [dirtyIds.size]);
+  }, [dirtyIds.size, structureDirty]);
   const onDirty = useCallback((lineId: string, dirty: boolean) => {
-    setDirtyIds((ids) => { const next = new Set(ids); if (dirty) next.add(lineId); else next.delete(lineId); return next; });
+    const next = new Set(dirtyRef.current); if (dirty) next.add(lineId); else next.delete(lineId);
+    dirtyRef.current = next; setDirtyIds(next);
+    if (!dirty) setPreservedDrafts((lines) => lines.filter((line) => line.id !== lineId));
   }, []);
   const onTime = useCallback((value: number) => setTime(value), []);
   const onStop = useCallback(() => setStopAt(null), []);
@@ -107,15 +122,21 @@ export default function ProjectPage() {
   }
   async function activate(revisionId: string) {
     if (!project) return;
-    if (dirtyIds.size && !window.confirm("Discard unsaved drafts and switch timeline? Saved revisions are preserved.")) return;
+    if ((dirtyIds.size || structureDirty) && !window.confirm("Discard unsaved drafts and switch timeline? Saved revisions are preserved.")) return;
     try { setBusy("revision"); setProject(await api.activateRevision(id, revisionId, project.active_revision_id));
-      setDirtyIds(new Set()); setSelectedSource(null); mediaRef.current?.pause(); setStopAt(null); }
+      dirtyRef.current = new Set(); lineCache.current.clear(); setPreservedDrafts([]);
+      setDirtyIds(new Set()); setStructureDirty(false); setSelectedSource(null); mediaRef.current?.pause(); setStopAt(null); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Could not switch timeline"); }
     finally { setBusy(null); }
   }
   async function jobAction(action: () => Promise<unknown>) {
     try { setBusy("job"); await action(); await load(); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Job action failed"); }
+    finally { setBusy(null); }
+  }
+  async function structureAction(action: () => Promise<unknown>) {
+    setBusy("structure");
+    try { await action(); await load(); }
     finally { setBusy(null); }
   }
   async function playLine(line: Segment) {
@@ -155,10 +176,10 @@ export default function ProjectPage() {
   return <main className="studioShell">
     <header className="studioTopbar"><div className="studioIdentity">
       <Link href="/" className="iconButton" aria-label="Projects" onClick={(event) => {
-        if (dirtyIds.size && !window.confirm("Leave this scene and discard unsaved drafts?")) event.preventDefault();
+        if ((dirtyIds.size || structureDirty) && !window.confirm("Leave this scene and discard unsaved drafts?")) event.preventDefault();
       }}><ArrowLeft size={17} /></Link><span className="brandMark"><Film size={17} /></span>
       <div><strong>{project.name}</strong><span>English → Malayalam · v0.2</span></div></div>
-      <div className="studioStatus">{dirtyIds.size > 0 && <span>{dirtyIds.size} unsaved</span>}
+      <div className="studioStatus">{(dirtyIds.size > 0 || structureDirty) && <span>{dirtyIds.size + Number(structureDirty)} unsaved</span>}
         {activeJob ? activeJob.phase.replaceAll("_", " ") : project.status}
         <button className="iconButton" aria-label="Refresh project" onClick={load}><RefreshCw size={15} /></button></div></header>
     {error && <div className="errorBanner studioError" role="alert">{error}</div>}
@@ -246,15 +267,19 @@ export default function ProjectPage() {
           disabled={locked} onSaved={load} onRun={run} />}
         <div className="reviewFilters" role="group" aria-label="Filter dialogue">{["all", "untranslated", "edited", "approved", "warnings"].map((value) =>
           <button key={value} className={`smallButton ${filter === value ? "selected" : ""}`} aria-pressed={filter === value} onClick={() => setFilter(value)}>{value}</button>)}</div>
-        <DialogueTimeline>{project.segments.map((line) => <DialogueLine key={line.id} segment={line} speakers={project.speakers} artifacts={project.artifacts}
+        <DialogueTimeline>{[...project.segments, ...preservedDrafts].map((line) => <DialogueLine key={line.id} segment={line} speakers={project.speakers} artifacts={project.artifacts}
+          structureLocked={busy === "structure"}
           disabled={locked} onGenerate={(lineId) => run({ stage: "synthesize", revision_id: revisionId, segment_ids: [lineId], force_new: true })}
-          active={timelineMatches && time >= line.start_ms && time < line.end_ms} hidden={hidden(line)} canPlay={!!sourceReady && timelineMatches}
+          active={!line.retired && timelineMatches && time >= line.start_ms && time < line.end_ms} hidden={!line.retired && hidden(line)} canPlay={!line.retired && !!sourceReady && timelineMatches}
           onPlay={playLine} onSaved={load} onDirty={onDirty} onRegenerate={(lineId) => {
             if (window.confirm("Generate a new translation for this saved line? It will need review again."))
               void run({ stage: "translate", revision_id: revisionId, segment_ids: [lineId], regenerate: true });
           }} />)}
           {!project.segments.length && <div className="timelineEmpty"><strong>{activeRevision ? "No speech detected" : "Your dialogue will appear here"}</strong>
             <span>{activeRevision ? "Try a clearer source or retranscribe into a new revision." : "Import a scene, wait for preparation, then transcribe it."}</span></div>}</DialogueTimeline>
+        {project.active_revision_id && <StructurePanel key={`structure:${project.active_revision_id}`} project={project}
+          disabled={locked} unsaved={dirtyIds.size > 0} onApply={structureAction} onDirty={setStructureDirty}
+          onPlayRange={playRange} canPlay={!!sourceReady && timelineMatches} />}
       </section>
       <aside className="rightRail"><div className="metricCard"><div><span>Review</span><strong>{project.segments.filter((line) => line.status === "approved").length}/{project.segments.length} approved</strong></div></div>
         <div className="metricCard"><div><span>Estimated processing budget</span><strong>₹{project.spent_estimate_inr.toFixed(2)} / ₹{project.budget_inr.toFixed(2)}</strong>

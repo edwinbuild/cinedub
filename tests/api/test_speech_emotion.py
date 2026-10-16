@@ -271,3 +271,38 @@ def test_vad_padding_is_not_counted_as_speech_and_state_resets_between_lines():
         assert milliseconds == 38 and fraction == 1 and count == 2
     assert not model.calls[0]["state"].any() and not model.calls[2]["state"].any()
     assert model.calls[0]["input"].shape == (1, 576)
+
+
+@pytest.mark.anyio
+async def test_replaced_window_preserves_emotion_report_but_blocks_new_review(
+    client, session, analyzer
+):
+    project, detail = await scene(client, session)
+    _, artifact_id, report = await analyze(client, session, project)
+    line = detail["segments"][0]
+    response = await client.post(
+        f"/segments/{line['id']}/split",
+        json={
+            "revision_id": detail["active_revision_id"],
+            "expected_version": line["version"],
+            "split_ms": (line["start_ms"] + line["end_ms"]) // 2,
+            "first": {"source_text": "Manual first half"},
+            "second": {"source_text": "Manual second half"},
+            "replacement_confirmed": True,
+        },
+    )
+    assert response.status_code == 200, response.text
+    url = f"/speech-emotion-reports/{artifact_id}"
+    updated = (await client.get(url)).json()
+    assert updated["lines"][0]["stale_reason"]
+    response = await client.post(
+        url + "/review",
+        json={
+            "segment_id": line["id"],
+            "expected_review_version": 0,
+            "status": "accepted",
+            "reviewed_by": "Synthetic fixture editor",
+            "listening_confirmed": True,
+        },
+    )
+    assert response.status_code == 409

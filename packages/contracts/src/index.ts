@@ -60,6 +60,7 @@ export interface Segment {
   human_edited: boolean;
   warnings_json: Array<string>;
   selected_candidate_id: string | null;
+  retired: boolean;
 }
 
 export interface Job {
@@ -329,6 +330,47 @@ export interface SegmentHistoryAction {
   expected_version: number;
   expected_edit_id: string;
   action: "undo" | "redo";
+  restoration_confirmed?: boolean;
+}
+
+export interface SplitLinePart {
+  source_text: string;
+  translated_text: string;
+}
+
+export interface SegmentSplit {
+  revision_id: string;
+  expected_version: number;
+  split_ms: number;
+  first: SplitLinePart;
+  second: SplitLinePart;
+  replacement_confirmed?: boolean;
+}
+
+export interface SegmentMerge {
+  revision_id: string;
+  next_segment_id: string;
+  expected_version: number;
+  expected_next_version: number;
+  text: SplitLinePart;
+  replacement_confirmed?: boolean;
+}
+
+export interface TimelineStructureEdit {
+  id: string;
+  revision_id: string;
+  action: "split" | "merge" | "restore";
+  parent_edit_id: string | null;
+  before: Array<Segment>;
+  after: Array<Segment>;
+  created_at: string;
+  restorable: boolean;
+  unavailable_reason: string | null;
+}
+
+export interface TimelineStructureRestore {
+  revision_id: string;
+  expected_versions: Record<string, number>;
   restoration_confirmed?: boolean;
 }
 

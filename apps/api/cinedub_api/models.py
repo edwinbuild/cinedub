@@ -202,6 +202,21 @@ class Segment(Base, TimestampMixin):
     human_edited: Mapped[bool] = mapped_column(Boolean, default=False)
     warnings_json: Mapped[list] = mapped_column(JSON, default=list)
     selected_candidate_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    retired: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+
+
+class TimelineStructureEdit(Base):
+    __tablename__ = "timeline_structure_edits"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    revision_id: Mapped[str] = mapped_column(ForeignKey("timeline_revisions.id"), index=True)
+    action: Mapped[str] = mapped_column(String(16))
+    parent_edit_id: Mapped[str | None] = mapped_column(
+        ForeignKey("timeline_structure_edits.id"), nullable=True
+    )
+    before_json: Mapped[list] = mapped_column(JSON)
+    after_json: Mapped[list] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class SegmentEdit(Base):

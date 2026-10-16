@@ -20,6 +20,7 @@ def validate_take(session, project_id, revision_id, take, *, verify_files=False)
     profile = session.get(VoiceProfile, voice["profile_id"])
     if (
         not line
+        or line.retired
         or line.project_id != project_id
         or line.revision_id != revision_id
         or not candidate

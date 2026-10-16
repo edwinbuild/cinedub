@@ -67,6 +67,7 @@ def line_changed(session, project_id, revision_id, snapshot, all_lines):
     line = session.get(Segment, snapshot["id"])
     return (
         not line
+        or line.retired
         or line.project_id != project_id
         or line.revision_id != revision_id
         or any(getattr(line, key) != snapshot[key] for key in ("start_ms", "end_ms", "speaker_id"))

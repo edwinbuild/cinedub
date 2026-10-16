@@ -69,7 +69,11 @@ def revision_segments(session: Session, project_id: str, revision_id: str | None
     return list(
         session.scalars(
             select(Segment)
-            .where(Segment.project_id == project_id, Segment.revision_id == revision_id)
+            .where(
+                Segment.project_id == project_id,
+                Segment.revision_id == revision_id,
+                Segment.retired.is_(False),
+            )
             .order_by(Segment.start_ms, Segment.index)
         ).all()
     )

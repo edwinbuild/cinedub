@@ -84,7 +84,9 @@ def process_align(session, job):
         raise ValueError("Alignment did not return every requested line")
     neighbors = session.scalars(
         select(Segment).where(
-            Segment.project_id == job.project_id, Segment.revision_id == inputs["revision_id"]
+            Segment.project_id == job.project_id,
+            Segment.revision_id == inputs["revision_id"],
+            Segment.retired.is_(False),
         )
     ).all()
     for evidence, snapshot in zip(report.lines, inputs["segments"], strict=True):

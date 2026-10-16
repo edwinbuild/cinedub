@@ -32,7 +32,7 @@ def test_fresh_and_upgrade_paths_preserve_legacy_edits(tmp_path):
     with sqlite3.connect(fresh) as connection:
         assert (
             connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
-            == "0008_speech_emotion_reviews"
+            == "0009_timeline_structure"
         )
         fresh_columns = {row[1] for row in connection.execute("PRAGMA table_info(segments)")}
     legacy = tmp_path / "legacy.db"
@@ -305,3 +305,51 @@ def test_emotion_upgrade_preserves_briefs_and_creates_recoverable_backup(tmp_pat
     with sqlite3.connect(database) as connection:
         assert connection.execute("SELECT * FROM dialogue_briefs").fetchall() == original
         assert connection.execute("SELECT COUNT(*) FROM speech_emotion_reviews").fetchone()[0] == 0
+
+
+def test_structure_upgrade_preserves_emotion_reviews_active_lines_and_backup(tmp_path):
+    database = tmp_path / "emotion.db"
+    environment = migrate(database, "0008_speech_emotion_reviews")
+    now = "2026-10-16 00:00:00"
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "INSERT INTO speech_emotion_reviews VALUES "
+            "('review','artifact','line',1,'corrected','other','Quiet','Fixture','Keep note',?)",
+            (now,),
+        )
+        connection.execute(
+            'INSERT INTO segments (id, project_id, "index", start_ms, end_ms, source_text, '
+            "translated_text, status, delivery_json, version, human_edited, warnings_json, "
+            "selected_candidate_id, created_at, updated_at) "
+            "VALUES ('line','p',0,0,1000,'Synthetic source','Preserved translation','approved',"
+            "'{}',7,1,'[]','take',?,?)",
+            (now, now),
+        )
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from cinedub_api.database import create_database; create_database()",
+        ],
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+    )
+    backups = list(tmp_path.glob("emotion.db.v02-emotion-*.bak"))
+    assert len(backups) == 1
+    with sqlite3.connect(backups[0]) as connection:
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone()[0] == (
+            "0008_speech_emotion_reviews"
+        )
+        prior = connection.execute("SELECT * FROM speech_emotion_reviews").fetchall()
+    with sqlite3.connect(database) as connection:
+        assert connection.execute("SELECT * FROM speech_emotion_reviews").fetchall() == prior
+        assert connection.execute(
+            "SELECT retired,status,version,selected_candidate_id FROM segments"
+        ).fetchone() == (0, "approved", 7, "take")
+        assert (
+            connection.execute("SELECT COUNT(*) FROM timeline_structure_edits").fetchone()[0] == 0
+        )

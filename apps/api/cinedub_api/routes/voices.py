@@ -101,6 +101,7 @@ async def select_candidate(segment_id: str, payload: CandidateSelection, session
     artifact = session.get(Artifact, payload.artifact_id)
     if (
         not line
+        or line.retired
         or not artifact
         or artifact.project_id != line.project_id
         or artifact.kind != "dialogue_candidate"

@@ -29,6 +29,8 @@ def inspect_history(segment_id: str, session: SessionDep):
 def restore_history(segment_id: str, payload: SegmentHistoryAction, session: SessionDep):
     write_lock(session)
     segment = require_segment(session, segment_id)
+    if segment.retired:
+        raise HTTPException(409, "This replaced line is read-only; use structural history")
     project = session.get(Project, segment.project_id)
     if project.active_revision_id != segment.revision_id:
         raise HTTPException(409, "Activate this timeline before restoring saved edits")

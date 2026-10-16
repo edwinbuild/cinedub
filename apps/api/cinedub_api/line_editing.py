@@ -8,6 +8,10 @@ from .schemas import SegmentRead, SegmentUpdate
 
 
 def apply_line_edit(session, segment, payload: SegmentUpdate, *, history_metadata=None):
+    if segment.retired:
+        raise HTTPException(
+            409, "This line was replaced by a structural edit; use current dialogue"
+        )
     if segment.version != payload.expected_version:
         raise HTTPException(409, "Segment changed; refresh before saving")
     values = payload.model_dump(exclude={"expected_version"}, exclude_unset=True)

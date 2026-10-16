@@ -481,3 +481,36 @@ async def test_alignment_does_not_silently_ignore_acoustic_provider_routing(
     response = await client.post(f"/projects/{project['id']}/jobs", json={"stage": "align"})
     assert response.status_code == 422 and "local acoustic adapter" in response.text
     assert not session.query(Job).filter_by(project_id=project["id"], stage="align").all()
+
+
+@pytest.mark.anyio
+async def test_replaced_line_keeps_alignment_evidence_but_cannot_apply_it(client, session, aligner):
+    project, asset = await prepare_scene(client, session)
+    await transcribe(client, session, project, asset)
+    detail, _, artifact, _ = await create_alignment(client, session, project)
+    line = detail["segments"][0]
+    response = await client.post(
+        f"/segments/{line['id']}/split",
+        json={
+            "revision_id": detail["active_revision_id"],
+            "expected_version": line["version"],
+            "split_ms": (line["start_ms"] + line["end_ms"]) // 2,
+            "first": {"source_text": "Manually split first half"},
+            "second": {"source_text": "Manually split second half"},
+            "replacement_confirmed": True,
+        },
+    )
+    assert response.status_code == 200, response.text
+    url = f"/alignment-reports/{artifact['id']}"
+    report = (await client.get(url)).json()
+    assert report["lines"][0]["stale_reason"]
+    response = await client.post(
+        url + "/apply",
+        json={
+            "segment_id": line["id"],
+            "expected_version": line["version"],
+            "listening_confirmed": True,
+            "replace_reviewed_timing": True,
+        },
+    )
+    assert response.status_code == 409
