@@ -93,6 +93,10 @@ export function EmotionPanel({ project, sourceId, available, disabled, unsaved, 
     <summary>Speech-emotion hints · {reports.length} saved reports</summary>
     <p>Optional English audio-only model: neutral, happy, angry and sad. It does not read text, infer an actor’s mental state, or prove emotion preservation in Malayalam.</p>
     <p className="lineWarning">Experimental, uncalibrated scores. Silence, overlapping speech and unsupported window lengths are skipped. Film and language-expert quality evaluation is still required.</p>
+    <aside className="lineWarning" aria-label="Emotion model quality limitation">
+      <p>Current English model has weak measured label agreement: 6 of 14 suggestions matched supported crowd labels, and 7 of 8 unsupported-emotion clips received a forced label in a small 24-clip diagnostic.</p>
+      <p>This is not representative cinema accuracy. Keep hints review-only: listen and make your own performance decision. A high score is not proof. Reviews do not automatically control voices.</p>
+    </aside>
     <p>Analysis input: {transcriptionInput === "dialogue_stem" ? "reviewed dialogue stem" : "original source audio"}. The listen button plays the original source for comparison.</p>
     <button className="smallButton" disabled={disabled || busy || unsaved || !available || !sourceMatches || !project.segments.length} onClick={() => onRun({
       stage: "analyze_emotion", revision_id: project.active_revision_id!, source_asset_id: sourceId!, transcription_input: transcriptionInput,

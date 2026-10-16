@@ -26,6 +26,10 @@ test("real local emotion evidence and separate human review survive reload", asy
     const original = await first.getByLabel("English", { exact: true }).inputValue();
     const panel = page.getByLabel("Speech-emotion hints", { exact: true });
     await panel.locator("summary").click();
+    const limitation = panel.getByRole("complementary", { name: "Emotion model quality limitation", exact: true });
+    await expect(limitation).toContainText("6 of 14");
+    await expect(limitation).toContainText("7 of 8");
+    await expect(limitation).toContainText("A high score is not proof");
     await panel.getByRole("button", { name: "Analyze source speech emotion", exact: true }).click();
     const inspect = panel.getByRole("button", { name: "Inspect emotion report 1", exact: true });
     await expect(inspect).toBeVisible({ timeout: 60_000 });
@@ -38,6 +42,7 @@ test("real local emotion evidence and separate human review survive reload", asy
     expect(report.model).toContain("wav2vec2-base-superb-er-ONNX@");
     expect(report.metadata.emotion_inference_count).toBeGreaterThan(0);
     expect(report.metadata.peak_rss_mib).toBeLessThan(10 * 1024);
+    expect(report.warnings.some((warning: string) => warning.includes("6/14") && warning.includes("7/8"))).toBe(true);
     expect(report.lines.every((line: { review_history: unknown[] }) => line.review_history.length === 0)).toBe(true);
     const window = results.getByRole("article").first();
     await expect(window.getByRole("button", { name: "Save human correction", exact: true })).toBeDisabled();

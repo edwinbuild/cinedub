@@ -10,6 +10,12 @@ from ..local_process import run_inference
 MODEL_ID = "onnx-community/wav2vec2-base-superb-er-ONNX"
 MODEL_REVISION = "e2191e9e8b692c19c7d96e2a1d789ab1df5b7259"
 MODEL_NAME = f"{MODEL_ID}@{MODEL_REVISION}"
+QUALITY_WARNING = (
+    "Weak label agreement in a small 24-clip English CREMA-D diagnostic: "
+    "6/14 supported-label suggestions matched crowd votes; "
+    "7/8 unsupported-emotion clips received a forced label. "
+    "Not representative cinema accuracy. Review-only; do not drive voice controls automatically."
+)
 VAD_ID = "onnx-community/silero-vad"
 VAD_REVISION = "e71cae966052b992a7eca6b17738916ce0eca4ec"
 MODEL_FILES = {
@@ -75,7 +81,7 @@ def availability(directory):
         )
     return (
         True,
-        "Experimental English audio-only emotion hints; four classes, human review required",
+        "Experimental English audio-only emotion hints; " + QUALITY_WARNING,
     )
 
 

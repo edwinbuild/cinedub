@@ -117,6 +117,7 @@ async def test_audio_only_report_and_append_only_review_never_change_timeline(
         not line["review_history"] for line in report["lines"]
     )
     assert len(analyzer["calls"]) == 1
+    assert any("6/14" in warning and "7/8" in warning for warning in report["warnings"])
     runs = session.query(ProviderRun).filter_by(job_id=job.id).all()
     assert {r.capability for r in runs} == {"emotion_analyzer", "speech_presence_detector"}
     assert all(r.estimated_cost_inr == 0 for r in runs)
@@ -138,6 +139,7 @@ async def test_audio_only_report_and_append_only_review_never_change_timeline(
     payload.update(expected_review_version=2, status="rejected", label=None)
     assert (await client.post(url, json=payload)).status_code == 200
     saved = (await client.get(f"/speech-emotion-reports/{artifact_id}")).json()
+    assert saved["warnings"] == report["warnings"]
     assert [r["version"] for r in saved["lines"][0]["review_history"]] == [1, 2, 3]
     assert (await client.get(f"/projects/{project['id']}")).json()["segments"] == initial[
         "segments"

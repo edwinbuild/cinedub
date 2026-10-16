@@ -10,7 +10,7 @@ from .media import file_digest
 from .models import Artifact, ProviderRun
 from .processing import check_cancel, checkpoint
 from .providers import ProviderRegistry
-from .providers.local_emotion import read_manifest
+from .providers.local_emotion import QUALITY_WARNING, read_manifest
 from .schemas import SpeechEmotionReport
 from .speech_emotion import read_emotion_report, validate_emotion_inputs, validated_inferences
 
@@ -116,6 +116,7 @@ def process_analyze_emotion(session, job):
             for result, saved in zip(inferences, inputs["segments"], strict=True)
         ],
         warnings=[
+            QUALITY_WARNING,
             "Audio-only model hints, not text sentiment or facts about an actor's mental state",
             "English, four training classes only; "
             "Malayalam and natural-film accuracy are not validated",
