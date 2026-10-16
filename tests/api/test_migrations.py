@@ -26,13 +26,99 @@ def migrate(path, revision):
     return environment
 
 
+def test_speaker_reuse_upgrade_backs_up_structure_schema_without_rewriting_rows(tmp_path):
+    from cinedub_api.models import Project, Segment, Speaker, TimelineRevision, VoiceProfile
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    database = tmp_path / "structure.db"
+    environment = migrate(database, "0009_timeline_structure")
+    engine = create_engine("sqlite:///" + str(database))
+    with Session(engine) as session:
+        project = Project(name="Preserved actor choices")
+        session.add(project)
+        session.flush()
+        revision = TimelineRevision(project_id=project.id, provider="fake", model="prior")
+        session.add(revision)
+        session.flush()
+        project.active_revision_id = revision.id
+        speaker = Speaker(
+            project_id=project.id, revision_id=revision.id, label="A", display_name="Original actor"
+        )
+        session.add(speaker)
+        session.flush()
+        profile = VoiceProfile(
+            project_id=project.id,
+            speaker_id=speaker.id,
+            display_name="Stock",
+            provider="fake",
+            voice_kind="preset",
+            consent_status="not_required",
+            provider_voice_id="speaker-a",
+        )
+        session.add(profile)
+        session.flush()
+        speaker.voice_profile_id = profile.id
+        session.add(
+            Segment(
+                project_id=project.id,
+                revision_id=revision.id,
+                speaker_id=speaker.id,
+                index=0,
+                start_ms=0,
+                end_ms=1000,
+                source_text="Preserved",
+                translated_text="മലയാളം",
+                status="approved",
+                version=7,
+                selected_candidate_id="historical-take",
+            )
+        )
+        session.commit()
+    engine.dispose()
+    tables = ("projects", "timeline_revisions", "speakers", "segments", "voice_profiles")
+    with sqlite3.connect(database) as connection:
+        before = {
+            table: connection.execute(f"SELECT * FROM {table}").fetchall() for table in tables
+        }
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from cinedub_api.database import create_database; create_database()",
+        ],
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+    )
+    backups = list(tmp_path.glob("structure.db.v02-structure-*.bak"))
+    assert len(backups) == 1
+    with sqlite3.connect(backups[0]) as connection:
+        assert (
+            connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
+            == "0009_timeline_structure"
+        )
+    with sqlite3.connect(database) as connection:
+        assert (
+            connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
+            == "0010_speaker_reuse"
+        )
+        assert connection.execute("SELECT COUNT(*) FROM speaker_reuses").fetchone()[0] == 0
+        assert {
+            table: connection.execute(f"SELECT * FROM {table}").fetchall() for table in tables
+        } == before
+
+
 def test_fresh_and_upgrade_paths_preserve_legacy_edits(tmp_path):
     fresh = tmp_path / "fresh.db"
     migrate(fresh, "head")
     with sqlite3.connect(fresh) as connection:
         assert (
             connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
-            == "0009_timeline_structure"
+            == "0010_speaker_reuse"
         )
         fresh_columns = {row[1] for row in connection.execute("PRAGMA table_info(segments)")}
     legacy = tmp_path / "legacy.db"

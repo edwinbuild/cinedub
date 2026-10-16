@@ -224,6 +224,12 @@ CINEDUB_E2E_TRANSCRIBER=local npm run test:e2e -- tests/e2e/local-asr.spec.ts
 
 This uses temporary projects, no Sarvam key and no model download. The ordinary browser suite skips this opt-in test.
 
+## Reuse characters after transcription reruns
+
+Open **Reuse earlier character**, choose a current speaker and an earlier same-project character, and preview the change. Audition both before confirming. Provider speaker numbers are not stable identity labels. You may opt in to copying a selected stock voice/pace into a separate current-speaker profile; cloned voices, consent and scene briefs never transfer automatically. Applying retains dialogue text/timing but clears affected approvals and selected takes for review. Source revisions and voice choices remain historical. Save or discard drafts first. [Reuse rules and audit history](docs/decisions/0016-reviewed-speaker-reuse.md).
+
+Migration 0010 adds reuse audit history without rewriting existing choices; startup from schema 0009 creates a database-only `v02-structure` backup. Complete database/media recovery still requires the [workspace snapshot procedure](docs/recovery.md).
+
 ## Saved edits and keyboard navigation
 
 Open a dialogue line's **Saved edit history** to inspect its recent before/after records and undo or redo saved text, speaker or timing changes. Acknowledged restoration requires approval again and clears selected voice audio; it never restores old consent, voices or emotion settings. Save or explicitly discard drafts before restoring. History survives reload and detects conflicts with other tabs or provider changes. See [history rules and remaining editor scope](docs/decisions/0012-saved-line-history.md).

@@ -383,6 +383,33 @@ export interface SpeakerCreate {
   revision_id: string;
 }
 
+export interface SpeakerReusePreview {
+  source: Speaker;
+  target: Speaker;
+  copy_stock_voice: boolean;
+  voice: Record<string, unknown>;
+  affected_line_ids: Array<string>;
+  fingerprint: string;
+  warnings: Array<string>;
+}
+
+export interface SpeakerReuseApply {
+  source_speaker_id: string;
+  copy_stock_voice?: boolean;
+  expected_fingerprint: string;
+  identity_confirmed: boolean;
+}
+
+export interface SpeakerReuse {
+  id: string;
+  source_speaker_id: string;
+  target_speaker_id: string;
+  fingerprint: string;
+  before_json: Record<string, unknown>;
+  after_json: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface BudgetUpdate {
   budget_inr: number;
 }

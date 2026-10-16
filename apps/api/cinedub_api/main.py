@@ -45,6 +45,7 @@ from .routes.dialogue import router as dialogue_router
 from .routes.emotion import router as emotion_router
 from .routes.history import router as history_router
 from .routes.mixes import router as mixes_router
+from .routes.speaker_reuse import router as speaker_reuse_router
 from .routes.stems import router as stems_router
 from .routes.structure import router as structure_router
 from .routes.take_analysis import router as take_analysis_router
@@ -107,6 +108,7 @@ app.include_router(adaptation_router)
 app.include_router(emotion_router)
 app.include_router(history_router)
 app.include_router(structure_router)
+app.include_router(speaker_reuse_router)
 
 
 def artifact_read(artifact: Artifact, session: Session | None = None) -> ArtifactRead:

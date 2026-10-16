@@ -10,6 +10,7 @@ import { DialogueTimeline } from "@/components/dialogue-timeline";
 import { StructurePanel } from "@/components/structure-panel";
 import { ScenePlayer } from "@/components/scene-player";
 import { VoicePanel } from "@/components/voice-panel";
+import { SpeakerReusePanel } from "@/components/speaker-reuse-panel";
 import { ClonePanel } from "@/components/clone-panel";
 import { StemPanel } from "@/components/stem-panel";
 import { MixPanel } from "@/components/mix-panel";
@@ -240,6 +241,8 @@ export default function ProjectPage() {
       <section className="timelinePanel">
         <ScenePlayer artifacts={project.artifacts} sourceId={sourceId} mediaRef={mediaRef} onTime={onTime} stopAt={stopAt} onStop={onStop} />
         <StemPanel project={project} sourceId={sourceId} disabled={locked} onSaved={load} />
+        {project.active_revision_id && <SpeakerReusePanel key={`reuse:${project.active_revision_id}`} project={project}
+          disabled={locked} unsaved={dirtyIds.size > 0 || structureDirty || referenceDirty || mixDraftIds.size > 0} onSaved={load} />}
         {project.active_revision_id && <DialogueBriefPanel key={`brief:${project.active_revision_id}`} project={project}
           disabled={locked} unsaved={dirtyIds.size > 0} onRun={run} onSaved={load} onDirty={onDirty}
           onPlayRange={playRange} canPlay={!!sourceReady && timelineMatches} />}

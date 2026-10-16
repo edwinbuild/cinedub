@@ -29,6 +29,9 @@ NAMES = {
     "TimelineStructureRestore": "TimelineStructureRestore",
     "SpeakerUpdate": "SpeakerUpdate",
     "SpeakerCreate": "SpeakerCreate",
+    "SpeakerReusePreview": "SpeakerReusePreview",
+    "SpeakerReuseApply": "SpeakerReuseApply",
+    "SpeakerReuseRead": "SpeakerReuse",
     "BudgetUpdate": "BudgetUpdate",
     "VoiceProfileCreate": "VoiceProfileCreate",
     "VoiceProfileRead": "VoiceProfile",
@@ -60,6 +63,7 @@ NAMES = {
     "SpeechEmotionReview": "SpeechEmotionReview",
 }
 REQUESTS = {
+    "SpeakerReuseApply",
     "JobCreate",
     "SegmentUpdate",
     "SegmentHistoryAction",

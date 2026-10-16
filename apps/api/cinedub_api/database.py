@@ -53,6 +53,7 @@ def _upgrade_database() -> None:
                     "0006_reviewed_mixes",
                     "0007_dialogue_briefs",
                     "0008_speech_emotion_reviews",
+                    "0009_timeline_structure",
                 }:
                     label = {
                         "0001_initial_schema": "v01",
@@ -63,6 +64,7 @@ def _upgrade_database() -> None:
                         "0006_reviewed_mixes": "v02-mixes",
                         "0007_dialogue_briefs": "v02-briefs",
                         "0008_speech_emotion_reviews": "v02-emotion",
+                        "0009_timeline_structure": "v02-structure",
                     }[current[0]]
                     backup = path.with_name(
                         f"{path.name}.{label}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S%f')}.bak"

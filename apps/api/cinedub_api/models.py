@@ -313,6 +313,20 @@ class Artifact(Base, TimestampMixin):
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
+class SpeakerReuse(Base):
+    __tablename__ = "speaker_reuses"
+    __table_args__ = (UniqueConstraint("target_speaker_id", "fingerprint"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), index=True)
+    source_speaker_id: Mapped[str] = mapped_column(ForeignKey("speakers.id"))
+    target_speaker_id: Mapped[str] = mapped_column(ForeignKey("speakers.id"), index=True)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    before_json: Mapped[dict] = mapped_column(JSON)
+    after_json: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class ProviderRun(Base, TimestampMixin):
     __tablename__ = "provider_runs"
 

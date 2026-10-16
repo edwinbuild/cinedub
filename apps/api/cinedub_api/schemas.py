@@ -136,6 +136,34 @@ class SpeakerCreate(SpeakerUpdate):
     revision_id: str
 
 
+class SpeakerReusePreview(BaseModel):
+    source: SpeakerRead
+    target: SpeakerRead
+    copy_stock_voice: bool
+    voice: dict
+    affected_line_ids: list[str]
+    fingerprint: str
+    warnings: list[str]
+
+
+class SpeakerReuseApply(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source_speaker_id: str
+    copy_stock_voice: bool = False
+    expected_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    identity_confirmed: bool
+
+
+class SpeakerReuseRead(ORMModel):
+    id: str
+    source_speaker_id: str
+    target_speaker_id: str
+    fingerprint: str
+    before_json: dict
+    after_json: dict
+    created_at: datetime
+
+
 class RevisionRead(ORMModel):
     id: str
     source_asset_id: str | None
