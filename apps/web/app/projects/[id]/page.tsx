@@ -36,6 +36,7 @@ export default function ProjectPage() {
   const [stopAt, setStopAt] = useState<number | null>(null);
   const [dirtyIds, setDirtyIds] = useState<Set<string>>(() => new Set());
   const [structureDirty, setStructureDirty] = useState(false);
+  const [referenceDirty, setReferenceDirty] = useState(false);
   const [preservedDrafts, setPreservedDrafts] = useState<Segment[]>([]);
   const dirtyRef = useRef<Set<string>>(new Set());
   const lineCache = useRef<Map<string, Segment>>(new Map());
@@ -71,11 +72,11 @@ export default function ProjectPage() {
     const timer = window.setInterval(load, 1500); return () => window.clearInterval(timer);
   }, [hasJobs, load]);
   useEffect(() => {
-    if (!dirtyIds.size && !structureDirty) return;
+    if (!dirtyIds.size && !structureDirty && !referenceDirty) return;
     function warn(event: BeforeUnloadEvent) { event.preventDefault(); event.returnValue = ""; }
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [dirtyIds.size, structureDirty]);
+  }, [dirtyIds.size, structureDirty, referenceDirty]);
   const onDirty = useCallback((lineId: string, dirty: boolean) => {
     const next = new Set(dirtyRef.current); if (dirty) next.add(lineId); else next.delete(lineId);
     dirtyRef.current = next; setDirtyIds(next);
@@ -177,10 +178,10 @@ export default function ProjectPage() {
     <a className="skipLink" href="#dialogue-editor">Skip to dialogue editor</a>
     <header className="studioTopbar"><div className="studioIdentity">
       <Link href="/" className="iconButton" aria-label="Projects" onClick={(event) => {
-        if ((dirtyIds.size || structureDirty) && !window.confirm("Leave this scene and discard unsaved drafts?")) event.preventDefault();
+        if ((dirtyIds.size || structureDirty || referenceDirty) && !window.confirm("Leave this scene and discard unsaved drafts?")) event.preventDefault();
       }}><ArrowLeft size={17} /></Link><span className="brandMark"><Film size={17} /></span>
       <div><strong>{project.name}</strong><span>English → Malayalam · v0.2</span></div></div>
-      <div className="studioStatus">{(dirtyIds.size > 0 || structureDirty) && <span>{dirtyIds.size + Number(structureDirty)} unsaved</span>}
+      <div className="studioStatus">{(dirtyIds.size > 0 || structureDirty || referenceDirty) && <span>{dirtyIds.size + Number(structureDirty) + Number(referenceDirty)} unsaved</span>}
         {activeJob ? activeJob.phase.replaceAll("_", " ") : project.status}
         <button className="iconButton" aria-label="Refresh project" onClick={load}><RefreshCw size={15} /></button></div></header>
     {error && <div className="errorBanner studioError" role="alert">{error}</div>}
@@ -265,7 +266,7 @@ export default function ProjectPage() {
           || project.segments.some((line) => !line.speaker_id)).map((warning) => <p className="lineWarning" key={warning}>{warning}</p>)}
         {cloneCapability && ["fake", "sarvam"].includes(cloneCapability.selected_provider) && <ClonePanel project={project}
           provider={cloneCapability.selected_provider as "fake" | "sarvam"} available={cloneCapability.available}
-          disabled={locked} onSaved={load} onRun={run} />}
+          disabled={locked} onSaved={load} onRun={run} onDirty={setReferenceDirty} />}
         <div className="reviewFilters" role="group" aria-label="Filter dialogue">{["all", "untranslated", "edited", "approved", "warnings"].map((value) =>
           <button key={value} className={`smallButton ${filter === value ? "selected" : ""}`} aria-pressed={filter === value} onClick={() => setFilter(value)}>{value}</button>)}</div>
         <DialogueTimeline>{[...project.segments, ...preservedDrafts].map((line) => <DialogueLine key={line.id} segment={line} speakers={project.speakers} artifacts={project.artifacts}

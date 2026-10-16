@@ -175,6 +175,8 @@ It needs the optional separator and eSpeak NG; speech/translation remain labelle
 
 Open **Voice references & consent** in the editor. Stock-voice users can leave this panel closed. Never infer actor cloning rights from possession of a film.
 
+Unsaved reference/consent fields survive project refresh and timeline switching. The Projects link and supported browser reload/close actions warn before losing them. Use **Discard reference draft** to explicitly reset the form; this never revokes saved consent or deletes a provider copy. Drafts stay in the open page only, not browser storage, and cannot survive a crash. Save the reference to make it durable.
+
 1. Import an authorized clean recording if the scene itself does not contain a suitable single-speaker reference. Choose a 10–15 second range, the target speaker, rights holder, attester and consent evidence note. All permission/review checkboxes start unchecked.
 2. Save the profile, then **Prepare reference**. This remains local and creates a checksum-tracked 24 kHz mono WAV. Silent/too-quiet clips are rejected; level/clipping warnings require review. Known overlaps with another assigned speaker are rejected. These checks do not independently verify speaker identity, background cleanliness or legal rights.
 3. Listen to the prepared clip and explicitly confirm review. **Upload and register with Sarvam** stores a saved voice with the provider; saving consent alone never uploads it. The key and beta/account entitlement must be configured. Set a registration allowance in INR because the exact enrollment tariff/account limits are not live-verified. This is a project-budget estimate, not a provider charge cap.

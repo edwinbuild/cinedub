@@ -1,18 +1,33 @@
 "use client";
 
 import type { ConsentRecord, JobRequest, ProjectDetail, VoiceProfile } from "@cinedub/contracts";
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { API_URL, api } from "@/lib/api";
 
-export function ClonePanel({ project, provider, available, disabled, onSaved, onRun }: {
+function formChanged(form: HTMLFormElement) {
+  return Array.from(form.elements).some((field) => {
+    if (field instanceof HTMLInputElement) return field.type === "checkbox"
+      ? field.checked !== field.defaultChecked : field.value !== field.defaultValue;
+    if (field instanceof HTMLTextAreaElement) return field.value !== field.defaultValue;
+    if (field instanceof HTMLSelectElement) return Array.from(field.options).some((option) => option.selected !== option.defaultSelected);
+    return false;
+  });
+}
+
+export function ClonePanel({ project, provider, available, disabled, onSaved, onRun, onDirty }: {
   project: ProjectDetail; provider: "sarvam" | "fake"; available: boolean; disabled: boolean;
   onSaved: () => Promise<void>; onRun: (payload: JobRequest) => Promise<void>;
+  onDirty: (dirty: boolean) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<Record<string, ConsentRecord[]>>({});
   const [reviewed, setReviewed] = useState<Record<string, boolean>>({});
   const [allowance, setAllowance] = useState("");
+  const [dirty, setDirty] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  useEffect(() => () => onDirty(false), [onDirty]);
+  function markDirty(value: boolean) { setDirty(value); onDirty(value); }
   const clones = project.voice_profiles.filter((profile) => profile.voice_kind === "clone");
 
   async function action(run: () => Promise<unknown>) {
@@ -35,6 +50,7 @@ export function ClonePanel({ project, provider, available, disabled, onSaved, on
           allows_provider_upload: fields.has("upload"), clean_single_speaker: fields.has("clean") },
       });
       form.reset();
+      markDirty(false);
     });
   }
   async function revoke(profile: VoiceProfile) {
@@ -46,7 +62,8 @@ export function ClonePanel({ project, provider, available, disabled, onSaved, on
   return <details className="clonePanel"><summary>Voice references &amp; consent <small>{clones.length} saved · {provider === "fake" ? "demo only" : "Sarvam beta"}</small></summary>
     <p>Use a clean 10–15 second recording of one consenting speaker. Saving and preparing are local. Registering uploads the reference to {provider === "fake" ? "the demo adapter (no external service)" : "Sarvam, where it is stored as a saved voice"}.</p>
     <p className="lineWarning">Owning a film file is not actor permission. This records your attestation, not independent legal or identity verification. Original uploads and local history are retained after revocation.</p>
-    <form aria-label="Create consented voice reference" onSubmit={save}>
+    <form ref={formRef} aria-label="Create consented voice reference" onSubmit={save}
+      onChange={(event) => markDirty(formChanged(event.currentTarget))}>
       <div className="cloneFields">
         <label>Speaker<select name="speaker" aria-label="Reference speaker" required disabled={disabled || busy} defaultValue="">
           <option value="" disabled>Choose speaker</option>{project.speakers.map((speaker) => <option key={speaker.id} value={speaker.id}>{speaker.display_name}</option>)}</select></label>
@@ -63,7 +80,12 @@ export function ClonePanel({ project, provider, available, disabled, onSaved, on
       <label className="consentCheck"><input type="checkbox" name="clean" required disabled={disabled || busy} />I reviewed this range: one authorized speaker, no overlapping voices or music.</label>
       <label className="consentCheck"><input type="checkbox" name="upload" required disabled={disabled || busy} />I have permission to upload this reference to the selected provider when I register it.</label>
       <button className="smallButton" disabled={disabled || busy || !project.speakers.length}>Save consented reference</button>
+      {dirty && <button type="button" className="smallButton" disabled={disabled || busy} onClick={() => {
+        if (!window.confirm("Discard this unsaved reference and consent draft? No saved consent or provider copy will change.")) return;
+        formRef.current?.reset(); markDirty(false); setError(null);
+      }}>Discard reference draft</button>}
     </form>
+    {dirty && <p className="lineWarning" role="status">Unsaved reference draft. Nothing has been saved or uploaded from this form. Draft values stay in this open page only; save or explicitly discard before leaving.</p>}
     {provider === "sarvam" && <label className="fieldLabel">Registration allowance (INR, not a verified tariff)<input aria-label="Registration allowance INR" type="number" min="0.01" max="1000" step="0.01" value={allowance} onChange={(event) => setAllowance(event.target.value)} />
       <small>Exact enrollment billing and account voice limits need live verification. This amount reserves project budget, not a provider spending cap.</small></label>}
     {clones.map((profile) => {
