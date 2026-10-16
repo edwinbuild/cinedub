@@ -30,6 +30,8 @@ SQLite, local filesystem artifacts and a separate database-backed worker are the
 
 For complete recovery, use the [offline database and media snapshot procedure](docs/recovery.md), not a database-only migration backup. Recovery creates a separate verified workspace, holds active jobs for explicit review and quarantines historical clone approvals; it never overwrites the source or automatically replays paid work. Run `npm run test:recovery` for the synthetic backup and real HTTP recovery rehearsal.
 
+Recognized SQLite/storage-quota errors now give an actionable 507 response or stop the worker with a sanitized capacity diagnostic. Keep/copy unsaved editor fields, restore space or resolve the quota, then restart and inspect job/provider history before retrying paid work. Do not delete database/media/journal/lock files to bypass the failure. [Capacity recovery and test limits](docs/recovery.md#when-storage-capacity-is-exhausted).
+
 For an isolated base-install smoke check, run `npm run verify:clean-install` from a trusted checkout. It installs locked dependencies into a private temporary snapshot, without your `.env`, data or optional models, then checks build/startup and a browser upload-to-subtitle workflow. It requires installed Chrome and may use network/package caches and about 1 GiB temporary space; it keeps private results/logs for inspection and requires at least 2 GiB free space. [Scope, results and remaining machine checks](docs/evaluations/clean-install.md).
 
 ## Use real Sarvam processing

@@ -42,6 +42,25 @@ test("keyboard save keeps editing focus and never steals a deliberate focus move
   await expect(english).toBeFocused();
   await expect(english).toHaveValue("Keep this draft after a save conflict.");
   await expect(first.getByRole("button", { name: "Save line", exact: true })).toBeEnabled();
+  await page.unroute(/\/segments\/[^/]+$/);
+  await page.route(/\/segments\/[^/]+$/, async (route) => {
+    if (route.request().method() === "PATCH") await route.fulfill({ status: 507, json: {
+      detail: "Storage capacity exhausted. Free space or resolve the quota, then restart CineDub.",
+    } });
+    else await route.continue();
+  });
+  await english.fill("Keep this draft after a storage-capacity failure.");
+  await english.press("Control+Enter");
+  await expect(first.getByRole("alert")).toContainText("Storage capacity exhausted. Free space");
+  await expect(english).toBeFocused();
+  await expect(english).toHaveValue("Keep this draft after a storage-capacity failure.");
+  await expect(first.getByRole("button", { name: "Save line", exact: true })).toBeEnabled();
+  await page.unroute(/\/segments\/[^/]+$/);
+  await english.press("Control+Enter");
+  await expect(first.getByRole("button", { name: "Save line", exact: true })).toBeDisabled();
+  await expect(first.getByRole("status")).toHaveText("Line saved. Review is still required.");
+  await page.reload();
+  await expect(english).toHaveValue("Keep this draft after a storage-capacity failure.");
 });
 
 test("composition and native select keys stay native and dialogue can be skipped to", async ({ page }) => {

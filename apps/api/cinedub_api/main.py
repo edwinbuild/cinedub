@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import json
+import logging
 import shutil
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -9,8 +10,9 @@ from typing import Annotated
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import select
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from .config import get_settings
@@ -72,6 +74,7 @@ from .schemas import (
     StemSetRead,
     VoiceProfileRead,
 )
+from .storage_capacity import STORAGE_MESSAGE, is_storage_capacity_error
 from .streaming import media_response
 from .timeline import revision_segments
 from .workspace_lock import workspace_lease
@@ -88,6 +91,17 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="CineDub API", version="0.2.0", lifespan=lifespan)
+
+
+@app.exception_handler(DBAPIError)
+@app.exception_handler(OSError)
+async def storage_capacity_failure(_: Request, error: Exception):
+    if not is_storage_capacity_error(error):
+        raise error
+    logging.getLogger(__name__).error("storage_capacity_exhausted")
+    return JSONResponse(status_code=507, content={"detail": STORAGE_MESSAGE})
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.web_origin, "http://localhost:3000"],

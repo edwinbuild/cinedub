@@ -1,11 +1,13 @@
 import fcntl
 import logging
+import sqlite3
 import time
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
 from sqlalchemy import case, select, update
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from .adaptation_processing import process_adapt_dialogue
@@ -44,6 +46,7 @@ from .processing import process_transcribe
 from .processing import process_translate as process_real_translate
 from .providers.retry import safe_error
 from .separation_processing import process_separate
+from .storage_capacity import STORAGE_MESSAGE, StorageCapacityError, is_storage_capacity_error
 from .take_analysis_processing import process_analyze_takes
 from .voice_processing import process_render_preview
 from .voice_processing import process_synthesize as process_voice_candidates
@@ -383,6 +386,18 @@ def claim_job(session: Session) -> Job | None:
 
 
 def process_once(session: Session) -> bool:
+    try:
+        return _process_once(session)
+    except (DBAPIError, OSError, sqlite3.Error) as exc:
+        if not is_storage_capacity_error(exc):
+            raise
+        session.rollback()
+        # Capacity may prevent even recording an error. Retain durable running
+        # state/checkpoints and stop; restart recovery guards ambiguous paid calls.
+        raise StorageCapacityError(STORAGE_MESSAGE) from None
+
+
+def _process_once(session: Session) -> bool:
     job = claim_job(session)
     if not job:
         return False
@@ -413,6 +428,8 @@ def process_once(session: Session) -> bool:
         job.error_message = str(exc)
         project.status = "review"
     except Exception as exc:  # worker boundary records structured failures
+        if is_storage_capacity_error(exc):
+            raise
         logger.error("job_id=%s stage=%s error_type=%s", job.id, job.stage, type(exc).__name__)
         session.rollback()
         job = session.get(Job, job.id)
@@ -483,6 +500,16 @@ def worker_lock_path() -> Path:
 
 
 def run_worker(poll_interval: float = 1.0) -> None:
+    try:
+        _run_worker(poll_interval)
+    except (DBAPIError, OSError, sqlite3.Error, StorageCapacityError) as exc:
+        if not is_storage_capacity_error(exc):
+            raise
+        logger.error("storage_capacity_exhausted: %s", STORAGE_MESSAGE)
+        raise SystemExit(1) from None
+
+
+def _run_worker(poll_interval: float) -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     lock_path = worker_lock_path()
     with workspace_lease(settings.database_url, settings.storage_root), lock_path.open("a") as lock:
