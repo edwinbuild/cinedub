@@ -1,7 +1,7 @@
 "use client";
 
 import type { Artifact, Segment, Speaker } from "@cinedub/contracts";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { VoiceCandidates } from "@/components/voice-candidates";
 import { LineHistory } from "@/components/line-history";
@@ -24,28 +24,42 @@ export function DialogueLine({ segment, speakers, artifacts, disabled, structure
   const [saving, setSaving] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState("");
+  const root = useRef<HTMLElement>(null);
+  const saveFocus = useRef<HTMLElement | null>(null);
   const dirty = JSON.stringify(values) !== JSON.stringify(draft(base));
   const stale = segment.version > base.version;
 
+  useLayoutEffect(() => {
+    if (saving || !saveFocus.current) return;
+    const target = saveFocus.current; saveFocus.current = null;
+    if (document.activeElement !== document.body || !target.isConnected || target.closest("[hidden]")) return;
+    if (!target.matches(":disabled")) target.focus();
+    else root.current?.focus();
+  }, [saving]);
+
   useEffect(() => {
     if (dirty || !stale) return;
-    const timer = window.setTimeout(() => { setBase(segment); setValues(draft(segment)); }, 0);
+    const timer = window.setTimeout(() => { setBase(segment); setValues(draft(segment)); setNotice(""); }, 0);
     return () => window.clearTimeout(timer);
   }, [segment, dirty, stale]);
 
   function change(next: Partial<typeof values>) {
-    const updated = { ...values, ...next }; setValues(updated);
+    const updated = { ...values, ...next }; setValues(updated); setNotice("");
     onDirty(segment.id, JSON.stringify(updated) !== JSON.stringify(draft(base)));
   }
   async function save() {
-    if (segment.retired) return;
-    setSaving(true); setError(null);
+    if (segment.retired || saving || restoring || structureLocked || stale || !dirty) return;
+    saveFocus.current = document.activeElement instanceof HTMLElement && root.current?.contains(document.activeElement)
+      ? document.activeElement : null;
+    setSaving(true); setError(null); setNotice("Saving line…");
     try {
       const changes = Object.fromEntries(Object.entries(values).filter(([key, value]) =>
         value !== draft(base)[key as keyof typeof values]));
       const saved = await api.updateSegment(base, changes);
       setBase(saved); setValues(draft(saved)); onDirty(segment.id, false); onSaved();
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Save failed"); }
+      setNotice(saved.status === "approved" ? "Line saved and approved." : "Line saved. Review is still required.");
+    } catch (cause) { setNotice(""); setError(cause instanceof Error ? cause.message : "Save failed"); }
     finally { setSaving(false); }
   }
 
@@ -57,9 +71,9 @@ export function DialogueLine({ segment, speakers, artifacts, disabled, structure
     link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  return <article hidden={hidden} tabIndex={-1} data-dialogue-line className={`dialogueLine ${active ? "playing" : ""}`} aria-label={segment.retired ? `Preserved draft for removed line ${segment.index + 1}` : `Dialogue line ${segment.index + 1}`}
+  return <article ref={root} hidden={hidden} tabIndex={-1} data-dialogue-line className={`dialogueLine ${active ? "playing" : ""}`} aria-label={segment.retired ? `Preserved draft for removed line ${segment.index + 1}` : `Dialogue line ${segment.index + 1}`}
     onKeyDown={(event) => {
-      if (!event.nativeEvent.isComposing && !event.repeat && (event.ctrlKey || event.metaKey) && !event.altKey && event.key === "Enter") {
+      if (!event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229 && !event.repeat && (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key === "Enter") {
         event.preventDefault();
         if (dirty && !segment.retired && !saving && !restoring && !structureLocked && !stale) void save();
       }
@@ -99,12 +113,13 @@ export function DialogueLine({ segment, speakers, artifacts, disabled, structure
     {segment.warnings_json.map((warning) => <p className="lineWarning" key={warning}>{warning}</p>)}
     {stale && dirty && !segment.retired && <p className="lineWarning">This line changed on the server. Your draft is preserved.
       <button className="smallButton" onClick={() => { if (window.confirm("Discard your unsaved draft and load the saved line?")) {
-        setBase(segment); setValues(draft(segment)); onDirty(segment.id, false); setError(null);
+        setBase(segment); setValues(draft(segment)); onDirty(segment.id, false); setError(null); setNotice("");
       } }}>Load saved line</button></p>}
     {dirty && <small className="muted">Unsaved changes. Changing dialogue or timing requires approval again.</small>}
+    <p className="muted lineSaveStatus" role="status" aria-atomic="true">{notice}</p>
     {error && <p className="inlineError" role="alert">{error}</p>}
     <LineHistory segment={segment} disabled={segment.retired || disabled || dirty || saving || restoring || stale} onRestoring={setRestoring} onRestored={(saved) => {
-      setBase(saved); setValues(draft(saved)); onDirty(segment.id, false); onSaved();
+      setBase(saved); setValues(draft(saved)); onDirty(segment.id, false); setNotice(""); onSaved();
     }} />
     <VoiceCandidates segment={segment} artifacts={artifacts} disabled={segment.retired || disabled || dirty || saving || restoring || stale} onSaved={onSaved} />
   </article>;

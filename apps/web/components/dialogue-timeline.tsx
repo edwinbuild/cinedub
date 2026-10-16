@@ -13,11 +13,11 @@ export function DialogueTimeline({ children }: { children: ReactNode }) {
     const line = lines[next];
     if (line) { line.focus(); lastFocused.current = line; }
   }
-  return <div ref={root} onFocusCapture={(event) => {
+  return <div ref={root} id="dialogue-editor" role="region" aria-label="Dialogue editor" tabIndex={-1} onFocusCapture={(event) => {
     const line = event.target.closest<HTMLElement>("[data-dialogue-line]");
     if (line) lastFocused.current = line;
   }} onKeyDown={(event) => {
-    if (event.nativeEvent.isComposing || event.repeat || !event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 || event.repeat || !event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
     if (event.target instanceof HTMLElement && event.target.closest("select,[role=combobox],audio,video,[contenteditable=true]")) return;
     const line = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>("[data-dialogue-line]") : null;

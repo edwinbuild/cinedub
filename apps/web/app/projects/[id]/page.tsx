@@ -174,6 +174,7 @@ export default function ProjectPage() {
   }
 
   return <main className="studioShell">
+    <a className="skipLink" href="#dialogue-editor">Skip to dialogue editor</a>
     <header className="studioTopbar"><div className="studioIdentity">
       <Link href="/" className="iconButton" aria-label="Projects" onClick={(event) => {
         if ((dirtyIds.size || structureDirty) && !window.confirm("Leave this scene and discard unsaved drafts?")) event.preventDefault();
