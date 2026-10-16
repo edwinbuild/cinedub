@@ -165,6 +165,8 @@ Listen against picture, enter reviewer/notes and confirm review, then **Approve 
 
 Unrendered settings and unsaved mix-review notes survive project refresh and warn before leaving or explicitly switching timelines. Each timeline opens with its latest render settings or defaults. Failed operations keep the draft; a completed render or successful review clears the relevant warning. The two **Discard mix… draft** buttons reset only unsaved controls/notes, not saved renders or acceptance history. Drafts stay in the open page only, not browser storage, and are not crash recovery.
 
+If another tab changes the active timeline while you have mix drafts, refresh keeps the old scene and fields visible and pauses its editing actions. Copy any needed values, then explicitly confirm **Discard mix drafts and load current timeline**. A failed refresh does not discard anything. This only loads the server's current timeline; it does not reactivate the old one or alter saved renders/reviews. Other timeline-specific forms are discarded on confirmation; displaced dialogue drafts remain available to copy.
+
 Audio preparation now preserves audio-track offsets relative to the container timeline. If an older scene has an offset track, prepare/separate it again and review a fresh transcript; zero-offset scenes are unaffected.
 
 The actual separator-to-export browser workflow uses generated video/audio and no paid APIs:

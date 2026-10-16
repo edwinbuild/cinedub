@@ -1,6 +1,56 @@
 import { expect, test } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 
+test("another tab cannot silently discard mix settings on refresh", async ({ page, context }) => {
+  await page.goto("/");
+  await page.getByLabel("Project name").fill("Remote timeline mix protection");
+  await page.getByRole("button", { name: "Create workspace" }).click();
+  await expect(page).toHaveURL(/\/projects\//);
+  const buffer = execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=220:duration=4", "-ar", "16000", "-ac", "1", "-f", "wav", "pipe:1"]);
+  await page.getByLabel("Import scene").setInputFiles({ name: "remote-mix.wav", mimeType: "audio/wav", buffer });
+  await expect(page.getByRole("slider", { name: "Seek scene" })).toBeVisible();
+  await page.getByRole("button", { name: "Transcribe scene", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "2 reviewable lines" })).toBeVisible();
+  await page.getByRole("button", { name: "Retranscribe into new revision", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Use this timeline", exact: true })).toBeEnabled();
+  const panel = page.getByRole("region", { name: "Retained-background mix and export", exact: true });
+  await panel.getByText("Mix & export · reviewed stereo delivery", { exact: true }).click();
+  const gain = panel.getByLabel("Music gain (dB)");
+  await gain.fill("-7");
+  const other = await context.newPage();
+  await other.goto(page.url());
+  await other.getByRole("button", { name: "Use this timeline", exact: true }).click();
+  await expect(other.getByRole("button", { name: "Use this timeline", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Refresh project", exact: true }).click();
+  const warning = page.getByRole("alert").filter({ hasText: "Another tab changed the active timeline" });
+  await expect(warning).toBeVisible();
+  await expect(gain).toHaveValue("-7");
+  await expect(gain).toBeDisabled();
+  await expect(page.getByText("1 unsaved", { exact: true })).toBeVisible();
+  const discard = warning.getByRole("button", { name: "Discard mix drafts and load current timeline", exact: true });
+  await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.dismiss()), discard.click()]);
+  await expect(gain).toHaveValue("-7");
+  await page.getByRole("button", { name: "Refresh project", exact: true }).click();
+  await expect(warning).toBeVisible();
+  await expect(gain).toHaveValue("-7");
+  await page.route("**/projects/*", async (route) => {
+    if (route.request().method() === "GET" && new URL(route.request().url()).pathname.split("/").length === 3)
+      await route.fulfill({ status: 503, json: { detail: "Synthetic refresh unavailable" } });
+    else await route.continue();
+  });
+  await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.accept()), discard.click()]);
+  await expect(page.getByText("Synthetic refresh unavailable", { exact: true })).toBeVisible();
+  await expect(warning).toBeVisible();
+  await expect(gain).toHaveValue("-7");
+  await page.unroute("**/projects/*");
+  await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.accept()), discard.click()]);
+  await expect(warning).toHaveCount(0);
+  await expect(gain).toHaveValue("0");
+  await expect(gain).toBeEnabled();
+  await expect(page.getByText("1 unsaved", { exact: true })).toHaveCount(0);
+  await other.close();
+});
+
 test("unrendered mix settings survive refresh and require confirmed timeline discard", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Project name").fill("Scoped mix settings rehearsal");

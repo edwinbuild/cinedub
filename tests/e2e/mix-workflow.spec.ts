@@ -116,6 +116,27 @@ test("actual separation through reviewed stereo export and hash-verifiable accep
     await page.setViewportSize({ width: 390, height: 844 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: "test-results/cinedub-retained-background-mix-mobile.png", fullPage: true });
+    await panel.getByLabel("Mix reviewer", { exact: true }).fill("Preserved remote-review draft");
+    await panel.getByLabel("Mix review notes").fill("Keep this unsaved listening note");
+    await panel.getByLabel("I reviewed dialogue, background leakage, effects, levels and timing against the scene.").check();
+    const other = await page.context().newPage();
+    await other.goto(page.url());
+    await other.getByRole("button", { name: "Retranscribe into new revision", exact: true }).click();
+    await other.getByRole("button", { name: "Use this timeline", exact: true }).click();
+    await expect(other.getByRole("button", { name: "Use this timeline", exact: true })).toBeEnabled();
+    await page.getByRole("button", { name: "Refresh project", exact: true }).click();
+    const warning = page.getByRole("alert").filter({ hasText: "Another tab changed the active timeline" });
+    await expect(warning).toBeVisible();
+    await expect(panel.getByLabel("Mix review notes")).toHaveValue("Keep this unsaved listening note");
+    await expect(panel.getByLabel("I reviewed dialogue, background leakage, effects, levels and timing against the scene.")).toBeChecked();
+    await expect(panel.getByRole("button", { name: "Approve mix and export bundle" })).toBeDisabled();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.accept()),
+      warning.getByRole("button", { name: "Discard mix drafts and load current timeline", exact: true }).click()]);
+    await expect(warning).toHaveCount(0);
+    await expect(panel.getByLabel("Mix review notes")).toHaveCount(0);
+    expect((await detail()).mixes.find((mix: { id: string }) => mix.id === project.mixes[0].id).reviews.length).toBe(acceptanceCount);
+    await other.close();
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

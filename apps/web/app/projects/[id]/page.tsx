@@ -39,19 +39,34 @@ export default function ProjectPage() {
   const [structureDirty, setStructureDirty] = useState(false);
   const [referenceDirty, setReferenceDirty] = useState(false);
   const [mixDraftIds, setMixDraftIds] = useState<Set<string>>(() => new Set());
-  const onMixDirty = useCallback((key: string, dirty: boolean) => setMixDraftIds((previous) => {
+  const mixDraftRef = useRef<Set<string>>(new Set());
+  const displayedRevision = useRef<string | null | undefined>(undefined);
+  const [remoteTimelineChanged, setRemoteTimelineChanged] = useState(false);
+  const onMixDirty = useCallback((key: string, dirty: boolean) => {
+    const previous = mixDraftRef.current;
     if (previous.has(key) === dirty) return previous;
-    const next = new Set(previous); if (dirty) next.add(key); else next.delete(key); return next;
-  }), []);
+    const next = new Set(previous); if (dirty) next.add(key); else next.delete(key);
+    mixDraftRef.current = next; setMixDraftIds(next);
+  }, []);
   const [preservedDrafts, setPreservedDrafts] = useState<Segment[]>([]);
   const dirtyRef = useRef<Set<string>>(new Set());
   const lineCache = useRef<Map<string, Segment>>(new Map());
   const mediaRef = useRef<HTMLMediaElement | null>(null);
   const loadSequence = useRef(0);
-  const load = useCallback(async () => {
+  const load = useCallback(async (discardMixDrafts = false) => {
     const sequence = ++loadSequence.current;
     try { const detail = await api.project(id);
       if (sequence === loadSequence.current) {
+        if (displayedRevision.current !== undefined && displayedRevision.current !== detail.active_revision_id
+          && mixDraftRef.current.size && !discardMixDrafts) {
+          mediaRef.current?.pause(); setStopAt(null);
+          setRemoteTimelineChanged(true); setError(null); return;
+        }
+        if (displayedRevision.current !== undefined && displayedRevision.current !== detail.active_revision_id) {
+          setSelectedSource(null); setStructureDirty(false); mediaRef.current?.pause(); setStopAt(null);
+        }
+        displayedRevision.current = detail.active_revision_id;
+        setRemoteTimelineChanged(false);
         const current = new Map(detail.segments.map((line) => [line.id, line]));
         const displaced = Array.from(dirtyRef.current).flatMap((lineId) => {
           const previous = lineCache.current.get(lineId);
@@ -130,9 +145,10 @@ export default function ProjectPage() {
   async function activate(revisionId: string) {
     if (!project) return;
     if ((dirtyIds.size || structureDirty || mixDraftIds.size) && !window.confirm("Discard unsaved drafts and switch timeline? Saved revisions are preserved.")) return;
-    try { setBusy("revision"); setProject(await api.activateRevision(id, revisionId, project.active_revision_id));
+    try { setBusy("revision"); const detail = await api.activateRevision(id, revisionId, project.active_revision_id);
+      displayedRevision.current = detail.active_revision_id; setProject(detail); setRemoteTimelineChanged(false);
       dirtyRef.current = new Set(); lineCache.current.clear(); setPreservedDrafts([]);
-      setDirtyIds(new Set()); setMixDraftIds(new Set()); setStructureDirty(false); setSelectedSource(null); mediaRef.current?.pause(); setStopAt(null); }
+      setDirtyIds(new Set()); mixDraftRef.current = new Set(); setMixDraftIds(new Set()); setStructureDirty(false); setSelectedSource(null); mediaRef.current?.pause(); setStopAt(null); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Could not switch timeline"); }
     finally { setBusy(null); }
   }
@@ -166,7 +182,7 @@ export default function ProjectPage() {
   }
   if (!project) return <main className="loadingScreen"><LoaderCircle className="spin" />{error ?? "Opening scene…"}</main>;
   const activeJob = project.jobs.find((job) => ["running", "queued"].includes(job.status));
-  const locked = !!busy || !!activeJob;
+  const locked = !!busy || !!activeJob || remoteTimelineChanged;
   const missing = project.segments.some((line) => !line.translated_text.trim());
   const revisionId = project.active_revision_id ?? undefined;
   const allApproved = project.segments.length > 0 && project.segments.every((line) => line.status === "approved");
@@ -189,9 +205,16 @@ export default function ProjectPage() {
       <div><strong>{project.name}</strong><span>English → Malayalam · v0.2</span></div></div>
       <div className="studioStatus">{(dirtyIds.size > 0 || structureDirty || referenceDirty || mixDraftIds.size > 0) && <span>{dirtyIds.size + Number(structureDirty) + Number(referenceDirty) + mixDraftIds.size} unsaved</span>}
         {activeJob ? activeJob.phase.replaceAll("_", " ") : project.status}
-        <button className="iconButton" aria-label="Refresh project" onClick={load}><RefreshCw size={15} /></button></div></header>
+        <button className="iconButton" aria-label="Refresh project" onClick={() => void load()}><RefreshCw size={15} /></button></div></header>
     {error && <div className="errorBanner studioError" role="alert">{error}</div>}
     {notice && <div className="noticeBanner" role="status">{notice}</div>}
+    {remoteTimelineChanged && <div className="noticeBanner" role="alert">
+      Another tab changed the active timeline. Your unsaved mix settings and review fields are still visible below.
+      Copy any needed values before continuing. Actions on this old timeline are paused.
+      <button className="smallButton" disabled={!!busy} onClick={() => {
+        if (window.confirm("Discard unsaved mix settings, mix review fields and other timeline-specific forms and load the current server timeline? Displaced dialogue drafts remain available to copy. Saved renders and acceptance history will not change.")) void load(true);
+      }}>Discard mix drafts and load current timeline</button>
+    </div>}
     <section className="studioGrid">
       <aside className="leftRail">
         <div className="panelTitle"><span>Scene media</span><label className="uploadButton"><Upload size={14} />
@@ -278,7 +301,7 @@ export default function ProjectPage() {
         <div className="reviewFilters" role="group" aria-label="Filter dialogue">{["all", "untranslated", "edited", "approved", "warnings"].map((value) =>
           <button key={value} className={`smallButton ${filter === value ? "selected" : ""}`} aria-pressed={filter === value} onClick={() => setFilter(value)}>{value}</button>)}</div>
         <DialogueTimeline>{[...project.segments, ...preservedDrafts].map((line) => <DialogueLine key={line.id} segment={line} speakers={project.speakers} artifacts={project.artifacts}
-          structureLocked={busy === "structure"}
+          structureLocked={busy === "structure" || remoteTimelineChanged}
           disabled={locked} onGenerate={(lineId) => run({ stage: "synthesize", revision_id: revisionId, segment_ids: [lineId], force_new: true })}
           active={!line.retired && timelineMatches && time >= line.start_ms && time < line.end_ms} hidden={!line.retired && hidden(line)} canPlay={!line.retired && !!sourceReady && timelineMatches}
           onPlay={playLine} onSaved={load} onDirty={onDirty} onRegenerate={(lineId) => {
