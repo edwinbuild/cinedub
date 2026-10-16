@@ -46,4 +46,6 @@ Measured take feedback is connected to optional `cinema-dialogue-v2` adaptation.
 
 ## Deferred external gates
 
+The optional emotion classifier now has a reproducible 24-clip CREMA-D audio-crowd-label diagnostic: supported-label raw agreement 6/16, suggested-label agreement 6/14 and unsupported-emotion false suggestions 7/8. This is weak evidence, not quality acceptance: keep the classifier optional/review-only and do not connect it to automatic voice controls. Recordings remain outside the repository, thresholds are unchanged, and no paid call or training occurred. See [method, rights and limitations](evaluations/speech-emotion.md). Compare replacement models on a larger speaker-disjoint evaluation before promoting this capability.
+
 The user will configure `SARVAM_API_KEY` later. Continue independent local implementation; do not make paid calls or claim service verification without it. Natural actor recordings require authorization and a reviewer; synthetic fixtures cannot prove cinematic quality. The goal remains active until the full agreed workflow and its acceptance evidence exist.
