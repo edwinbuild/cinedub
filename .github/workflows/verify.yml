@@ -1,0 +1,106 @@
+name: Verify CineDub
+
+on:
+  pull_request:
+  push:
+    branches: [main, release/v0.1.0-foundation]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  SARVAM_API_KEY: ""
+  CINEDUB_SARVAM_API_KEY: ""
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  quality:
+    name: Backend and production build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24.19.0"
+          package-manager-cache: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.12.1"
+          python-version: "3.12.13"
+          enable-cache: false
+      - name: Install media tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Install locked test dependencies without model weights
+        run: |
+          uv sync --frozen --extra local-alignment --group dev
+          npm ci --no-audit --no-fund
+      - name: Python checks and generated contracts
+        run: |
+          .venv/bin/ruff check apps tests scripts migrations
+          .venv/bin/ruff format --check apps tests scripts migrations
+          npm run contracts:check
+      - name: Production build, strict types and lint
+        run: |
+          npm run build:web
+          npm run typecheck
+          npm run lint:web
+      - name: Full backend suite
+        run: .venv/bin/pytest -q -ra
+      - name: Confirm immutable locks and no downloaded weights
+        run: |
+          git diff --exit-code -- uv.lock package-lock.json packages/contracts/src/index.ts
+          test ! -d models
+
+  browser:
+    name: Base-install editor workflows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CINEDUB_E2E_LAUNCHER: "1"
+      CINEDUB_E2E_BROWSER: chromium
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24.19.0"
+          package-manager-cache: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.12.1"
+          python-version: "3.12.13"
+          enable-cache: false
+      - name: Install media tools and locked base dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          uv sync --frozen --group dev
+          npm ci --no-audit --no-fund
+          npx --no-install playwright install --with-deps chromium
+      - name: Check base install has no optional AI packages
+        run: |
+          .venv/bin/python -c 'import importlib.util; assert all(importlib.util.find_spec(name) is None for name in ("numpy", "onnxruntime", "faster_whisper", "torch", "huggingface_hub"))'
+      - name: Editor, media, voice, consent and draft workflows
+        run: >-
+          npm run test:e2e --
+          tests/e2e/review-workflow.spec.ts
+          tests/e2e/dialogue-review.spec.ts
+          tests/e2e/edit-history.spec.ts
+          tests/e2e/structure.spec.ts
+          tests/e2e/editor-accessibility.spec.ts
+          tests/e2e/reference-draft.spec.ts
+          tests/e2e/mix-drafts.spec.ts
+          tests/e2e/speaker-reuse.spec.ts
+      - name: Confirm immutable locks and no downloaded weights
+        run: |
+          git diff --exit-code -- uv.lock package-lock.json packages/contracts/src/index.ts
+          test ! -d models
