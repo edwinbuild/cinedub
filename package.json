@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "bash scripts/dev.sh",
     "doctor": "PYTHONPATH=apps/api .venv/bin/python scripts/local-runtime.py check",
+    "verify:clean-install": "UV_CACHE_DIR=/tmp/cinedub-uv-cache uv run --no-project --python 3.12 python scripts/verify-clean-install.py",
     "dev:web": "npm run dev --workspace @cinedub/web",
     "build:web": "npm run build --workspace @cinedub/web",
     "lint:web": "npm run lint --workspace @cinedub/web",
