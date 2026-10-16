@@ -5,6 +5,8 @@ from .fake import FakeProvider
 from .local_alignment import LocalAligner
 from .local_alignment import availability as alignment_availability
 from .local_asr import LocalTranscriber, availability
+from .local_dialogue import LocalDialogueAdapter
+from .local_dialogue import availability as dialogue_availability
 from .local_performance import LocalPerformanceAnalyzer
 from .local_separation import LocalSeparator
 from .local_separation import availability as separator_availability
@@ -42,6 +44,16 @@ class ProviderRegistry:
                 self.settings.translation_style,
             )
         raise ValueError(f"Translator provider '{selected}' is not installed")
+
+    def dialogue_adapter(self, name: str | None = None, options: dict | None = None):
+        if (name or self.settings.dialogue_adapter) != "local":
+            raise ValueError("This dialogue adaptation adapter is not installed")
+        values = options or {}
+        return LocalDialogueAdapter(
+            values.get("model_dir", self.settings.local_dialogue_model_dir),
+            values.get("threads", self.settings.local_dialogue_threads),
+            values.get("timeout_seconds", self.settings.local_dialogue_timeout_seconds),
+        )
 
     def voice_synthesizer(self, name: str | None = None):
         selected = name or self.settings.voice_synthesizer
@@ -119,7 +131,7 @@ class ProviderRegistry:
             "target_timing_aligner": self.settings.target_timing_aligner,
             "media_exporter": "local",
             "translation_reviewer": "local",
-            "dialogue_adapter": "local",
+            "dialogue_adapter": self.settings.dialogue_adapter,
         }
         implemented = {
             ("transcriber", "fake"),
@@ -139,6 +151,7 @@ class ProviderRegistry:
             ("performance_analyzer", "local"),
             ("target_timing_aligner", "local"),
             ("translation_reviewer", "local"),
+            ("dialogue_adapter", "local"),
         }
         result = []
         for capability, provider in values.items():
@@ -166,6 +179,8 @@ class ProviderRegistry:
                     if available
                     else "Install the optional local-alignment extra for acoustic analysis"
                 )
+            if capability == "dialogue_adapter" and provider == "local":
+                available, reason = dialogue_availability(self.settings.local_dialogue_model_dir)
             is_implemented = (capability, provider) in implemented
             configured = provider != "sarvam" or sarvam_ready
             if provider == "sarvam" and available:
@@ -195,10 +210,10 @@ class ProviderRegistry:
                     "Local glossary and saved-context checks; "
                     "no AI rewriting or speech-duration estimate"
                 )
-            if capability == "dialogue_adapter":
+            if capability == "dialogue_adapter" and available:
                 reason = (
-                    "Context-capable dialogue adaptation is not connected; "
-                    "briefs support manual review only"
+                    "Experimental CPU dialogue alternatives with saved context; "
+                    "not certified Malayalam, duration fit or emotion preservation"
                 )
             result.append(
                 Capability(

@@ -16,6 +16,7 @@ from .consent import (
     profile_is_selected,
     validate_voice_use,
 )
+from .dialogue_prompt import GENERATION, PROMPT_VERSION
 from .dialogue_review import freeze_dialogue_review
 from .mixes import freeze_background
 from .models import (
@@ -33,6 +34,9 @@ from .providers.local_alignment import MODEL_NAME as ALIGNMENT_MODEL
 from .providers.local_alignment import availability as alignment_availability
 from .providers.local_alignment import read_manifest as alignment_manifest
 from .providers.local_asr import MODEL_NAME, availability, read_manifest
+from .providers.local_dialogue import MODEL_NAME as DIALOGUE_MODEL
+from .providers.local_dialogue import availability as dialogue_availability
+from .providers.local_dialogue import read_manifest as dialogue_manifest
 from .providers.local_separation import MODEL_NAME as SEPARATOR_MODEL
 from .providers.local_separation import availability as separator_availability
 from .providers.local_separation import read_manifest as separator_manifest
@@ -82,6 +86,7 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
         "align": settings.timing_aligner,
         "analyze_takes": settings.performance_analyzer,
         "review_translation": "local",
+        "adapt_dialogue": settings.dialogue_adapter,
     }
     provider = payload.provider or defaults[payload.stage]
     if payload.stage in {"transcribe", "translate", "synthesize", "register_voice", "delete_voice"}:
@@ -131,11 +136,31 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
         {"source_language": project.source_language, "target_language": project.target_language}
     )
     cost = 0.0
-    if payload.stage == "review_translation":
+    if payload.stage in {"review_translation", "adapt_dialogue"}:
         try:
             inputs.update(freeze_dialogue_review(session, project, payload))
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
+        if payload.stage == "adapt_dialogue":
+            if provider != "local":
+                raise HTTPException(422, "This dialogue adapter is not implemented")
+            ready, reason = dialogue_availability(settings.local_dialogue_model_dir)
+            if not ready:
+                raise HTTPException(422, reason)
+            if project.source_language != "en-IN" or project.target_language != "ml-IN":
+                raise HTTPException(422, "This experimental profile supports English to Malayalam")
+            inputs.update(
+                {
+                    "model": DIALOGUE_MODEL,
+                    "model_manifest": dialogue_manifest(settings.local_dialogue_model_dir),
+                    "model_dir": str(settings.local_dialogue_model_dir.resolve()),
+                    "threads": settings.local_dialogue_threads,
+                    "timeout_seconds": settings.local_dialogue_timeout_seconds,
+                    "adaptation_provider": provider,
+                    "prompt_version": PROMPT_VERSION,
+                    "generation_parameters": GENERATION,
+                }
+            )
     if payload.stage == "analyze_takes":
         if provider != "local" or not take_analyzer_available():
             raise HTTPException(422, "Install the optional local acoustic analysis adapter")

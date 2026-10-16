@@ -19,6 +19,7 @@ from .database import SessionLocal, create_database
 from .dependencies import SessionDep, require_project
 from .diagnostics import hardware_diagnostics
 from .dialogue_review import latest_brief
+from .dialogue_review import stale_reason as dialogue_context_stale_reason
 from .jobs import ACTIVE, budget_totals, estimate_job, prepare_job, write_lock
 from .media import MediaError, probe_media, safe_filename
 from .mixes import mix_read
@@ -38,6 +39,7 @@ from .models import (
     new_id,
 )
 from .providers import ProviderRegistry
+from .routes.adaptation import router as adaptation_router
 from .routes.alignment import router as alignment_router
 from .routes.dialogue import router as dialogue_router
 from .routes.mixes import router as mixes_router
@@ -96,6 +98,7 @@ app.include_router(mixes_router)
 app.include_router(alignment_router)
 app.include_router(take_analysis_router)
 app.include_router(dialogue_router)
+app.include_router(adaptation_router)
 
 
 def artifact_read(artifact: Artifact, session: Session | None = None) -> ArtifactRead:
@@ -521,18 +524,29 @@ async def resume_job(job_id: str, session: SessionDep):
     job = session.get(Job, job_id)
     if not job:
         raise HTTPException(404, "Job not found")
-    if job.status != "failed" or not job.retryable or not job.remote_job_id:
+    local_dialogue = job.stage == "adapt_dialogue" and job.provider == "local"
+    if (
+        job.status != "failed"
+        or not job.retryable
+        or (not job.remote_job_id and not local_dialogue)
+    ):
         raise HTTPException(422, "This job cannot safely resume; create a new request explicitly")
     if session.scalar(
         select(Job.id).where(Job.project_id == job.project_id, Job.status.in_(ACTIVE))
     ):
         raise HTTPException(409, "Another job is active")
+    if local_dialogue:
+        reason = dialogue_context_stale_reason(session, job.project_id, job.input_json)
+        if reason:
+            raise HTTPException(409, reason)
+        job.retryable = False
     job.status = "queued"
     job.cancel_requested = False
     job.error_code = None
     job.error_message = None
     job.finished_at = None
-    job.checkpoint_json = {**job.checkpoint_json, "poll_started_at": None}
+    if job.remote_job_id:
+        job.checkpoint_json = {**job.checkpoint_json, "poll_started_at": None}
     session.get(Project, job.project_id).status = "processing"
     session.commit()
     return job

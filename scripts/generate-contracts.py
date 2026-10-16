@@ -48,6 +48,8 @@ NAMES = {
     "DialogueBriefUpdate": "DialogueBriefUpdate",
     "DialogueBriefContent": "DialogueBriefContent",
     "DialogueReviewReport": "DialogueReviewReport",
+    "DialogueAdaptationReport": "DialogueAdaptationReport",
+    "DialogueAdaptationApply": "DialogueAdaptationApply",
 }
 REQUESTS = {
     "JobCreate",
@@ -67,6 +69,7 @@ REQUESTS = {
     "MixSettings",
     "AlignmentApply",
     "DialogueBriefUpdate",
+    "DialogueAdaptationApply",
 }
 
 

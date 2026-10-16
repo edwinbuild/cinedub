@@ -107,6 +107,9 @@ local-alignment = [
 local-asr = [
     { name = "faster-whisper" },
 ]
+local-dialogue = [
+    { name = "huggingface-hub" },
+]
 local-separation = [
     { name = "huggingface-hub" },
     { name = "numpy" },
@@ -127,6 +130,7 @@ requires-dist = [
     { name = "faster-whisper", marker = "extra == 'local-asr'", specifier = ">=1.2,<2" },
     { name = "httpx", specifier = ">=0.28,<1" },
     { name = "huggingface-hub", marker = "extra == 'local-alignment'", specifier = ">=0.30,<3" },
+    { name = "huggingface-hub", marker = "extra == 'local-dialogue'", specifier = ">=0.30,<3" },
     { name = "huggingface-hub", marker = "extra == 'local-separation'", specifier = ">=0.30,<3" },
     { name = "numpy", marker = "extra == 'local-alignment'", specifier = ">=2,<3" },
     { name = "numpy", marker = "extra == 'local-separation'", specifier = ">=2,<3" },
@@ -138,7 +142,7 @@ requires-dist = [
     { name = "sqlalchemy", specifier = ">=2.0,<3" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.35,<1" },
 ]
-provides-extras = ["local-asr", "local-separation", "local-alignment"]
+provides-extras = ["local-asr", "local-separation", "local-alignment", "local-dialogue"]
 
 [package.metadata.requires-dev]
 dev = [

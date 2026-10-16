@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     transcriber: str = "fake"
     diarizer: str = "fake"
     translator: str = "fake"
+    dialogue_adapter: str = "local"
     voice_synthesizer: str = "fake"
     performance_analyzer: str = "local"
     stem_separator: str = "local"
@@ -55,6 +56,9 @@ class Settings(BaseSettings):
     local_aligner_timeout_seconds: int = Field(default=600, ge=10, le=1800)
     local_target_aligner_model_dir: Path = Path("./models/wav2vec2-malayalam")
     local_take_analyzer_timeout_seconds: int = Field(default=900, ge=10, le=1800)
+    local_dialogue_model_dir: Path = Path("./models/qwen3-dialogue")
+    local_dialogue_threads: int = Field(default=4, ge=1, le=8)
+    local_dialogue_timeout_seconds: int = Field(default=1800, ge=30, le=3600)
 
     sarvam_api_key: str | None = Field(
         default=None,

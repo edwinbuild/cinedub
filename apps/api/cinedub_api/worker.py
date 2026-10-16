@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from sqlalchemy import case, select, update
 from sqlalchemy.orm import Session
 
+from .adaptation_processing import process_adapt_dialogue
 from .alignment_processing import process_align
 from .clone_processing import (
     process_delete_voice,
@@ -350,6 +351,7 @@ PROCESSORS = {
     "align": process_align,
     "analyze_takes": process_analyze_takes,
     "review_translation": process_review_translation,
+    "adapt_dialogue": process_adapt_dialogue,
 }
 
 
@@ -418,6 +420,10 @@ def process_once(session: Session) -> bool:
             and bool(job.remote_job_id)
             and isinstance(exc, (TimeoutError, ConnectionError))
         )
+        if job.stage == "adapt_dialogue" and isinstance(exc, (TimeoutError, OSError, RuntimeError)):
+            # Local, read-only generation can resume only database-committed lines.
+            # Invalid context/output (ValueError) requires an explicit new request.
+            job.retryable = True
         # Status/download errors can safely resume a known remote job without resubmission.
         if (
             job.stage == "transcribe"

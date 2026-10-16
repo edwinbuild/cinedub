@@ -50,7 +50,18 @@ Sarvam provides phrase timings. The optional local aligner below can suggest Eng
 
 ## Dialogue brief and local editorial checks
 
-Before generating voices, open **Dialogue brief & editorial checks**. Save scene/adaptation notes, character intent and preferred Malayalam names or terms, then **Check saved dialogue** and inspect the result. These local checks show missing translations, preferred-text omissions, surrounding dialogue and saved time windows without replacing text or changing approvals. Refresh preserves drafts; a newer saved brief requires an explicit reload. Historical reports become stale when their context changes. Current translation models do not receive this brief, and no speech-duration estimate or emotion/quality score is invented. [Context and adapter boundary](docs/decisions/0009-dialogue-briefs.md).
+Before generating voices, open **Dialogue brief & editorial checks**. Save scene/adaptation notes, character intent and preferred Malayalam names or terms, then **Check saved dialogue** and inspect the result. These local checks show missing translations, preferred-text omissions, surrounding dialogue and saved time windows without replacing text or changing approvals. Refresh preserves drafts; a newer saved brief requires an explicit reload. Historical reports become stale when their context changes. Plain translation does not receive this brief; the optional model stage below uses it separately. No speech-duration estimate or emotion/quality score is invented. [Context and adapter boundary](docs/decisions/0009-dialogue-briefs.md).
+
+## Optional local dialogue alternatives
+
+```bash
+uv sync --all-extras --group dev
+PYTHONPATH=apps/api .venv/bin/python scripts/setup-local-dialogue.py
+```
+
+Restart the API/worker, save your dialogue brief and open **Model dialogue alternatives**. Choose one line initially, then **Generate dialogue alternatives** and inspect the faithful/concise drafts. Generation never changes saved text. Check the Malayalam against the English before explicitly applying; replacing reviewed work or accepting flagged terminology needs separate confirmations. Application preserves timing, clears old selected voice audio and requires approval again.
+
+The pinned Linux x86_64 CPU profile uses a roughly 2.5 GB Qwen3 4B quantization, four threads, a 4096-token context and a 10 GiB process address-space cap. The original two-example smoke run took about 46 seconds with 4542 MiB peak native memory; this is not whole-application or cinematic-quality acceptance. Sarvam/plain translation routing stays unchanged. There is no API charge for this stage, and no runtime model download, GPU or PyTorch requirement. Keep installed optional extras on later dependency syncs. [Setup/provenance and safeguards](docs/decisions/0010-local-dialogue-adaptation.md) · [Measured examples and remaining review](docs/evaluations/local-dialogue-adaptation.md).
 
 ## Optional offline English transcription
 

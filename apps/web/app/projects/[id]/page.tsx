@@ -14,6 +14,7 @@ import { MixPanel } from "@/components/mix-panel";
 import { AlignmentPanel } from "@/components/alignment-panel";
 import { PerformancePanel } from "@/components/performance-panel";
 import { DialogueBriefPanel } from "@/components/dialogue-brief-panel";
+import { DialogueAdaptationPanel } from "@/components/dialogue-adaptation-panel";
 import { API_URL, api } from "@/lib/api";
 
 export default function ProjectPage() {
@@ -78,6 +79,7 @@ export default function ProjectPage() {
   const aligner = capabilities.find((item) => item.capability === "timing_aligner");
   const targetAligner = capabilities.find((item) => item.capability === "target_timing_aligner");
   const performanceAnalyzer = capabilities.find((item) => item.capability === "performance_analyzer");
+  const dialogueAdapter = capabilities.find((item) => item.capability === "dialogue_adapter");
   const activeStems = project?.stem_sets.find((stems) => stems.id === project.assets.find((asset) => asset.id === sourceId)?.active_stem_set_id && stems.status === "approved");
   const transcriptionInput = preferDialogue && activeStems ? "dialogue_stem" : "original";
 
@@ -210,6 +212,9 @@ export default function ProjectPage() {
         <StemPanel project={project} sourceId={sourceId} disabled={locked} onSaved={load} />
         {project.active_revision_id && <DialogueBriefPanel key={`brief:${project.active_revision_id}`} project={project}
           disabled={locked} unsaved={dirtyIds.size > 0} onRun={run} onSaved={load} onDirty={onDirty}
+          onPlayRange={playRange} canPlay={!!sourceReady && timelineMatches} />}
+        {project.active_revision_id && <DialogueAdaptationPanel key={`adaptation:${project.active_revision_id}`} project={project}
+          available={!!dialogueAdapter?.available} disabled={locked} unsaved={dirtyIds.size > 0} onRun={run} onSaved={load}
           onPlayRange={playRange} canPlay={!!sourceReady && timelineMatches} />}
         <AlignmentPanel project={project} disabled={locked} unsaved={dirtyIds.size > 0}
           available={!!aligner?.available} sourceId={sourceId} transcriptionInput={transcriptionInput}

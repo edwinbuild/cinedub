@@ -23,6 +23,8 @@ import type {
   DialogueBrief,
   DialogueBriefUpdate,
   DialogueReviewReport,
+  DialogueAdaptationReport,
+  DialogueAdaptationApply,
 } from "@cinedub/contracts";
 
 export const API_URL = process.env.NEXT_PUBLIC_CINEDUB_API_URL ?? "http://127.0.0.1:8000";
@@ -120,6 +122,9 @@ export const api = {
       method: "POST", body: JSON.stringify(payload),
     }),
   dialogueReviewReport: (id: string) => request<DialogueReviewReport>(`/dialogue-review-reports/${id}`),
+  dialogueAdaptationReport: (id: string) => request<DialogueAdaptationReport>(`/dialogue-adaptation-reports/${id}`),
+  applyDialogueAdaptation: (id: string, payload: DialogueAdaptationApply) =>
+    request<Segment>(`/dialogue-adaptation-reports/${id}/apply`, { method: "POST", body: JSON.stringify(payload) }),
   applyAlignment: (id: string, payload: AlignmentApply) => request<Segment>(`/alignment-reports/${id}/apply`, {
     method: "POST", body: JSON.stringify(payload),
   }),

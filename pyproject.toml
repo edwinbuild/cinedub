@@ -19,6 +19,7 @@ dependencies = [
 local-asr = ["faster-whisper>=1.2,<2"]
 local-separation = ["numpy>=2,<3", "onnxruntime>=1.20,<2", "huggingface-hub>=0.30,<3"]
 local-alignment = ["numpy>=2,<3", "onnxruntime>=1.20,<2", "huggingface-hub>=0.30,<3"]
+local-dialogue = ["huggingface-hub>=0.30,<3"]
 
 [dependency-groups]
 dev = [

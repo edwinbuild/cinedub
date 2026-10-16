@@ -140,6 +140,33 @@ def source_contains(text, term):
     return False
 
 
+def review_findings(line, matched):
+    findings = []
+    if not line["translated_text"].strip():
+        findings.append(
+            {"code": "missing_translation", "message": "This saved line has no translation"}
+        )
+    else:
+        for term in matched:
+            if normalized(term.preferred_target) not in normalized(line["translated_text"]):
+                findings.append(
+                    {
+                        "code": "missing_preferred_term",
+                        "message": (
+                            f"Preferred text “{term.preferred_target}” for “{term.source}” "
+                            "is not present; review wording or inflection"
+                        ),
+                        "source_term": term.source,
+                        "preferred_target": term.preferred_target,
+                    }
+                )
+    if not line["speaker_id"]:
+        findings.append(
+            {"code": "unassigned_speaker", "message": "Assign a speaker to use character direction"}
+        )
+    return findings
+
+
 def build_review(inputs, project_id):
     brief = DialogueBriefRead.model_validate(inputs["brief"])
     directions = {item.speaker_id: item for item in brief.content.characters}
@@ -152,32 +179,6 @@ def build_review(inputs, project_id):
             for term in brief.content.glossary
             if source_contains(line["source_text"], term.source)
         ]
-        findings = []
-        if not line["translated_text"].strip():
-            findings.append(
-                {"code": "missing_translation", "message": "This saved line has no translation"}
-            )
-        else:
-            for term in matched:
-                if normalized(term.preferred_target) not in normalized(line["translated_text"]):
-                    findings.append(
-                        {
-                            "code": "missing_preferred_term",
-                            "message": (
-                                f"Preferred text “{term.preferred_target}” for “{term.source}” "
-                                "is not present; review wording or inflection"
-                            ),
-                            "source_term": term.source,
-                            "preferred_target": term.preferred_target,
-                        }
-                    )
-        if not line["speaker_id"]:
-            findings.append(
-                {
-                    "code": "unassigned_speaker",
-                    "message": "Assign a speaker to use character direction",
-                }
-            )
         lines.append(
             DialogueReviewLine(
                 **line,
@@ -190,7 +191,7 @@ def build_review(inputs, project_id):
                 else None,
                 character_direction=directions.get(line["speaker_id"]),
                 matched_glossary=matched,
-                findings=findings,
+                findings=review_findings(line, matched),
             )
         )
     return DialogueReviewReport(

@@ -280,6 +280,71 @@ class DialogueReviewReport(BaseModel):
     stale_reason: str | None = None
 
 
+class DialogueModelOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    faithful: str = Field(min_length=1, max_length=1200)
+    concise: str = Field(min_length=1, max_length=1200)
+    notes: str = Field(default="", max_length=600)
+
+
+class DialogueAlternative(BaseModel):
+    kind: Literal["faithful", "concise"]
+    text: str = Field(min_length=1, max_length=1200)
+    findings: list[DialogueFinding]
+    warnings: list[str]
+    eligible_for_application: bool
+
+
+class DialogueNativeLine(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    segment_id: str
+    output: DialogueModelOutput
+    prompt_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    request_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    prompt_tokens: int = Field(ge=1, le=3312)
+    latency_ms: int = Field(ge=0)
+
+
+class DialogueAdaptationLine(DialogueReviewLine):
+    alternatives: list[DialogueAlternative]
+    model_notes: str
+    prompt_sha256: str
+    request_sha256: str
+    prompt_tokens: int = Field(ge=1)
+    latency_ms: int = Field(ge=0)
+
+
+class DialogueAdaptationReport(BaseModel):
+    schema_version: Literal[1] = 1
+    project_id: str
+    revision_id: str
+    source_language: LanguageCode
+    target_language: LanguageCode
+    brief: DialogueBriefRead
+    context_lines: list[DialogueContextLine]
+    context_supplied_to_model: Literal[True] = True
+    provider: str
+    model: str
+    prompt_version: str
+    generation_parameters: dict
+    runtime: dict
+    lines: list[DialogueAdaptationLine]
+    warnings: list[str]
+    stale_reason: str | None = None
+    applied_line_ids: list[str] = Field(default_factory=list)
+    applied_translations: dict[str, str] = Field(default_factory=dict)
+
+
+class DialogueAdaptationApply(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    segment_id: str
+    kind: Literal["faithful", "concise"]
+    expected_version: int = Field(ge=1)
+    language_reviewed: bool = False
+    replace_reviewed_text: bool = False
+    issues_reviewed: bool = False
+
+
 class AlignedWord(BaseModel):
     text: str
     start_ms: int = Field(ge=0)
@@ -435,6 +500,7 @@ class JobCreate(BaseModel):
         "align",
         "analyze_takes",
         "review_translation",
+        "adapt_dialogue",
     ]
     provider: Literal["fake", "sarvam", "local"] | None = None
     source_asset_id: str | None = None

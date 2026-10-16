@@ -71,7 +71,7 @@ export function DialogueBriefPanel({ project, disabled, unsaved, onRun, onSaved,
   }
   return <details className="dubPreview dialogueBriefPanel" aria-label="Dialogue brief and editorial checks">
     <summary>Dialogue brief & editorial checks · version {version}{dirty ? " · unsaved" : ""}</summary>
-    <p>Keep scene context, character intent and preferred names beside the dialogue. Current translation models do not receive this brief. Checks below are local editorial aids, not AI adaptation or Malayalam quality scores.</p>
+    <p>Keep scene context, character intent and preferred names beside the dialogue. Plain translation does not receive this brief; the optional Model dialogue alternatives stage uses it separately. Checks below are local editorial aids, not AI adaptation or Malayalam quality scores.</p>
     <form aria-label="Dialogue brief" onSubmit={(event) => { event.preventDefault(); void save(); }}>
       <fieldset disabled={disabled || busy}><legend>Editorial direction</legend>
         <label className="fieldLabel">Scene summary<textarea aria-label="Scene summary" rows={3} maxLength={4000} value={content.scene_summary} onChange={(event) => setContent({ ...content, scene_summary: event.target.value })} /></label>

@@ -236,7 +236,7 @@ export interface MixSettings {
 }
 
 export interface JobRequest {
-  stage: "ingest" | "demo_pipeline" | "transcribe" | "translate" | "synthesize" | "export" | "render_preview" | "prepare_reference" | "register_voice" | "delete_voice" | "separate" | "render_mix" | "align" | "analyze_takes" | "review_translation";
+  stage: "ingest" | "demo_pipeline" | "transcribe" | "translate" | "synthesize" | "export" | "render_preview" | "prepare_reference" | "register_voice" | "delete_voice" | "separate" | "render_mix" | "align" | "analyze_takes" | "review_translation" | "adapt_dialogue";
   provider?: "fake" | "sarvam" | "local" | null;
   source_asset_id?: string | null;
   revision_id?: string | null;
@@ -578,4 +578,66 @@ export interface DialogueReviewReport {
   lines: Array<DialogueReviewLine>;
   warnings: Array<string>;
   stale_reason: string | null;
+}
+
+export interface DialogueAdaptationLine {
+  segment_id: string;
+  source_text: string;
+  translated_text: string;
+  speaker_id: string | null;
+  speaker_name: string | null;
+  start_ms: number;
+  end_ms: number;
+  segment_version: number;
+  slot_duration_ms: number;
+  target_character_count: number;
+  previous_line: DialogueContextLine | null;
+  next_line: DialogueContextLine | null;
+  character_direction: CharacterDirection | null;
+  matched_glossary: Array<GlossaryTerm>;
+  findings: Array<DialogueFinding>;
+  alternatives: Array<DialogueAlternative>;
+  model_notes: string;
+  prompt_sha256: string;
+  request_sha256: string;
+  prompt_tokens: number;
+  latency_ms: number;
+}
+
+export interface DialogueAlternative {
+  kind: "faithful" | "concise";
+  text: string;
+  findings: Array<DialogueFinding>;
+  warnings: Array<string>;
+  eligible_for_application: boolean;
+}
+
+export interface DialogueAdaptationReport {
+  schema_version: 1;
+  project_id: string;
+  revision_id: string;
+  source_language: "en-IN" | "ml-IN";
+  target_language: "en-IN" | "ml-IN";
+  brief: DialogueBrief;
+  context_lines: Array<DialogueContextLine>;
+  context_supplied_to_model: true;
+  provider: string;
+  model: string;
+  prompt_version: string;
+  generation_parameters: Record<string, unknown>;
+  runtime: Record<string, unknown>;
+  lines: Array<DialogueAdaptationLine>;
+  warnings: Array<string>;
+  stale_reason: string | null;
+  applied_line_ids: Array<string>;
+  applied_translations: Record<string, string>;
+}
+
+export interface DialogueAdaptationApply {
+  segment_id: string;
+  kind: "faithful" | "concise";
+  expected_version: number;
+  language_reviewed?: boolean;
+  replace_reviewed_text?: boolean;
+  issues_reviewed?: boolean;
 }

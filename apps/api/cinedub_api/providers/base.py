@@ -127,3 +127,16 @@ class TakePerformanceAnalyzer(Protocol):
         cancel: Callable[[], None],
         progress: Callable[[int, int], None],
     ) -> dict: ...
+
+
+class DialogueAdapter(Protocol):
+    name: str
+
+    def adapt(
+        self,
+        request: dict,
+        output_dir: Path,
+        *,
+        cancel: Callable[[], None],
+        progress: Callable[[list[dict]], None],
+    ) -> dict: ...

@@ -1,6 +1,6 @@
 # ADR 0009 Dialogue briefs and local editorial checks
 
-Status: implemented editorial-context foundation, 2026-10-15. Context-capable model adaptation remains a separate open milestone.
+Status: implemented editorial-context foundation, 2026-10-15. An optional experimental model adapter is now connected separately in [ADR 0010](0010-local-dialogue-adaptation.md); language-quality acceptance remains open.
 
 ## Saved context
 
@@ -20,7 +20,7 @@ Reports have checksums and frozen job lineage. Typed reads validate the saved by
 
 The [Sarvam text-translation request](https://docs.sarvam.ai/api-reference/text/translate-text), checked on 2026-10-15, exposes source/target language, model, style and formatting options, but no separate scene, character, glossary or duration fields. Do not prepend those instructions to dialogue and pretend they are a supported context channel.
 
-`translation_reviewer` is available locally; `dialogue_adapter` remains unavailable. Reports explicitly record `context_applied_by_model=false`. The next adapter must consume a frozen brief, surrounding dialogue, character direction and time-window constraints, and return reviewable alternatives with model/version, prompt/version, parameters and latency. It must preserve names, meaning and human edits, reject malformed/mismatched outputs, and be evaluated on natural Malayalam before routing defaults change. A resource-bounded local model or a separately verified Sarvam chat adapter can implement that contract; neither is silently selected by this milestone.
+`translation_reviewer` remains a local deterministic check and its reports explicitly record `context_applied_by_model=false`. The separate optional `dialogue_adapter` consumes frozen context and returns model alternatives with provenance. Plain translation is not silently rerouted through it. Model drafts still need independent Malayalam review, and the editorial checks do not become AI quality scores merely because a model is installed.
 
 ## Verification
 
