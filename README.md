@@ -161,6 +161,8 @@ Download a PCM24 WAV master, PCM16 listening copy, matching Malayalam SRT, rende
 
 Listen against picture, enter reviewer/notes and confirm review, then **Approve mix and export bundle**. A worker job verifies the files and creates a ZIP plus an acceptance certificate. New edits or stem/voice changes make older renders historical; rejection does not erase them. Clone consent revocation blocks dependent media, manifests and bundles. Demo takes remain labelled demo tones even after simulated approval.
 
+Unrendered settings and unsaved mix-review notes survive project refresh and warn before leaving or explicitly switching timelines. Each timeline opens with its latest render settings or defaults. Failed operations keep the draft; a completed render or successful review clears the relevant warning. The two **Discard mix… draft** buttons reset only unsaved controls/notes, not saved renders or acceptance history. Drafts stay in the open page only, not browser storage, and are not crash recovery.
+
 Audio preparation now preserves audio-track offsets relative to the container timeline. If an older scene has an offset track, prepare/separate it again and review a fresh transcript; zero-offset scenes are unaffected.
 
 The actual separator-to-export browser workflow uses generated video/audio and no paid APIs:

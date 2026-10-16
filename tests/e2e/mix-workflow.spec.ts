@@ -53,8 +53,20 @@ test("actual separation through reviewed stereo export and hash-verifiable accep
     const panel = page.getByRole("region", { name: "Retained-background mix and export" });
     await panel.getByText("Mix & export · reviewed stereo delivery", { exact: true }).click();
     await panel.getByLabel("Music gain (dB)").fill("-3");
+    await expect(page.getByText("1 unsaved", { exact: true })).toBeVisible();
+    await page.route("**/projects/*/jobs", async (route) => {
+      if (route.request().method() === "POST" && route.request().postDataJSON().stage === "render_mix")
+        await route.fulfill({ status: 422, json: { detail: "Synthetic mix start refused" } });
+      else await route.continue();
+    });
+    await panel.getByRole("button", { name: "Render retained-background mix", exact: true }).click();
+    await expect(page.getByText("Synthetic mix start refused", { exact: true })).toBeVisible();
+    await expect(panel.getByLabel("Music gain (dB)")).toHaveValue("-3");
+    await expect(page.getByText("1 unsaved", { exact: true })).toBeVisible();
+    await page.unroute("**/projects/*/jobs");
     await panel.getByRole("button", { name: "Render retained-background mix", exact: true }).click();
     await expect(panel.getByLabel("Retained-background video preview")).toBeVisible({ timeout: 90_000 });
+    await expect(page.getByText("1 unsaved", { exact: true })).toHaveCount(0);
     const project = await detail();
     expect(project.mixes[0].quality_json.audio_master.sample_count).toBe(project.assets[0].duration_ms * 48);
     expect(project.mixes[0].quality_json.video.width).toBe(1440); // Not the 1280px browser proxy.
@@ -62,15 +74,37 @@ test("actual separation through reviewed stereo export and hash-verifiable accep
     await expect(panel.getByText(/DEMO TONES/)).toBeVisible();
     await panel.getByLabel("Mix reviewer", { exact: true }).fill("Automated fixture reviewer");
     await panel.getByLabel("Mix review notes").fill("Automated acceptance path, not language or listening quality evidence");
+    await expect(page.getByText("1 unsaved", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Refresh project", exact: true }).click();
+    await expect(panel.getByLabel("Mix review notes")).toHaveValue("Automated acceptance path, not language or listening quality evidence");
     await expect(panel.getByRole("button", { name: "Approve mix and export bundle" })).toBeDisabled();
     await panel.getByLabel("I reviewed dialogue, background leakage, effects, levels and timing against the scene.").check();
+    await page.route("**/mixes/*/review", (route) => route.fulfill({ status: 409, json: { detail: "Synthetic mix review conflict" } }));
     await panel.getByRole("button", { name: "Approve mix and export bundle" }).click();
+    await expect(panel.getByRole("alert")).toContainText("Synthetic mix review conflict");
+    await expect(panel.getByLabel("Mix reviewer", { exact: true })).toHaveValue("Automated fixture reviewer");
+    await expect(panel.getByLabel("I reviewed dialogue, background leakage, effects, levels and timing against the scene.")).toBeChecked();
+    await page.unroute("**/mixes/*/review");
+    await panel.getByRole("button", { name: "Approve mix and export bundle" }).click();
+    await expect(panel.getByLabel("Mix reviewer", { exact: true })).toHaveValue("");
+    await expect(page.getByText("1 unsaved", { exact: true })).toHaveCount(0);
     const download = panel.getByRole("link", { name: "Download accepted export bundle", exact: true });
     await expect(download).toBeVisible({ timeout: 30_000 });
     const response = await request.get((await download.getAttribute("href"))!);
     expect(response.ok()).toBeTruthy();
     expect((await response.body()).subarray(0, 2).toString()).toBe("PK");
+    const acceptanceCount = (await detail()).mixes[0].reviews.length;
+    await panel.getByLabel("Mix reviewer", { exact: true }).fill("Discarded synthetic review draft");
+    await panel.getByLabel("Mix review notes").fill("Not a new acceptance event");
+    await Promise.all([
+      page.waitForEvent("dialog").then((dialog) => dialog.accept()),
+      panel.getByRole("button", { name: "Discard mix review draft", exact: true }).click(),
+    ]);
+    await expect(panel.getByLabel("Mix reviewer", { exact: true })).toHaveValue("");
+    await expect(page.getByText("1 unsaved", { exact: true })).toHaveCount(0);
+    expect((await detail()).mixes[0].reviews.length).toBe(acceptanceCount);
     await page.reload();
+    await expect(panel.getByLabel("Music gain (dB)")).toHaveValue("-3");
     await expect(panel.getByRole("link", { name: "Download accepted export bundle", exact: true })).toBeVisible();
     const player = panel.getByLabel("Retained-background video preview");
     await expect.poll(() => player.evaluate((element: HTMLVideoElement) => element.readyState)).toBeGreaterThanOrEqual(2);

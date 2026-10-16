@@ -37,6 +37,11 @@ export default function ProjectPage() {
   const [dirtyIds, setDirtyIds] = useState<Set<string>>(() => new Set());
   const [structureDirty, setStructureDirty] = useState(false);
   const [referenceDirty, setReferenceDirty] = useState(false);
+  const [mixDraftIds, setMixDraftIds] = useState<Set<string>>(() => new Set());
+  const onMixDirty = useCallback((key: string, dirty: boolean) => setMixDraftIds((previous) => {
+    if (previous.has(key) === dirty) return previous;
+    const next = new Set(previous); if (dirty) next.add(key); else next.delete(key); return next;
+  }), []);
   const [preservedDrafts, setPreservedDrafts] = useState<Segment[]>([]);
   const dirtyRef = useRef<Set<string>>(new Set());
   const lineCache = useRef<Map<string, Segment>>(new Map());
@@ -72,11 +77,11 @@ export default function ProjectPage() {
     const timer = window.setInterval(load, 1500); return () => window.clearInterval(timer);
   }, [hasJobs, load]);
   useEffect(() => {
-    if (!dirtyIds.size && !structureDirty && !referenceDirty) return;
+    if (!dirtyIds.size && !structureDirty && !referenceDirty && !mixDraftIds.size) return;
     function warn(event: BeforeUnloadEvent) { event.preventDefault(); event.returnValue = ""; }
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [dirtyIds.size, structureDirty, referenceDirty]);
+  }, [dirtyIds.size, structureDirty, referenceDirty, mixDraftIds.size]);
   const onDirty = useCallback((lineId: string, dirty: boolean) => {
     const next = new Set(dirtyRef.current); if (dirty) next.add(lineId); else next.delete(lineId);
     dirtyRef.current = next; setDirtyIds(next);
@@ -123,10 +128,10 @@ export default function ProjectPage() {
   }
   async function activate(revisionId: string) {
     if (!project) return;
-    if ((dirtyIds.size || structureDirty) && !window.confirm("Discard unsaved drafts and switch timeline? Saved revisions are preserved.")) return;
+    if ((dirtyIds.size || structureDirty || mixDraftIds.size) && !window.confirm("Discard unsaved drafts and switch timeline? Saved revisions are preserved.")) return;
     try { setBusy("revision"); setProject(await api.activateRevision(id, revisionId, project.active_revision_id));
       dirtyRef.current = new Set(); lineCache.current.clear(); setPreservedDrafts([]);
-      setDirtyIds(new Set()); setStructureDirty(false); setSelectedSource(null); mediaRef.current?.pause(); setStopAt(null); }
+      setDirtyIds(new Set()); setMixDraftIds(new Set()); setStructureDirty(false); setSelectedSource(null); mediaRef.current?.pause(); setStopAt(null); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Could not switch timeline"); }
     finally { setBusy(null); }
   }
@@ -178,10 +183,10 @@ export default function ProjectPage() {
     <a className="skipLink" href="#dialogue-editor">Skip to dialogue editor</a>
     <header className="studioTopbar"><div className="studioIdentity">
       <Link href="/" className="iconButton" aria-label="Projects" onClick={(event) => {
-        if ((dirtyIds.size || structureDirty || referenceDirty) && !window.confirm("Leave this scene and discard unsaved drafts?")) event.preventDefault();
+        if ((dirtyIds.size || structureDirty || referenceDirty || mixDraftIds.size) && !window.confirm("Leave this scene and discard unsaved drafts?")) event.preventDefault();
       }}><ArrowLeft size={17} /></Link><span className="brandMark"><Film size={17} /></span>
       <div><strong>{project.name}</strong><span>English → Malayalam · v0.2</span></div></div>
-      <div className="studioStatus">{(dirtyIds.size > 0 || structureDirty || referenceDirty) && <span>{dirtyIds.size + Number(structureDirty) + Number(referenceDirty)} unsaved</span>}
+      <div className="studioStatus">{(dirtyIds.size > 0 || structureDirty || referenceDirty || mixDraftIds.size > 0) && <span>{dirtyIds.size + Number(structureDirty) + Number(referenceDirty) + mixDraftIds.size} unsaved</span>}
         {activeJob ? activeJob.phase.replaceAll("_", " ") : project.status}
         <button className="iconButton" aria-label="Refresh project" onClick={load}><RefreshCw size={15} /></button></div></header>
     {error && <div className="errorBanner studioError" role="alert">{error}</div>}
@@ -250,7 +255,7 @@ export default function ProjectPage() {
         {project.active_revision_id && <EmotionPanel key={`emotion:${project.active_revision_id}`} project={project} sourceId={sourceId}
           disabled={locked} unsaved={dirtyIds.size > 0} available={!!capabilities.find((item) => item.capability === "emotion_analyzer")?.available}
           transcriptionInput={transcriptionInput} onRun={run} onPlayRange={playRange} canPlay={!!sourceReady && timelineMatches} />}
-        <MixPanel project={project} disabled={locked || !timelineMatches} unsaved={dirtyIds.size > 0} onSaved={load} onRun={run} />
+        <MixPanel key={`mix:${project.active_revision_id ?? "none"}`} project={project} disabled={locked || !timelineMatches} unsaved={dirtyIds.size > 0} onSaved={load} onRun={run} onDirty={onMixDirty} />
         {voicePreview && <section className="dubPreview" aria-label="Dialogue-only preview"><h2>{voicePreview.metadata_json.demo ? "Demo-tone preview" : "Dialogue-only preview"}</h2>
           <p className="lineWarning">{previewStale ? "Saved preview uses earlier takes. Render again after selecting current audio." : "Original dialogue, music and effects are excluded from this preview."}</p>
           {voicePreview.access_blocked_reason ? <p className="lineWarning">{voicePreview.access_blocked_reason}</p>
