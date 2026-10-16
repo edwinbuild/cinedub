@@ -73,6 +73,7 @@ from .schemas import (
 )
 from .streaming import media_response
 from .timeline import revision_segments
+from .workspace_lock import workspace_lease
 
 settings = get_settings()
 UploadDep = Annotated[UploadFile, File()]
@@ -80,8 +81,9 @@ UploadDep = Annotated[UploadFile, File()]
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    create_database()
-    yield
+    with workspace_lease(settings.database_url, settings.storage_root):
+        create_database()
+        yield
 
 
 app = FastAPI(title="CineDub API", version="0.2.0", lifespan=lifespan)
@@ -464,10 +466,11 @@ async def resume_job(job_id: str, session: SessionDep):
     if not job:
         raise HTTPException(404, "Job not found")
     local_dialogue = job.stage == "adapt_dialogue" and job.provider == "local"
+    restored_local = job.error_code == "restored_job_hold" and job.provider in {"local", "fake"}
     if (
         job.status != "failed"
         or not job.retryable
-        or (not job.remote_job_id and not local_dialogue)
+        or (not job.remote_job_id and not local_dialogue and not restored_local)
     ):
         raise HTTPException(422, "This job cannot safely resume; create a new request explicitly")
     if session.scalar(

@@ -76,6 +76,7 @@ export function ClonePanel({ project, provider, available, disabled, onSaved, on
       return <section key={profile.id} className="cloneCard" aria-label={`Voice reference ${profile.display_name}`}>
         <h3>{profile.display_name} {active && <small>Selected voice</small>}</h3>
         <p>{profile.provider === "fake" ? "Demo only — no voice cloned" : "Consented clone · beta"} · {profile.registration_status} · Consent: {profile.consent_status}</p>
+        {profile.consent_status === "recovery_hold" && <p className="lineWarning">Restored permission is historical. Verify current rights and create a fresh consented reference before use. No provider copy was deleted; explicit revocation is required before cleanup.</p>}
         {reference && !reference.access_blocked_reason && <audio controls preload="none" aria-label={`Reference audio ${profile.display_name}`} src={`${API_URL}${reference.content_url}`} />}
         {reference?.access_blocked_reason && <p className="lineWarning">{reference.access_blocked_reason}</p>}
         {(reference?.metadata_json.quality as { warnings?: string[] } | undefined)?.warnings?.map((warning) => <p className="lineWarning" key={warning}>{warning}</p>)}
@@ -91,8 +92,8 @@ export function ClonePanel({ project, provider, available, disabled, onSaved, on
         </>}
         {profile.registration_status === "ready" && !revoked && speaker && <button className="smallButton" disabled={disabled || busy || active}
           onClick={() => action(() => api.selectVoiceProfile(speaker, profile.id))}>{active ? "Selected voice" : profile.provider === "fake" ? "Use demo profile" : "Use this clone"}</button>}
-        {!revoked && <button className="smallButton" disabled={busy} onClick={() => revoke(profile)}>Revoke consent</button>}
-        {revoked && profile.provider_voice_id && profile.registration_status !== "deleted" && <button className="smallButton" disabled={disabled || busy || !profileAvailable}
+        {profile.consent_status !== "revoked" && <button className="smallButton" disabled={busy} onClick={() => revoke(profile)}>Revoke consent</button>}
+        {profile.consent_status === "revoked" && profile.provider_voice_id && profile.registration_status !== "deleted" && <button className="smallButton" disabled={disabled || busy || !profileAvailable}
           onClick={() => { if (window.confirm("Delete this saved voice and its reference assets from the provider? Other applications using this voice will lose access. Local audit history is retained."))
             void onRun({ stage: "delete_voice", provider: profile.provider as "fake" | "sarvam", voice_profile_id: profile.id }); }}>Delete provider copy</button>}
         <button className="smallButton" onClick={() => action(async () => { const records = await api.voiceConsentHistory(profile.id); setHistory({ ...history, [profile.id]: records }); })}>Show consent history</button>

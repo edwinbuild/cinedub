@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 from .providers.local_separation import MODEL_FILE, MODEL_NAME, read_manifest
+from .workspace_lock import child_process_options
 
 
 def run(model_dir, audio, output_dir, duration_ms, gain_db, threads):
@@ -99,6 +100,7 @@ def run(model_dir, audio, output_dir, duration_ms, gain_db, threads):
             capture_output=True,
             check=True,
             timeout=60,
+            **child_process_options(),
         )
         metadata["stems"][name] = {
             "filename": path.name,

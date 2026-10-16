@@ -301,7 +301,7 @@ export default function ProjectPage() {
           {job.error_message && <p className="inlineError">{job.error_message}</p>}
           {job.warnings_json.map((warning) => <small key={warning}>{warning}</small>)}
           {job.status === "failed" && job.retryable && <button className="smallButton" disabled={locked}
-            onClick={() => jobAction(() => api.resumeJob(job.id))}>Resume existing remote job</button>}</div>)}</div>
+            onClick={() => jobAction(() => api.resumeJob(job.id))}>{job.provider === "sarvam" ? "Resume existing remote job" : "Resume saved local job"}</button>}</div>)}</div>
         <div className="inspectorSection"><p className="eyebrow">Downloads</p>{project.artifacts.filter((item) => ["subtitle", "raw_transcript", "translation_candidates", "dub_preview", "dialogue_mix"].includes(item.kind)).map((item) =>
           item.access_blocked_reason ? <div className="artifact" key={item.id}><strong>{item.filename}</strong><small>{item.access_blocked_reason}</small></div>
             : <a className="artifact" href={`${API_URL}${item.download_url}`} key={item.id}><span><strong>{item.filename}</strong><small>{item.kind.replaceAll("_", " ")} · {item.metadata_json.revision_id === project.active_revision_id ? "active timeline" : "other timeline"}</small></span></a>)}</div>

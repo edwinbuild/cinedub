@@ -47,6 +47,7 @@ from .separation_processing import process_separate
 from .take_analysis_processing import process_analyze_takes
 from .voice_processing import process_render_preview
 from .voice_processing import process_synthesize as process_voice_candidates
+from .workspace_lock import inherit_lease, workspace_lease
 
 logger = logging.getLogger("cinedub.worker")
 settings = get_settings()
@@ -484,15 +485,18 @@ def worker_lock_path() -> Path:
 def run_worker(poll_interval: float = 1.0) -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     lock_path = worker_lock_path()
-    with lock_path.open("a") as lock:
+    with workspace_lease(settings.database_url, settings.storage_root), lock_path.open("a") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
             raise RuntimeError("A CineDub worker is already running for this database") from exc
-        create_database()
-        with SessionLocal() as session:
-            recover_jobs(session)
-        _worker_loop(poll_interval)
+        with inherit_lease(lock.fileno()):
+            create_database()
+            # Alembic sets the root threshold to WARN; retain worker lifecycle evidence.
+            logger.setLevel(logging.INFO)
+            with SessionLocal() as session:
+                recover_jobs(session)
+            _worker_loop(poll_interval)
 
 
 def _worker_loop(poll_interval: float) -> None:

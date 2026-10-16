@@ -13,6 +13,8 @@ import sys
 import time
 from pathlib import Path
 
+from ..workspace_lock import child_lease_environment, child_process_options
+
 MODEL_ID = "Systran/faster-whisper-small.en"
 MODEL_REVISION = "d1d751a5f8271d482d14ca55d9e2deeebbae577f"
 MODEL_FILES = ("config.json", "model.bin", "tokenizer.json", "vocabulary.txt")
@@ -74,6 +76,7 @@ class LocalTranscriber:
                 "OPENBLAS_NUM_THREADS": "1",
             }
         )
+        env.update(child_lease_environment())
         command = [
             sys.executable,
             "-m",
@@ -89,7 +92,9 @@ class LocalTranscriber:
         ]
         started = time.monotonic()
         with (output_dir / "inference.log").open("w") as log:
-            process = subprocess.Popen(command, env=env, stdout=log, stderr=log)
+            process = subprocess.Popen(
+                command, env=env, stdout=log, stderr=log, **child_process_options()
+            )
             try:
                 while process.poll() is None:
                     cancel()

@@ -16,7 +16,8 @@
     "test:e2e": "playwright test",
     "contracts:generate": "PYTHONPATH=apps/api .venv/bin/python scripts/generate-contracts.py --write",
     "contracts:check": "PYTHONPATH=apps/api .venv/bin/python scripts/generate-contracts.py --check",
-    "test": "bash scripts/check.sh"
+    "test": "bash scripts/check.sh",
+    "test:recovery": ".venv/bin/pytest tests/api/test_workspace_backup.py tests/api/test_workspace_recovery_http.py -q"
   },
   "engines": {
     "node": ">=22"

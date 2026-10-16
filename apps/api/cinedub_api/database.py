@@ -9,6 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from .config import get_settings
+from .workspace_lock import workspace_lease
 
 
 class Base(DeclarativeBase):
@@ -22,6 +23,11 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 
 
 def create_database() -> None:
+    with workspace_lease(settings.database_url, settings.storage_root):
+        _upgrade_database()
+
+
+def _upgrade_database() -> None:
     root = Path(__file__).resolve().parents[3]
     config = Config(str(root / "alembic.ini"))
     config.set_main_option("script_location", str(root / "migrations"))

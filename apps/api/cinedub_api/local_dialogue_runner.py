@@ -18,6 +18,7 @@ from .providers.local_dialogue import (
     serialized_prompt_digest,
 )
 from .schemas import DialogueModelOutput
+from .workspace_lock import child_process_options
 
 
 def atomic_json(path, value):
@@ -32,7 +33,14 @@ def native_call(command, directory, label):
     with (directory / f"{label}.stderr.log").open("w") as log:
         output_path = directory / f"{label}.stdout.txt"
         with output_path.open("wb") as output:
-            subprocess.run(command, stdin=subprocess.DEVNULL, stdout=output, stderr=log, check=True)
+            subprocess.run(
+                command,
+                stdin=subprocess.DEVNULL,
+                stdout=output,
+                stderr=log,
+                check=True,
+                **child_process_options(),
+            )
     if output_path.stat().st_size > 100_000:
         raise ValueError("Native dialogue output exceeds the supported bound")
     return output_path.read_text(encoding="utf-8").strip()

@@ -8,6 +8,8 @@ import sys
 import time
 from pathlib import Path
 
+from .workspace_lock import child_lease_environment, child_process_options
+
 
 def run_inference(module, arguments, output_dir, *, threads, timeout_seconds, cancel, progress):
     env = {
@@ -24,6 +26,7 @@ def run_inference(module, arguments, output_dir, *, threads, timeout_seconds, ca
             "OMP_NUM_THREADS": str(threads),
         }
     )
+    env.update(child_lease_environment())
     progress_path = output_dir / "progress.json"
     progress_path.unlink(missing_ok=True)
     last_progress = None
@@ -35,6 +38,7 @@ def run_inference(module, arguments, output_dir, *, threads, timeout_seconds, ca
             stdout=log,
             stderr=log,
             start_new_session=True,
+            **child_process_options(),
         )
         try:
             while child.poll() is None:

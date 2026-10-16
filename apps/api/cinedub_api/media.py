@@ -10,6 +10,8 @@ import time
 import wave
 from pathlib import Path
 
+from .workspace_lock import child_lease_environment, child_process_options
+
 
 class MediaError(RuntimeError):
     pass
@@ -35,7 +37,14 @@ def probe_media(path: Path) -> dict:
         str(path),
     ]
     try:
-        result = subprocess.run(command, capture_output=True, text=True, check=True, timeout=30)
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30,
+            **child_process_options(),
+        )
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as exc:
         raise MediaError("The uploaded file is not readable media") from exc
     payload = json.loads(result.stdout)
@@ -83,6 +92,7 @@ def run_ffmpeg_capture(arguments, timeout=300, *, cancel=None, loglevel="error")
         for key, value in os.environ.items()
         if key in {"PATH", "LANG", "LC_ALL", "SYSTEMROOT"}
     }
+    environment.update(child_lease_environment())
     try:
         if cancel is None:
             return subprocess.run(
@@ -92,6 +102,7 @@ def run_ffmpeg_capture(arguments, timeout=300, *, cancel=None, loglevel="error")
                 check=True,
                 timeout=timeout,
                 env=environment,
+                **child_process_options(),
             ).stderr
         cancel()
         with tempfile.TemporaryFile(mode="w+") as log:
@@ -101,6 +112,7 @@ def run_ffmpeg_capture(arguments, timeout=300, *, cancel=None, loglevel="error")
                 stderr=log,
                 start_new_session=True,
                 env=environment,
+                **child_process_options(),
             )
             started = time.monotonic()
             try:
