@@ -27,7 +27,7 @@ test("another tab cannot silently discard mix settings on refresh", async ({ pag
   await expect(gain).toHaveValue("-7");
   await expect(gain).toBeDisabled();
   await expect(page.getByText("1 unsaved", { exact: true })).toBeVisible();
-  const discard = warning.getByRole("button", { name: "Discard mix drafts and load current timeline", exact: true });
+  const discard = warning.getByRole("button", { name: "Discard review drafts and load current timeline", exact: true });
   await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.dismiss()), discard.click()]);
   await expect(gain).toHaveValue("-7");
   await page.getByRole("button", { name: "Refresh project", exact: true }).click();

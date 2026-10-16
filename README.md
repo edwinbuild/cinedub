@@ -165,7 +165,7 @@ Listen against picture, enter reviewer/notes and confirm review, then **Approve 
 
 Unrendered settings and unsaved mix-review notes survive project refresh and warn before leaving or explicitly switching timelines. Each timeline opens with its latest render settings or defaults. Failed operations keep the draft; a completed render or successful review clears the relevant warning. The two **Discard mix… draft** buttons reset only unsaved controls/notes, not saved renders or acceptance history. Drafts stay in the open page only, not browser storage, and are not crash recovery.
 
-If another tab changes the active timeline while you have mix drafts, refresh keeps the old scene and fields visible and pauses its editing actions. Copy any needed values, then explicitly confirm **Discard mix drafts and load current timeline**. A failed refresh does not discard anything. This only loads the server's current timeline; it does not reactivate the old one or alter saved renders/reviews. Other timeline-specific forms are discarded on confirmation; displaced dialogue drafts remain available to copy.
+If another tab changes the active timeline while you have mix or emotion-review drafts, refresh keeps the old scene and fields visible and pauses its editing actions. Copy any needed values, then explicitly confirm **Discard review drafts and load current timeline**. A failed refresh does not discard anything. This only loads the server's current timeline; it does not reactivate the old one or alter saved renders/reviews. Other timeline-specific forms are discarded on confirmation; displaced dialogue drafts remain available to copy.
 
 Audio preparation now preserves audio-track offsets relative to the container timeline. If an older scene has an offset track, prepare/separate it again and review a fresh transcript; zero-offset scenes are unaffected.
 
@@ -247,6 +247,8 @@ If another tab removes a line you are editing, its unsaved dialogue stays visibl
 ## Optional speech emotion hints
 
 Install the `local-emotion` extra alongside your existing extras, then run `PYTHONPATH=apps/api .venv/bin/python scripts/setup-local-emotion.py`. Restart the API and worker to refresh availability. The editor's **Speech-emotion hints** panel runs an offline English audio classifier with a speech-presence guard. Its four classes are experimental, uncalibrated hints; explicit human reviews are saved separately and never change translations, timing, voice settings or approvals. About 381 MB of graphs are downloaded only during setup. See [setup, measurements and limitations](docs/evaluations/speech-emotion.md).
+
+Unsaved emotion-review fields are tracked per report and line. Project refresh and inspecting the same report retain them; leaving the scene, switching timeline or inspecting a different report requires confirmation. Failed saves retain the fields, and a successful save clears only that line's form, including its listening checkbox. A newer saved review blocks the older draft rather than silently adopting the newer version. Copy any needed notes before **Discard emotion review draft**; discard never changes saved review history. Drafts stay only in the open page and are not crash recovery.
 
 ## Following milestones
 

@@ -132,7 +132,7 @@ test("actual separation through reviewed stereo export and hash-verifiable accep
     await expect(panel.getByRole("button", { name: "Approve mix and export bundle" })).toBeDisabled();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.accept()),
-      warning.getByRole("button", { name: "Discard mix drafts and load current timeline", exact: true }).click()]);
+      warning.getByRole("button", { name: "Discard review drafts and load current timeline", exact: true }).click()]);
     await expect(warning).toHaveCount(0);
     await expect(panel.getByLabel("Mix review notes")).toHaveCount(0);
     expect((await detail()).mixes.find((mix: { id: string }) => mix.id === project.mixes[0].id).reviews.length).toBe(acceptanceCount);

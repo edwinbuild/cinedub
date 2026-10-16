@@ -38,27 +38,27 @@ export default function ProjectPage() {
   const [dirtyIds, setDirtyIds] = useState<Set<string>>(() => new Set());
   const [structureDirty, setStructureDirty] = useState(false);
   const [referenceDirty, setReferenceDirty] = useState(false);
-  const [mixDraftIds, setMixDraftIds] = useState<Set<string>>(() => new Set());
-  const mixDraftRef = useRef<Set<string>>(new Set());
+  const [panelDraftIds, setPanelDraftIds] = useState<Set<string>>(() => new Set());
+  const panelDraftRef = useRef<Set<string>>(new Set());
   const displayedRevision = useRef<string | null | undefined>(undefined);
   const [remoteTimelineChanged, setRemoteTimelineChanged] = useState(false);
-  const onMixDirty = useCallback((key: string, dirty: boolean) => {
-    const previous = mixDraftRef.current;
-    if (previous.has(key) === dirty) return previous;
+  const onPanelDirty = useCallback((key: string, dirty: boolean) => {
+    const previous = panelDraftRef.current;
+    if (previous.has(key) === dirty) return;
     const next = new Set(previous); if (dirty) next.add(key); else next.delete(key);
-    mixDraftRef.current = next; setMixDraftIds(next);
+    panelDraftRef.current = next; setPanelDraftIds(next);
   }, []);
   const [preservedDrafts, setPreservedDrafts] = useState<Segment[]>([]);
   const dirtyRef = useRef<Set<string>>(new Set());
   const lineCache = useRef<Map<string, Segment>>(new Map());
   const mediaRef = useRef<HTMLMediaElement | null>(null);
   const loadSequence = useRef(0);
-  const load = useCallback(async (discardMixDrafts = false) => {
+  const load = useCallback(async (discardPanelDrafts = false) => {
     const sequence = ++loadSequence.current;
     try { const detail = await api.project(id);
       if (sequence === loadSequence.current) {
         if (displayedRevision.current !== undefined && displayedRevision.current !== detail.active_revision_id
-          && mixDraftRef.current.size && !discardMixDrafts) {
+          && panelDraftRef.current.size && !discardPanelDrafts) {
           mediaRef.current?.pause(); setStopAt(null);
           setRemoteTimelineChanged(true); setError(null); return;
         }
@@ -93,11 +93,11 @@ export default function ProjectPage() {
     const timer = window.setInterval(load, 1500); return () => window.clearInterval(timer);
   }, [hasJobs, load]);
   useEffect(() => {
-    if (!dirtyIds.size && !structureDirty && !referenceDirty && !mixDraftIds.size) return;
+    if (!dirtyIds.size && !structureDirty && !referenceDirty && !panelDraftIds.size) return;
     function warn(event: BeforeUnloadEvent) { event.preventDefault(); event.returnValue = ""; }
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [dirtyIds.size, structureDirty, referenceDirty, mixDraftIds.size]);
+  }, [dirtyIds.size, structureDirty, referenceDirty, panelDraftIds.size]);
   const onDirty = useCallback((lineId: string, dirty: boolean) => {
     const next = new Set(dirtyRef.current); if (dirty) next.add(lineId); else next.delete(lineId);
     dirtyRef.current = next; setDirtyIds(next);
@@ -144,11 +144,11 @@ export default function ProjectPage() {
   }
   async function activate(revisionId: string) {
     if (!project) return;
-    if ((dirtyIds.size || structureDirty || mixDraftIds.size) && !window.confirm("Discard unsaved drafts and switch timeline? Saved revisions are preserved.")) return;
+    if ((dirtyIds.size || structureDirty || panelDraftIds.size) && !window.confirm("Discard unsaved drafts and switch timeline? Saved revisions are preserved.")) return;
     try { setBusy("revision"); const detail = await api.activateRevision(id, revisionId, project.active_revision_id);
       displayedRevision.current = detail.active_revision_id; setProject(detail); setRemoteTimelineChanged(false);
       dirtyRef.current = new Set(); lineCache.current.clear(); setPreservedDrafts([]);
-      setDirtyIds(new Set()); mixDraftRef.current = new Set(); setMixDraftIds(new Set()); setStructureDirty(false); setSelectedSource(null); mediaRef.current?.pause(); setStopAt(null); }
+      setDirtyIds(new Set()); panelDraftRef.current = new Set(); setPanelDraftIds(new Set()); setStructureDirty(false); setSelectedSource(null); mediaRef.current?.pause(); setStopAt(null); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Could not switch timeline"); }
     finally { setBusy(null); }
   }
@@ -200,20 +200,20 @@ export default function ProjectPage() {
     <a className="skipLink" href="#dialogue-editor">Skip to dialogue editor</a>
     <header className="studioTopbar"><div className="studioIdentity">
       <Link href="/" className="iconButton" aria-label="Projects" onClick={(event) => {
-        if ((dirtyIds.size || structureDirty || referenceDirty || mixDraftIds.size) && !window.confirm("Leave this scene and discard unsaved drafts?")) event.preventDefault();
+        if ((dirtyIds.size || structureDirty || referenceDirty || panelDraftIds.size) && !window.confirm("Leave this scene and discard unsaved drafts?")) event.preventDefault();
       }}><ArrowLeft size={17} /></Link><span className="brandMark"><Film size={17} /></span>
       <div><strong>{project.name}</strong><span>English → Malayalam · v0.2</span></div></div>
-      <div className="studioStatus">{(dirtyIds.size > 0 || structureDirty || referenceDirty || mixDraftIds.size > 0) && <span>{dirtyIds.size + Number(structureDirty) + Number(referenceDirty) + mixDraftIds.size} unsaved</span>}
+      <div className="studioStatus">{(dirtyIds.size > 0 || structureDirty || referenceDirty || panelDraftIds.size > 0) && <span>{dirtyIds.size + Number(structureDirty) + Number(referenceDirty) + panelDraftIds.size} unsaved</span>}
         {activeJob ? activeJob.phase.replaceAll("_", " ") : project.status}
         <button className="iconButton" aria-label="Refresh project" onClick={() => void load()}><RefreshCw size={15} /></button></div></header>
     {error && <div className="errorBanner studioError" role="alert">{error}</div>}
     {notice && <div className="noticeBanner" role="status">{notice}</div>}
     {remoteTimelineChanged && <div className="noticeBanner" role="alert">
-      Another tab changed the active timeline. Your unsaved mix settings and review fields are still visible below.
+      Another tab changed the active timeline. Your unsaved mix settings and emotion/mix review fields are still visible below.
       Copy any needed values before continuing. Actions on this old timeline are paused.
       <button className="smallButton" disabled={!!busy} onClick={() => {
-        if (window.confirm("Discard unsaved mix settings, mix review fields and other timeline-specific forms and load the current server timeline? Displaced dialogue drafts remain available to copy. Saved renders and acceptance history will not change.")) void load(true);
-      }}>Discard mix drafts and load current timeline</button>
+        if (window.confirm("Discard unsaved mix settings, emotion/mix review fields and other timeline-specific forms and load the current server timeline? Displaced dialogue drafts remain available to copy. Saved renders and review history will not change.")) void load(true);
+      }}>Discard review drafts and load current timeline</button>
     </div>}
     <section className="studioGrid">
       <aside className="leftRail">
@@ -265,7 +265,7 @@ export default function ProjectPage() {
         <ScenePlayer artifacts={project.artifacts} sourceId={sourceId} mediaRef={mediaRef} onTime={onTime} stopAt={stopAt} onStop={onStop} />
         <StemPanel project={project} sourceId={sourceId} disabled={locked} onSaved={load} />
         {project.active_revision_id && <SpeakerReusePanel key={`reuse:${project.active_revision_id}`} project={project}
-          disabled={locked} unsaved={dirtyIds.size > 0 || structureDirty || referenceDirty || mixDraftIds.size > 0} onSaved={load} />}
+          disabled={locked} unsaved={dirtyIds.size > 0 || structureDirty || referenceDirty || panelDraftIds.size > 0} onSaved={load} />}
         {project.active_revision_id && <DialogueBriefPanel key={`brief:${project.active_revision_id}`} project={project}
           disabled={locked} unsaved={dirtyIds.size > 0} onRun={run} onSaved={load} onDirty={onDirty}
           onPlayRange={playRange} canPlay={!!sourceReady && timelineMatches} />}
@@ -280,8 +280,8 @@ export default function ProjectPage() {
           transcriptionInput={transcriptionInput} onRun={run} onPlayRange={playRange} />
         {project.active_revision_id && <EmotionPanel key={`emotion:${project.active_revision_id}`} project={project} sourceId={sourceId}
           disabled={locked} unsaved={dirtyIds.size > 0} available={!!capabilities.find((item) => item.capability === "emotion_analyzer")?.available}
-          transcriptionInput={transcriptionInput} onRun={run} onPlayRange={playRange} canPlay={!!sourceReady && timelineMatches} />}
-        <MixPanel key={`mix:${project.active_revision_id ?? "none"}`} project={project} disabled={locked || !timelineMatches} unsaved={dirtyIds.size > 0} onSaved={load} onRun={run} onDirty={onMixDirty} />
+          transcriptionInput={transcriptionInput} onRun={run} onPlayRange={playRange} canPlay={!!sourceReady && timelineMatches} onDirty={onPanelDirty} />}
+        <MixPanel key={`mix:${project.active_revision_id ?? "none"}`} project={project} disabled={locked || !timelineMatches} unsaved={dirtyIds.size > 0} onSaved={load} onRun={run} onDirty={onPanelDirty} />
         {voicePreview && <section className="dubPreview" aria-label="Dialogue-only preview"><h2>{voicePreview.metadata_json.demo ? "Demo-tone preview" : "Dialogue-only preview"}</h2>
           <p className="lineWarning">{previewStale ? "Saved preview uses earlier takes. Render again after selecting current audio." : "Original dialogue, music and effects are excluded from this preview."}</p>
           {voicePreview.access_blocked_reason ? <p className="lineWarning">{voicePreview.access_blocked_reason}</p>

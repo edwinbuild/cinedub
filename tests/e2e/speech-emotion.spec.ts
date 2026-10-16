@@ -45,8 +45,30 @@ test("real local emotion evidence and separate human review survive reload", asy
     await window.getByLabel("Human emotion label", { exact: true }).selectOption("other");
     await window.getByLabel("Performance direction", { exact: true }).fill("Synthetic speech; this test does not establish acting accuracy.");
     await window.getByLabel("I listened to the source window before reviewing its performance", { exact: true }).check();
+    const second = results.getByRole("article").nth(1);
+    await second.getByLabel("Performance direction", { exact: true }).fill("Separate unsaved direction");
+    await expect(page.getByText("2 unsaved", { exact: true })).toBeVisible();
+    await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.dismiss()), page.getByRole("link", { name: "Projects", exact: true }).click()]);
+    await expect(window.getByLabel("Emotion reviewer", { exact: true })).toHaveValue("Synthetic fixture reviewer");
+    await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.dismiss()), page.reload({ timeout: 5000 }).catch(() => undefined)]);
+    await expect(window.getByLabel("Performance direction", { exact: true })).toHaveValue("Synthetic speech; this test does not establish acting accuracy.");
+    await page.getByRole("button", { name: "Refresh project", exact: true }).click();
+    await inspect.click();
+    await expect(second.getByLabel("Performance direction", { exact: true })).toHaveValue("Separate unsaved direction");
+    await page.route("**/speech-emotion-reports/*/review", (route) => route.fulfill({ status: 409, json: { detail: "Synthetic emotion review conflict" } }));
+    await window.getByRole("button", { name: "Save human correction", exact: true }).click();
+    await expect(panel.getByRole("alert")).toContainText("Synthetic emotion review conflict");
+    await expect(window.getByLabel("I listened to the source window before reviewing its performance", { exact: true })).toBeChecked();
+    await expect(page.getByText("2 unsaved", { exact: true })).toBeVisible();
+    await page.unroute("**/speech-emotion-reports/*/review");
     await window.getByRole("button", { name: "Save human correction", exact: true }).click();
     await expect(window.getByText(/Version 1: corrected · other/)).toBeVisible();
+    await expect(window.getByLabel("Emotion reviewer", { exact: true })).toHaveValue("");
+    await expect(window.getByLabel("I listened to the source window before reviewing its performance", { exact: true })).not.toBeChecked();
+    await expect(second.getByLabel("Performance direction", { exact: true })).toHaveValue("Separate unsaved direction");
+    await expect(page.getByText("1 unsaved", { exact: true })).toBeVisible();
+    await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.accept()), second.getByRole("button", { name: "Discard emotion review draft", exact: true }).click()]);
+    await expect(page.getByText("1 unsaved", { exact: true })).toHaveCount(0);
     await expect(first.getByLabel("English", { exact: true })).toHaveValue(original);
     await page.setViewportSize({ width: 390, height: 844 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -56,6 +78,52 @@ test("real local emotion evidence and separate human review survive reload", asy
     await reopened.locator("summary").click();
     await reopened.getByRole("button", { name: "Inspect emotion report 1", exact: true }).click();
     await expect(reopened.getByText(/Version 1: corrected · other/)).toBeVisible();
+    const projectId = page.url().split("/").at(-1)!;
+    const detail = await (await page.request.get(`http://127.0.0.1:8011/projects/${projectId}`)).json();
+    const artifact = detail.artifacts.find((item: { kind: string }) => item.kind === "speech_emotion_report");
+    const firstReview = reopened.getByRole("region", { name: "Speech-emotion results", exact: true }).getByRole("article").first();
+    await firstReview.getByLabel("Performance direction", { exact: true }).fill("Do not silently overwrite a newer review");
+    const remote = await page.request.post(`http://127.0.0.1:8011/speech-emotion-reports/${artifact.id}/review`, { data: {
+      segment_id: report.lines[0].segment_id, expected_review_version: 1, status: "corrected", label: "neutral",
+      direction: "Explicit synthetic second reviewer", reviewed_by: "Other reviewer", listening_confirmed: true,
+    } });
+    expect(remote.ok()).toBe(true);
+    await reopened.getByRole("button", { name: "Inspect emotion report 1", exact: true }).click();
+    await expect(firstReview.getByRole("alert")).toContainText("A newer review was saved");
+    await expect(firstReview.getByLabel("Performance direction", { exact: true })).toHaveValue("Do not silently overwrite a newer review");
+    await expect(firstReview.getByRole("button", { name: "Save human correction", exact: true })).toBeDisabled();
+    await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.accept()), firstReview.getByRole("button", { name: "Discard emotion review draft", exact: true }).click()]);
+    const next = await page.request.post(`http://127.0.0.1:8011/projects/${projectId}/jobs`, { data: {
+      stage: "analyze_emotion", revision_id: detail.active_revision_id, source_asset_id: report.source_asset_id, force_new: true,
+    } });
+    expect(next.ok()).toBe(true);
+    await page.getByRole("button", { name: "Refresh project", exact: true }).click();
+    await expect(reopened.getByRole("button", { name: "Inspect emotion report 2", exact: true })).toBeVisible({ timeout: 60_000 });
+    const updated = await (await page.request.get(`http://127.0.0.1:8011/projects/${projectId}`)).json();
+    const newArtifact = updated.artifacts.find((item: { id: string; kind: string }) => item.kind === "speech_emotion_report" && item.id !== artifact.id);
+    const differentReport = reopened.locator(".alignmentReportChoice").filter({ has: page.locator(`a[href*="${newArtifact.id}"]`) }).getByRole("button");
+    await firstReview.getByLabel("Performance direction", { exact: true }).fill("Report-scoped unsaved notes");
+    await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.dismiss()), differentReport.click()]);
+    await expect(firstReview.getByLabel("Performance direction", { exact: true })).toHaveValue("Report-scoped unsaved notes");
+    await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.accept()), differentReport.click()]);
+    await expect(firstReview.getByLabel("Performance direction", { exact: true })).toHaveValue("");
+    await firstReview.getByLabel("Performance direction", { exact: true }).fill("Keep this draft on remote timeline change");
+    const other = await page.context().newPage();
+    await other.goto(page.url());
+    await other.getByRole("button", { name: "Retranscribe into new revision", exact: true }).click();
+    await other.getByRole("button", { name: "Use this timeline", exact: true }).click();
+    await expect(other.getByRole("button", { name: "Use this timeline", exact: true })).toBeEnabled();
+    await page.getByRole("button", { name: "Refresh project", exact: true }).click();
+    const warning = page.getByRole("alert").filter({ hasText: "Another tab changed the active timeline" });
+    await expect(warning).toBeVisible();
+    await expect(firstReview.getByLabel("Performance direction", { exact: true })).toHaveValue("Keep this draft on remote timeline change");
+    await expect(firstReview.getByLabel("Performance direction", { exact: true })).toBeDisabled();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.accept()), warning.getByRole("button", { name: "Discard review drafts and load current timeline", exact: true }).click()]);
+    await expect(warning).toHaveCount(0);
+    await expect(page.getByText("1 unsaved", { exact: true })).toHaveCount(0);
+    await expect(reopened.getByRole("region", { name: "Speech-emotion results", exact: true })).toHaveCount(0);
+    await other.close();
     expect(errors).toEqual([]);
   } finally {
     rmSync(directory, { recursive: true, force: true });
