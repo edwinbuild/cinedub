@@ -1,6 +1,6 @@
 # Clean base installation rehearsal
 
-The committed application at `ce3fe6a2e385a47440d942d6c60dbef4eda1e495` passed installation into a new Python environment and new `node_modules`, followed by build, supervised startup and a real browser workflow. No optional model packages or weights were present. This closes a base-environment smoke check, not pristine-machine, live-provider or cinema-quality acceptance.
+The committed application at `043809a75c146e748a98aa0f9c9a53953e3c23b3` passed installation into a new Python environment and new `node_modules`, followed by build, supervised startup and a real browser workflow. No optional model packages or weights were present. The original rehearsal at `ce3fe6a2e385a47440d942d6c60dbef4eda1e495` remains historical evidence. These checks establish base-environment execution, not pristine-machine, live-provider or cinema-quality acceptance.
 
 ## Run the check
 
@@ -39,6 +39,18 @@ The completion receipt records application commit, driver hashes, unchanged depe
 | Snapshot/environment safety unit checks | 19 passed, including nested private/runtime folders |
 
 Observed tools: Python 3.12.13, Node v24.19.0, npm 11.17.0 and uv 0.12.1 on Linux x86_64. The rehearsals passed, including the final nested-path hardening run with frozen driver and lock hashes. Existing host tools and package caches were reused. The application source was the recorded commit; this milestone adds the rehearsal tooling/docs rather than changing the application runtime.
+
+## Current snapshot and local CI-profile rehearsal
+
+The newer `043809a` snapshot includes measured take-feedback contracts and the proposed CI workflow. Its clean-install receipt again records Python 3.12.13, Node v24.19.0, npm 11.17.0 and uv 0.12.1, both unchanged dependency locks, all five optional AI packages absent, production build/doctor/browser smoke passed, zero external application browser requests/paid jobs in that smoke, and owned services stopped. The receipt describes this initial base phase, not later package-profile changes in the temporary checkout.
+
+After that smoke, the isolated checkout installed only the frozen development group and a temporary Playwright Chromium binary. All 15 workflow-selected editor/media/video/voice/consent/brief/history/structure/draft cases passed through the supervisor, with NumPy/ONNX Runtime/faster-whisper/Torch/Hugging Face Hub still absent. This used Chrome for Testing 156.0.8078.4, Playwright Chromium revision 1248. Playwright reported the local OS unsupported and used its Ubuntu 24.04 x64 fallback build; this is not evidence of execution on a hosted Ubuntu runner. No local system package or browser installation was replaced.
+
+The separate backend profile adds frozen development/alignment libraries (including NumPy/ONNX Runtime/Hugging Face Hub), not model weights. Browser and backend profiles run sequentially in this local rehearsal to avoid shared Next.js state; the workflow assigns them separate hosted runners. The original project `.venv`, `node_modules`, `.env`, data and models are not used or changed. Private temporary receipts/logs/state remain outside Git; they are not release artifacts or authenticity certificates.
+
+That backend profile passed all 213 tests with no skips, production build, generated contracts, strict types, Ruff/format and ESLint. After both profiles, dependency-lock hashes and generated contract bytes remained identical to the committed snapshot, and no `models/` directory existed. faster-whisper and Torch remained absent even in the backend profile. This validates the declared local package profiles; it does not validate hosted action installation, Ubuntu system-package differences or GitHub permissions.
+
+The CI commit could not be pushed because the available GitHub OAuth credential lacks `workflow` scope. No hosted run exists yet, and no authorization/billing/branch-protection settings were changed. Reauthorize the push credential before retrying; local checks do not close the hosted-action/bootstrap gate.
 
 ## Remaining acceptance
 
