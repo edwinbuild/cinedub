@@ -140,3 +140,19 @@ class DialogueAdapter(Protocol):
         cancel: Callable[[], None],
         progress: Callable[[list[dict]], None],
     ) -> dict: ...
+
+
+class EmotionAnalyzer(Protocol):
+    name: str
+
+    def analyze(
+        self,
+        audio_path: Path,
+        output_dir: Path,
+        *,
+        windows: list[dict],
+        duration_ms: int,
+        language: str,
+        cancel: Callable[[], None],
+        progress: Callable[[int, int], None],
+    ) -> dict: ...

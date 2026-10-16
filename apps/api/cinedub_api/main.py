@@ -42,6 +42,7 @@ from .providers import ProviderRegistry
 from .routes.adaptation import router as adaptation_router
 from .routes.alignment import router as alignment_router
 from .routes.dialogue import router as dialogue_router
+from .routes.emotion import router as emotion_router
 from .routes.mixes import router as mixes_router
 from .routes.stems import router as stems_router
 from .routes.take_analysis import router as take_analysis_router
@@ -99,6 +100,7 @@ app.include_router(alignment_router)
 app.include_router(take_analysis_router)
 app.include_router(dialogue_router)
 app.include_router(adaptation_router)
+app.include_router(emotion_router)
 
 
 def artifact_read(artifact: Artifact, session: Session | None = None) -> ArtifactRead:

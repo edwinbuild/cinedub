@@ -345,6 +345,83 @@ class DialogueAdaptationApply(BaseModel):
     issues_reviewed: bool = False
 
 
+SpeechEmotionLabel = Literal["neutral", "happy", "angry", "sad"]
+PerformanceDirectionLabel = Literal[
+    "neutral", "happy", "angry", "sad", "fearful", "surprised", "disgusted", "other"
+]
+
+
+class SpeechEmotionScore(BaseModel):
+    label: SpeechEmotionLabel
+    score: float = Field(ge=0, le=1, allow_inf_nan=False)
+
+
+class SpeechEmotionReviewRead(ORMModel):
+    id: str
+    version: int
+    status: Literal["accepted", "corrected", "rejected"]
+    label: PerformanceDirectionLabel | None
+    direction: str
+    reviewed_by: str
+    note: str
+    created_at: datetime
+
+
+class SpeechEmotionReview(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    segment_id: str
+    expected_review_version: int = Field(ge=0)
+    status: Literal["accepted", "corrected", "rejected"]
+    label: PerformanceDirectionLabel | None = None
+    direction: str = Field(default="", max_length=1000)
+    reviewed_by: str = Field(min_length=1, max_length=120)
+    note: str = Field(default="", max_length=1000)
+    listening_confirmed: bool = False
+
+
+class SpeechEmotionInference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    segment_id: str
+    start_ms: int = Field(ge=0)
+    end_ms: int = Field(gt=0)
+    status: Literal["needs_review", "ambiguous", "no_speech", "too_short", "too_long", "overlap"]
+    suggested_label: SpeechEmotionLabel | None
+    scores: list[SpeechEmotionScore]
+    score_margin: float | None = Field(ge=0, le=1, allow_inf_nan=False)
+    speech_ms: int = Field(ge=0)
+    speech_fraction: float = Field(ge=0, le=1, allow_inf_nan=False)
+    rms_dbfs: float | None = Field(allow_inf_nan=False)
+    warnings: list[str]
+
+
+class SpeechEmotionLine(SpeechEmotionInference):
+    segment_version: int
+    source_text: str
+    speaker_id: str | None
+    stale_reason: str | None = None
+    review_history: list[SpeechEmotionReviewRead] = Field(default_factory=list)
+
+
+class SpeechEmotionReport(BaseModel):
+    schema_version: Literal[1] = 1
+    project_id: str
+    revision_id: str
+    source_asset_id: str
+    source_sha256: str
+    recognition_artifact_id: str
+    recognition_sha256: str
+    stem_set_id: str | None = None
+    stem_set_version: int | None = None
+    language: Literal["en-IN"]
+    provider: str
+    model: str
+    profile: dict
+    metadata: dict
+    lines: list[SpeechEmotionLine]
+    warnings: list[str]
+    stale_reason: str | None = None
+
+
 class AlignedWord(BaseModel):
     text: str
     start_ms: int = Field(ge=0)
@@ -501,6 +578,7 @@ class JobCreate(BaseModel):
         "analyze_takes",
         "review_translation",
         "adapt_dialogue",
+        "analyze_emotion",
     ]
     provider: Literal["fake", "sarvam", "local"] | None = None
     source_asset_id: str | None = None

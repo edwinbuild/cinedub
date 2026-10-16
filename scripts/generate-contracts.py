@@ -50,6 +50,8 @@ NAMES = {
     "DialogueReviewReport": "DialogueReviewReport",
     "DialogueAdaptationReport": "DialogueAdaptationReport",
     "DialogueAdaptationApply": "DialogueAdaptationApply",
+    "SpeechEmotionReport": "SpeechEmotionReport",
+    "SpeechEmotionReview": "SpeechEmotionReview",
 }
 REQUESTS = {
     "JobCreate",
@@ -70,6 +72,7 @@ REQUESTS = {
     "AlignmentApply",
     "DialogueBriefUpdate",
     "DialogueAdaptationApply",
+    "SpeechEmotionReview",
 }
 
 

@@ -110,6 +110,11 @@ local-asr = [
 local-dialogue = [
     { name = "huggingface-hub" },
 ]
+local-emotion = [
+    { name = "huggingface-hub" },
+    { name = "numpy" },
+    { name = "onnxruntime" },
+]
 local-separation = [
     { name = "huggingface-hub" },
     { name = "numpy" },
@@ -131,10 +136,13 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28,<1" },
     { name = "huggingface-hub", marker = "extra == 'local-alignment'", specifier = ">=0.30,<3" },
     { name = "huggingface-hub", marker = "extra == 'local-dialogue'", specifier = ">=0.30,<3" },
+    { name = "huggingface-hub", marker = "extra == 'local-emotion'", specifier = ">=0.30,<3" },
     { name = "huggingface-hub", marker = "extra == 'local-separation'", specifier = ">=0.30,<3" },
     { name = "numpy", marker = "extra == 'local-alignment'", specifier = ">=2,<3" },
+    { name = "numpy", marker = "extra == 'local-emotion'", specifier = ">=2,<3" },
     { name = "numpy", marker = "extra == 'local-separation'", specifier = ">=2,<3" },
     { name = "onnxruntime", marker = "extra == 'local-alignment'", specifier = ">=1.20,<2" },
+    { name = "onnxruntime", marker = "extra == 'local-emotion'", specifier = ">=1.20,<2" },
     { name = "onnxruntime", marker = "extra == 'local-separation'", specifier = ">=1.20,<2" },
     { name = "pydantic-settings", specifier = ">=2.7,<3" },
     { name = "python-multipart", specifier = ">=0.0.20,<1" },
@@ -142,7 +150,7 @@ requires-dist = [
     { name = "sqlalchemy", specifier = ">=2.0,<3" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.35,<1" },
 ]
-provides-extras = ["local-asr", "local-separation", "local-alignment", "local-dialogue"]
+provides-extras = ["local-asr", "local-separation", "local-alignment", "local-dialogue", "local-emotion"]
 
 [package.metadata.requires-dev]
 dev = [

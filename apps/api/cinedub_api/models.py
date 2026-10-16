@@ -71,6 +71,21 @@ class DialogueBrief(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class SpeechEmotionReviewRecord(Base):
+    __tablename__ = "speech_emotion_reviews"
+    __table_args__ = (UniqueConstraint("artifact_id", "segment_id", "version"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    artifact_id: Mapped[str] = mapped_column(ForeignKey("artifacts.id"), index=True)
+    segment_id: Mapped[str] = mapped_column(ForeignKey("segments.id"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(32))
+    label: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    direction: Mapped[str] = mapped_column(Text, default="")
+    reviewed_by: Mapped[str] = mapped_column(String(120))
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class MediaAsset(Base, TimestampMixin):
     __tablename__ = "media_assets"
 

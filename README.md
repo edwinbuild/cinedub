@@ -217,6 +217,10 @@ CINEDUB_E2E_TRANSCRIBER=local npm run test:e2e -- tests/e2e/local-asr.spec.ts
 
 This uses temporary projects, no Sarvam key and no model download. The ordinary browser suite skips this opt-in test.
 
+## Optional speech emotion hints
+
+Install the `local-emotion` extra alongside your existing extras, then run `PYTHONPATH=apps/api .venv/bin/python scripts/setup-local-emotion.py`. Restart the API and worker to refresh availability. The editor's **Speech-emotion hints** panel runs an offline English audio classifier with a speech-presence guard. Its four classes are experimental, uncalibrated hints; explicit human reviews are saved separately and never change translations, timing, voice settings or approvals. About 381 MB of graphs are downloaded only during setup. See [setup, measurements and limitations](docs/evaluations/speech-emotion.md).
+
 ## Following milestones
 
 - Live stock-voice listening, Malayalam expert review and timing-quality evaluation.

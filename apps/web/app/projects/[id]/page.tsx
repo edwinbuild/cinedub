@@ -13,6 +13,7 @@ import { StemPanel } from "@/components/stem-panel";
 import { MixPanel } from "@/components/mix-panel";
 import { AlignmentPanel } from "@/components/alignment-panel";
 import { PerformancePanel } from "@/components/performance-panel";
+import { EmotionPanel } from "@/components/emotion-panel";
 import { DialogueBriefPanel } from "@/components/dialogue-brief-panel";
 import { DialogueAdaptationPanel } from "@/components/dialogue-adaptation-panel";
 import { API_URL, api } from "@/lib/api";
@@ -222,6 +223,9 @@ export default function ProjectPage() {
         <PerformancePanel key={project.active_revision_id ?? "none"} project={project} sourceId={sourceId} disabled={locked} unsaved={dirtyIds.size > 0}
           available={!!performanceAnalyzer?.available} targetAlignmentAvailable={!!targetAligner?.available}
           transcriptionInput={transcriptionInput} onRun={run} onPlayRange={playRange} />
+        {project.active_revision_id && <EmotionPanel key={`emotion:${project.active_revision_id}`} project={project} sourceId={sourceId}
+          disabled={locked} unsaved={dirtyIds.size > 0} available={!!capabilities.find((item) => item.capability === "emotion_analyzer")?.available}
+          transcriptionInput={transcriptionInput} onRun={run} onPlayRange={playRange} canPlay={!!sourceReady && timelineMatches} />}
         <MixPanel project={project} disabled={locked || !timelineMatches} unsaved={dirtyIds.size > 0} onSaved={load} onRun={run} />
         {voicePreview && <section className="dubPreview" aria-label="Dialogue-only preview"><h2>{voicePreview.metadata_json.demo ? "Demo-tone preview" : "Dialogue-only preview"}</h2>
           <p className="lineWarning">{previewStale ? "Saved preview uses earlier takes. Render again after selecting current audio." : "Original dialogue, music and effects are excluded from this preview."}</p>

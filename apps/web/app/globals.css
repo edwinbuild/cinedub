@@ -299,6 +299,8 @@ a { color: inherit; text-decoration: none; }
 .briefActions { display: flex; flex-wrap: wrap; gap: 8px; }
 .dialogueAdaptationPanel > summary { cursor: pointer; font-weight: 600; }
 .dialogueAdaptationPanel p { font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.emotionPanel p { font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.emotionPanel fieldset { min-width: 0; }
 .adaptationOptions { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin: 14px 0; }
 .adaptationOption { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
 .adaptationOption h4 { margin: 0 0 8px; font-size: 13px; }

@@ -236,7 +236,7 @@ export interface MixSettings {
 }
 
 export interface JobRequest {
-  stage: "ingest" | "demo_pipeline" | "transcribe" | "translate" | "synthesize" | "export" | "render_preview" | "prepare_reference" | "register_voice" | "delete_voice" | "separate" | "render_mix" | "align" | "analyze_takes" | "review_translation" | "adapt_dialogue";
+  stage: "ingest" | "demo_pipeline" | "transcribe" | "translate" | "synthesize" | "export" | "render_preview" | "prepare_reference" | "register_voice" | "delete_voice" | "separate" | "render_mix" | "align" | "analyze_takes" | "review_translation" | "adapt_dialogue" | "analyze_emotion";
   provider?: "fake" | "sarvam" | "local" | null;
   source_asset_id?: string | null;
   revision_id?: string | null;
@@ -640,4 +640,70 @@ export interface DialogueAdaptationApply {
   language_reviewed?: boolean;
   replace_reviewed_text?: boolean;
   issues_reviewed?: boolean;
+}
+
+export interface SpeechEmotionLine {
+  segment_id: string;
+  start_ms: number;
+  end_ms: number;
+  status: "needs_review" | "ambiguous" | "no_speech" | "too_short" | "too_long" | "overlap";
+  suggested_label: "neutral" | "happy" | "angry" | "sad" | null;
+  scores: Array<SpeechEmotionScore>;
+  score_margin: number | null;
+  speech_ms: number;
+  speech_fraction: number;
+  rms_dbfs: number | null;
+  warnings: Array<string>;
+  segment_version: number;
+  source_text: string;
+  speaker_id: string | null;
+  stale_reason: string | null;
+  review_history: Array<SpeechEmotionReviewRead>;
+}
+
+export interface SpeechEmotionReviewRead {
+  id: string;
+  version: number;
+  status: "accepted" | "corrected" | "rejected";
+  label: "neutral" | "happy" | "angry" | "sad" | "fearful" | "surprised" | "disgusted" | "other" | null;
+  direction: string;
+  reviewed_by: string;
+  note: string;
+  created_at: string;
+}
+
+export interface SpeechEmotionScore {
+  label: "neutral" | "happy" | "angry" | "sad";
+  score: number;
+}
+
+export interface SpeechEmotionReport {
+  schema_version: 1;
+  project_id: string;
+  revision_id: string;
+  source_asset_id: string;
+  source_sha256: string;
+  recognition_artifact_id: string;
+  recognition_sha256: string;
+  stem_set_id: string | null;
+  stem_set_version: number | null;
+  language: "en-IN";
+  provider: string;
+  model: string;
+  profile: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  lines: Array<SpeechEmotionLine>;
+  warnings: Array<string>;
+  stale_reason: string | null;
+}
+
+export interface SpeechEmotionReview {
+  segment_id: string;
+  expected_review_version: number;
+  status: "accepted" | "corrected" | "rejected";
+  label?: "neutral" | "happy" | "angry" | "sad" | "fearful" | "surprised" | "disgusted" | "other" | null;
+  direction?: string;
+  reviewed_by: string;
+  note?: string;
+  listening_confirmed?: boolean;
 }

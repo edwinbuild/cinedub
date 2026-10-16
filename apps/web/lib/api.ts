@@ -25,6 +25,9 @@ import type {
   DialogueReviewReport,
   DialogueAdaptationReport,
   DialogueAdaptationApply,
+  SpeechEmotionReport,
+  SpeechEmotionReview,
+  SpeechEmotionReviewRead,
 } from "@cinedub/contracts";
 
 export const API_URL = process.env.NEXT_PUBLIC_CINEDUB_API_URL ?? "http://127.0.0.1:8000";
@@ -117,6 +120,8 @@ export const api = {
   diagnostics: () => request<HardwareStatus>("/diagnostics"),
   alignmentReport: (id: string) => request<AlignmentReport>(`/alignment-reports/${id}`),
   takeAnalysisReport: (id: string) => request<TakePerformanceReport>(`/take-analysis-reports/${id}`),
+  speechEmotionReport: (id: string) => request<SpeechEmotionReport>(`/speech-emotion-reports/${id}`),
+  reviewSpeechEmotion: (id: string, payload: SpeechEmotionReview) => request<SpeechEmotionReviewRead>(`/speech-emotion-reports/${id}/review`, { method: "POST", body: JSON.stringify(payload) }),
   saveDialogueBrief: (projectId: string, revisionId: string, payload: DialogueBriefUpdate) =>
     request<DialogueBrief>(`/projects/${projectId}/revisions/${revisionId}/dialogue-brief`, {
       method: "POST", body: JSON.stringify(payload),

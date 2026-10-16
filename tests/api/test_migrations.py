@@ -32,7 +32,7 @@ def test_fresh_and_upgrade_paths_preserve_legacy_edits(tmp_path):
     with sqlite3.connect(fresh) as connection:
         assert (
             connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
-            == "0007_dialogue_briefs"
+            == "0008_speech_emotion_reviews"
         )
         fresh_columns = {row[1] for row in connection.execute("PRAGMA table_info(segments)")}
     legacy = tmp_path / "legacy.db"
@@ -271,3 +271,37 @@ def test_brief_upgrade_backs_up_and_preserves_existing_mix_acceptance(tmp_path):
             == "Keep listening acceptance"
         )
         assert connection.execute("SELECT COUNT(*) FROM dialogue_briefs").fetchone()[0] == 0
+
+
+def test_emotion_upgrade_preserves_briefs_and_creates_recoverable_backup(tmp_path):
+    database = tmp_path / "briefs.db"
+    environment = migrate(database, "0007_dialogue_briefs")
+    now = "2026-10-16 00:00:00"
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "INSERT INTO dialogue_briefs VALUES ('brief','p','r',3,?,?)",
+            ('{"scene_summary":"Preserved human intent"}', now),
+        )
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from cinedub_api.database import create_database; create_database()",
+        ],
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+    )
+    backups = list(tmp_path.glob("briefs.db.v02-briefs-*.bak"))
+    assert len(backups) == 1
+    with sqlite3.connect(backups[0]) as connection:
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone()[0] == (
+            "0007_dialogue_briefs"
+        )
+        original = connection.execute("SELECT * FROM dialogue_briefs").fetchall()
+    with sqlite3.connect(database) as connection:
+        assert connection.execute("SELECT * FROM dialogue_briefs").fetchall() == original
+        assert connection.execute("SELECT COUNT(*) FROM speech_emotion_reviews").fetchone()[0] == 0

@@ -37,6 +37,10 @@ from .providers.local_asr import MODEL_NAME, availability, read_manifest
 from .providers.local_dialogue import MODEL_NAME as DIALOGUE_MODEL
 from .providers.local_dialogue import availability as dialogue_availability
 from .providers.local_dialogue import read_manifest as dialogue_manifest
+from .providers.local_emotion import MODEL_NAME as EMOTION_MODEL
+from .providers.local_emotion import PROFILE as EMOTION_PROFILE
+from .providers.local_emotion import availability as emotion_availability
+from .providers.local_emotion import read_manifest as emotion_manifest
 from .providers.local_separation import MODEL_NAME as SEPARATOR_MODEL
 from .providers.local_separation import availability as separator_availability
 from .providers.local_separation import read_manifest as separator_manifest
@@ -45,6 +49,7 @@ from .providers.local_target_alignment import MODEL_NAME as TARGET_ALIGNMENT_MOD
 from .providers.local_target_alignment import availability as target_aligner_available
 from .providers.local_target_alignment import read_manifest as target_aligner_manifest
 from .schemas import JobCreate, JobEstimate
+from .speech_emotion import freeze_emotion
 from .take_analysis import freeze_take_analysis
 from .timeline import revision_segments
 from .voices import candidate_signature
@@ -87,6 +92,7 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
         "analyze_takes": settings.performance_analyzer,
         "review_translation": "local",
         "adapt_dialogue": settings.dialogue_adapter,
+        "analyze_emotion": settings.emotion_analyzer,
     }
     provider = payload.provider or defaults[payload.stage]
     if payload.stage in {"transcribe", "translate", "synthesize", "register_voice", "delete_voice"}:
@@ -136,6 +142,26 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
         {"source_language": project.source_language, "target_language": project.target_language}
     )
     cost = 0.0
+    if payload.stage == "analyze_emotion":
+        if provider != "local":
+            raise HTTPException(422, "This speech-emotion adapter is not implemented")
+        ready, reason = emotion_availability(settings.local_emotion_model_dir)
+        if not ready:
+            raise HTTPException(422, reason)
+        try:
+            inputs.update(freeze_emotion(session, project, payload))
+        except (OSError, ValueError) as exc:
+            raise HTTPException(422, str(exc)) from exc
+        inputs.update(
+            {
+                "model": EMOTION_MODEL,
+                "profile": EMOTION_PROFILE,
+                "model_manifest": emotion_manifest(settings.local_emotion_model_dir),
+                "model_dir": str(settings.local_emotion_model_dir.resolve()),
+                "threads": settings.local_emotion_threads,
+                "timeout_seconds": settings.local_emotion_timeout_seconds,
+            }
+        )
     if payload.stage in {"review_translation", "adapt_dialogue"}:
         try:
             inputs.update(freeze_dialogue_review(session, project, payload))

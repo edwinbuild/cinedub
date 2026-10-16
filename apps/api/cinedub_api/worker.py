@@ -18,6 +18,7 @@ from .clone_processing import (
 from .config import get_settings
 from .database import SessionLocal, create_database
 from .dialogue_processing import process_review_translation
+from .emotion_processing import process_analyze_emotion
 from .media import (
     copy_reference_video,
     create_preview_proxy,
@@ -352,6 +353,7 @@ PROCESSORS = {
     "analyze_takes": process_analyze_takes,
     "review_translation": process_review_translation,
     "adapt_dialogue": process_adapt_dialogue,
+    "analyze_emotion": process_analyze_emotion,
 }
 
 

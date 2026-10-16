@@ -7,6 +7,8 @@ from .local_alignment import availability as alignment_availability
 from .local_asr import LocalTranscriber, availability
 from .local_dialogue import LocalDialogueAdapter
 from .local_dialogue import availability as dialogue_availability
+from .local_emotion import LocalEmotionAnalyzer
+from .local_emotion import availability as emotion_availability
 from .local_performance import LocalPerformanceAnalyzer
 from .local_separation import LocalSeparator
 from .local_separation import availability as separator_availability
@@ -62,6 +64,16 @@ class ProviderRegistry:
         if selected == "sarvam":
             return SarvamProvider(self.settings.sarvam_api_key or "", self.settings.sarvam_base_url)
         raise ValueError(f"Voice provider '{selected}' is not installed")
+
+    def emotion_analyzer(self, name: str | None = None, options: dict | None = None):
+        if (name or self.settings.emotion_analyzer) != "local":
+            raise ValueError("This speech-emotion adapter is not installed")
+        values = options or {}
+        return LocalEmotionAnalyzer(
+            values.get("model_dir", self.settings.local_emotion_model_dir),
+            values.get("threads", self.settings.local_emotion_threads),
+            values.get("timeout_seconds", self.settings.local_emotion_timeout_seconds),
+        )
 
     def voice_cloner(self, name: str | None = None):
         return self.voice_synthesizer(name)
@@ -132,6 +144,7 @@ class ProviderRegistry:
             "media_exporter": "local",
             "translation_reviewer": "local",
             "dialogue_adapter": self.settings.dialogue_adapter,
+            "emotion_analyzer": self.settings.emotion_analyzer,
         }
         implemented = {
             ("transcriber", "fake"),
@@ -152,6 +165,7 @@ class ProviderRegistry:
             ("target_timing_aligner", "local"),
             ("translation_reviewer", "local"),
             ("dialogue_adapter", "local"),
+            ("emotion_analyzer", "local"),
         }
         result = []
         for capability, provider in values.items():
@@ -181,6 +195,8 @@ class ProviderRegistry:
                 )
             if capability == "dialogue_adapter" and provider == "local":
                 available, reason = dialogue_availability(self.settings.local_dialogue_model_dir)
+            if capability == "emotion_analyzer" and provider == "local":
+                available, reason = emotion_availability(self.settings.local_emotion_model_dir)
             is_implemented = (capability, provider) in implemented
             configured = provider != "sarvam" or sarvam_ready
             if provider == "sarvam" and available:
@@ -214,6 +230,11 @@ class ProviderRegistry:
                 reason = (
                     "Experimental CPU dialogue alternatives with saved context; "
                     "not certified Malayalam, duration fit or emotion preservation"
+                )
+            if capability == "emotion_analyzer" and available:
+                reason = (
+                    "Experimental English audio-only hints, four classes; "
+                    "human review required, scores are not calibrated confidence"
                 )
             result.append(
                 Capability(

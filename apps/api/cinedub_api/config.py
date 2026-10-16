@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     diarizer: str = "fake"
     translator: str = "fake"
     dialogue_adapter: str = "local"
+    emotion_analyzer: str = "local"
     voice_synthesizer: str = "fake"
     performance_analyzer: str = "local"
     stem_separator: str = "local"
@@ -59,6 +60,9 @@ class Settings(BaseSettings):
     local_dialogue_model_dir: Path = Path("./models/qwen3-dialogue")
     local_dialogue_threads: int = Field(default=4, ge=1, le=8)
     local_dialogue_timeout_seconds: int = Field(default=1800, ge=30, le=3600)
+    local_emotion_model_dir: Path = Path("./models/speech-emotion")
+    local_emotion_threads: int = Field(default=4, ge=1, le=8)
+    local_emotion_timeout_seconds: int = Field(default=900, ge=10, le=1800)
 
     sarvam_api_key: str | None = Field(
         default=None,
