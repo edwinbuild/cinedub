@@ -58,7 +58,38 @@ Across all clips: 21 suggestions, two ambiguous results and one no-speech result
 
 The editor now exposes these weak results beside the analysis action, not only in documentation. New immutable reports retain the diagnostic warning and the installed-model capability description carries it. Historical report bytes are unchanged. Listening and explicit human review remain required; corrections are still independent of translation, timing and voice controls. The real-model supervised browser workflow passed warning visibility, evidence download, correction/conflict handling and reload persistence; the 390-pixel screenshot was inspected without horizontal overflow. All 21 focused emotion/benchmark backend tests, strict types, ESLint, Ruff/format and generated-contract checks passed. No representative-film or listening-quality acceptance is implied.
 
-## Remaining quality gates
+## Replacement candidate diagnostic (2026-10-16)
+
+An isolated diagnostic now evaluates a pinned eight-label INT8 candidate without changing application routing, contracts or installed production weights. [The packaging card](https://huggingface.co/smkrv/speech-emotion-classification-onnx/tree/5e6da6730a4add4cb8f4997b902df89c7d38c4e9) declares Apache-2.0 and attributes the upstream model and ONNX conversion. The graph is `fp32/onnx/model_quantized.onnx`, 95,389,059 bytes, SHA256 `3217e95e4b28d53913fbe94cd9650b520f8e7ecf2bd643b9e45fc5b8b93b8aab`; configuration, preprocessing and attribution files have pinned Git blob checksums. The folder name is not a claim that this graph is FP32.
+
+[The upstream model](https://huggingface.co/prithivMLmods/Speech-Emotion-Classification) points to SSI training data. [SSI includes CREMA-D](https://huggingface.co/datasets/stapesai/ssi-speech-emotion-recognition), so **these clips are not an independent held-out test for this candidate**. Dataset-card licence declarations do not resolve component-dataset restrictions, actor rights or commercial model clearance. No SSI recordings, demographic fields or model-specific remote Python code are downloaded. This candidate is a research diagnostic only, not an application provider or approved commercial replacement.
+
+Reproduce after the original benchmark, supplying its private directory:
+
+```bash
+PYTHONPATH=apps/api .venv/bin/python scripts/evaluate-emotion-candidate.py --dataset-directory /tmp/cinedub-crema-d-EXAMPLE
+# Later, reuse the verified downloaded files; outputs go to a new private directory:
+PYTHONPATH=apps/api .venv/bin/python scripts/evaluate-emotion-candidate.py --dataset-directory /tmp/cinedub-crema-d-EXAMPLE --model-directory /tmp/cinedub-emotion-candidate-EXAMPLE
+```
+
+The first invocation explicitly downloads the pinned candidate into private temporary storage. Later invocations can reuse it without downloading weights again. Selection is checked against the pinned crowd-label CSV; original hashes and normalized samples must match the baseline scene windows. The report records baseline manifest/scene hashes. The anonymous child request omits gold labels, transcripts, actor identifiers and filenames. Native execution is offline, sequential CPU, four threads, 10 GiB address-space cap and a 900-second parent deadline. The same installed Silero model and speech thresholds are used. Unlike the current model, the candidate's pinned preprocessor requires per-window mean/variance normalization (`do_normalize=true`, epsilon `1e-7`). Original inputs remain untouched.
+
+| Diagnostic measurement | Current four-label graph | Eight-label INT8 candidate |
+| --- | --- | --- |
+| Classifier graph size (decimal MB) | 378.5 | 95.4 |
+| Suggestions matching crowd labels on the 16 shared-class clips | 6/14 suggestions | 6/14 suggestions |
+| Label coverage | Neutral/happy/angry/sad | Adds calm/disgusted/fearful/surprised; calm/surprised not tested here |
+| Native time in this one run | 6.030 s | 4.740 s |
+| Peak child RSS | 755.8 MiB | 368.0 MiB |
+| Promotion decision | Remain optional/review-only | Do not replace the current model: no shared-class improvement, training overlap and unresolved independent acceptance |
+
+The final candidate run produced 13/24 correct raw argmax labels and 11/20 matching suggestions (55%) across the six crowd-labelled classes. Five of its eight fearful/disgusted clips received matching suggestions; these are now supported classes, so the earlier four-class out-of-class metric is not comparable. These counts must not be presented as generalization accuracy. Resource measurements exclude downloads, parent preparation and most provenance checks; VAD/classifier lifetimes also differ, so this is not a controlled speed benchmark.
+
+The first exploratory run did not reproduce the baseline's sub-millisecond zero padding and gave 12/24 raw matches and 11/21 matching suggestions. The final script requires identical padded baseline audio and gave the numbers above. This sensitivity reinforces the need for fixed preprocessing and a larger independent evaluation; no thresholds were tuned. Eighteen focused candidate/baseline diagnostic tests and Ruff/format passed; two actual candidate runs completed. No application/browser behavior changed in this milestone.
+
+Other options screened: [DistilHuBERT SER](https://huggingface.co/adolon-ai/distilhubert-ser) is small but outputs arousal/valence trained from CREMA-D categorical centroids, not interchangeable categorical emotion evidence; [emotion2vec+](https://huggingface.co/emotion2vec/emotion2vec_plus_base) offers broader labels but adopts a custom model licence rather than the software licence. Neither was downloaded or promoted. Independent natural-performance data and reviewed licensing remain prerequisites for a replacement.
+
+## Remaining acceptance gates
 
 The disclosure milestone's production build also passed outside the restricted sandbox. The initial sandbox build could not parse its TypeScript subprocess output; the identical host build succeeded. The preceding broader backend run remains incomplete (124 passed before interruption); the disclosure milestone ran the 21 focused tests and browser workflow, not a new full-suite run.
 
