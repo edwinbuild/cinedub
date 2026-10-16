@@ -3,7 +3,7 @@
 import hashlib
 import json
 
-PROMPT_VERSION = "cinema-dialogue-v1"
+PROMPT_VERSION = "cinema-dialogue-v2"
 GENERATION = {
     "context_tokens": 4096,
     "max_output_tokens": 768,
@@ -21,6 +21,10 @@ SYSTEM = (
     "without dropping essential facts or adding new meaning. Do not claim it fits acoustically. "
     "Use scene context, neighboring dialogue, human character intent/delivery and preferred terms. "
     "If a draft translation is supplied, correct it against the English source. "
+    "Optional measured_timing_feedback is the prior draft's measured raw take timing. "
+    "If too long, propose a concise faithful alternative. It cannot predict new speech "
+    "duration: synthesize and measure again. "
+    "demo=true means test tones, not speaking-pace evidence. "
     "Use Malayalam script, preserve numbers and approved names, and do not invent plot. "
     "notes: a brief English note about ambiguities or compromises requiring human review. "
     "Do not infer speech emotion or estimate duration from text. No explanation outside JSON."
@@ -51,6 +55,24 @@ def adaptation_requests(inputs, project_id):
                 "previous_line": line.previous_line.model_dump() if line.previous_line else None,
                 "next_line": line.next_line.model_dump() if line.next_line else None,
                 "preferred_terms": [term.model_dump() for term in line.matched_glossary],
+                **(
+                    {
+                        "measured_timing_feedback": {
+                            key: inputs["timing_feedback"][line.segment_id][key]
+                            for key in (
+                                "raw_duration_ms",
+                                "target_duration_ms",
+                                "required_speed_ratio",
+                                "max_safe_speedup",
+                                "safe_speedup_exceeded",
+                                "demo",
+                                "evaluation_fixture",
+                            )
+                        }
+                    }
+                    if line.segment_id in inputs.get("timing_feedback", {})
+                    else {}
+                ),
             },
         }
         for line in review.lines

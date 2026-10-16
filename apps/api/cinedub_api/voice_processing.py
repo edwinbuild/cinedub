@@ -148,6 +148,7 @@ def process_synthesize(session, job):
                 "signature": candidate_signature(snapshot, voice),
                 "demo": job.provider == "fake",
                 "sha256": file_digest(fitted if fit["fit_status"] == "ready" else raw),
+                "raw_sha256": file_digest(raw),
             },
         )
         session.add(artifact)

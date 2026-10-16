@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from .adaptation_timing import freeze_timing_feedback
 from .alignment import freeze_alignment_audio
 from .config import get_settings
 from .consent import (
@@ -133,7 +134,9 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
         raise HTTPException(422, "Provider is incompatible with this stage")
     inputs = payload.model_dump(exclude={"provider", "force_new"})
     if payload.stage != "analyze_takes":
-        if payload.candidate_ids is not None or payload.include_target_alignment:
+        if (
+            payload.candidate_ids is not None and payload.stage != "adapt_dialogue"
+        ) or payload.include_target_alignment:
             raise HTTPException(422, "Take-analysis options require the analyze_takes stage")
         # Preserve existing paid-job fingerprints when adding independent review options.
         inputs.pop("candidate_ids")
@@ -175,6 +178,13 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
                 raise HTTPException(422, reason)
             if project.source_language != "en-IN" or project.target_language != "ml-IN":
                 raise HTTPException(422, "This experimental profile supports English to Malayalam")
+            try:
+                feedback = freeze_timing_feedback(session, project, inputs, payload.candidate_ids)
+            except (OSError, ValueError) as exc:
+                raise HTTPException(422, str(exc)) from exc
+            if feedback:
+                inputs["timing_feedback"] = feedback
+                inputs["voices"] = {key: value["voice"] for key, value in feedback.items()}
             inputs.update(
                 {
                     "model": DIALOGUE_MODEL,

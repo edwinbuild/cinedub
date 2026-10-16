@@ -34,6 +34,15 @@ function Alternatives({ evidence, current, disabled, onApply, onPlayRange, canPl
   return <article className="alignmentLine" aria-label={`Model alternatives for line ${current ? current.index + 1 : "historical"}`}>
     <h3>{evidence.speaker_name ?? "Unassigned speaker"} · {(evidence.slot_duration_ms / 1000).toFixed(2)}s saved window</h3>
     <p>English: {evidence.source_text}</p><p lang="ml">Previous draft: {evidence.translated_text || "none"}</p>
+    {evidence.timing_feedback && <section aria-label="Measured synthesized timing feedback">
+      <p>{evidence.timing_feedback.demo ? "DEMO TONES · " : evidence.timing_feedback.evaluation_fixture ? "SYNTHETIC EVALUATION · " : ""}
+        Measured raw take: {(evidence.timing_feedback.raw_duration_ms / 1000).toFixed(3)}s for a {(evidence.timing_feedback.target_duration_ms / 1000).toFixed(3)}s slot.
+        Raw/slot duration ratio {evidence.timing_feedback.required_speed_ratio.toFixed(3)}×; safe speed-up limit {evidence.timing_feedback.max_safe_speedup.toFixed(3)}×.
+        {evidence.timing_feedback.safe_speedup_exceeded ? " The previous take exceeds its safe speed-up limit." : " The previous take does not exceed its safe speed-up limit."}</p>
+      <p>This measurement was supplied to the model for the previous draft. Short takes are padded, not slowed to the raw/slot ratio. Synthesize the chosen new text and measure again; new timing fit is not verified.</p>
+      <details><summary>Timing take provenance</summary><p>Candidate: {evidence.timing_feedback.candidate_id}</p>
+        <p>Raw SHA256: {evidence.timing_feedback.raw_sha256}</p><p>{evidence.timing_feedback.raw_sample_count} PCM frames at {evidence.timing_feedback.raw_sample_rate} Hz</p></details>
+    </section>}
     <button className="smallButton" disabled={!canPlay} onClick={() => onPlayRange(evidence.start_ms, evidence.end_ms)}>Listen to source window</button>
     <div className="adaptationOptions">{evidence.alternatives.map((option) => {
       const flagged = option.findings.length > 0 || option.warnings.length > 0;
@@ -58,11 +67,14 @@ function Alternatives({ evidence, current, disabled, onApply, onPlayRange, canPl
 
 export function DialogueAdaptationPanel({ project, available, disabled, unsaved, onRun, onSaved, onPlayRange, canPlay }: Props) {
   const [choice, setChoice] = useState("");
+  const [timingCandidate, setTimingCandidate] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<DialogueAdaptationReport | null>(null);
   const [reportId, setReportId] = useState<string | null>(null);
   const reports = project.artifacts.filter((item) => item.kind === "dialogue_adaptation_report" && item.metadata_json.revision_id === project.active_revision_id);
+  const candidates = project.artifacts.filter((item) => choice && item.kind === "dialogue_candidate"
+    && item.metadata_json.segment_id === choice && item.metadata_json.revision_id === project.active_revision_id && !item.access_blocked_reason);
   const stale = report?.stale_reason || (report && !currentContext(report, project) ? "Saved brief or dialogue context changed; generate alternatives again" : null);
   async function inspect(id: string) {
     try { setBusy(true); setError(null); setReport(await api.dialogueAdaptationReport(id)); setReportId(id); }
@@ -84,9 +96,14 @@ export function DialogueAdaptationPanel({ project, available, disabled, unsaved,
     <summary>Model dialogue alternatives · {reports.length} saved reports</summary>
     <p>Use the saved scene brief, character direction, preferred terms and surrounding dialogue to generate faithful and concise Malayalam drafts. Experimental local CPU model; generation never replaces your saved text.</p>
     <p className="lineWarning">These drafts need Malayalam language review. Shorter text does not prove timing fit, natural acting or emotion preservation.</p>
-    <label className="fieldLabel">Lines to adapt<select aria-label="Lines to adapt" value={choice} disabled={disabled || busy} onChange={(event) => setChoice(event.target.value)}>
+    <label className="fieldLabel">Lines to adapt<select aria-label="Lines to adapt" value={choice} disabled={disabled || busy} onChange={(event) => { setChoice(event.target.value); setTimingCandidate(""); }}>
       <option value="">All saved lines</option>{project.segments.map((line) => <option value={line.id} key={line.id}>Line {line.index + 1} · {line.source_text.slice(0, 60)}</option>)}</select></label>
-    <button className="smallButton" disabled={disabled || busy || unsaved || !available || !project.segments.length} onClick={() => onRun({ stage: "adapt_dialogue", revision_id: project.active_revision_id!, ...(choice ? { segment_ids: [choice] } : {}) })}>Generate dialogue alternatives</button>
+    <label className="fieldLabel">Measured timing feedback<select aria-label="Measured timing feedback" value={timingCandidate} disabled={disabled || busy || !choice} onChange={(event) => setTimingCandidate(event.target.value)}>
+      <option value="">No synthesized take feedback</option>{candidates.map((item) => <option value={item.id} key={item.id}>
+        {item.metadata_json.demo ? "DEMO · " : ""}{String(item.metadata_json.fit_status)} · {(Number(item.metadata_json.raw_duration_ms) / 1000).toFixed(3)}s raw · {item.id.slice(0, 8)}
+      </option>)}</select></label>
+    <p>Optional: choose one saved line and a synthesized take. The server verifies raw duration, current dialogue, selected voice and consent before using it. Stale takes are refused; no take is selected automatically.</p>
+    <button className="smallButton" disabled={disabled || busy || unsaved || !available || !project.segments.length} onClick={() => onRun({ stage: "adapt_dialogue", revision_id: project.active_revision_id!, ...(choice ? { segment_ids: [choice] } : {}), ...(choice && timingCandidate ? { candidate_ids: [timingCandidate] } : {}) })}>Generate dialogue alternatives</button>
     {!available && <p className="lineWarning">Install the optional local-dialogue model/runtime first. Plain translation and manual brief checks remain available independently.</p>}
     {unsaved && <p className="lineWarning">Save dialogue and brief drafts before generating or applying alternatives.</p>}
     {reports.map((artifact, index) => <div className="alignmentReportChoice" key={artifact.id}>

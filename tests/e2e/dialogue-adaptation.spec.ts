@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("actual local model alternatives, explicit language review, safe application and reload", async ({ page }) => {
   test.skip(process.env.CINEDUB_E2E_ADAPTATION !== "1", "Explicit opt-in for the installed CPU dialogue model");
-  test.setTimeout(180_000);
+  test.setTimeout(600_000);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
@@ -20,6 +20,13 @@ test("actual local model alternatives, explicit language review, safe applicatio
   await first.getByLabel("Malayalam", { exact: true }).fill("പഴയ തിരുത്തിയ വരി");
   await first.getByRole("button", { name: "Save line", exact: true }).click();
   await expect(first.getByRole("button", { name: "Save line", exact: true })).toBeDisabled();
+  await first.getByLabel("Review state for line 1", { exact: true }).selectOption("approved");
+  await first.getByRole("button", { name: "Save line", exact: true }).click();
+  await expect(first.getByRole("button", { name: "Save line", exact: true })).toBeDisabled();
+  await page.getByRole("combobox", { name: /^Voice for / }).first().selectOption("speaker-a");
+  await expect(page.getByRole("spinbutton", { name: /^Voice pace for / }).first()).toBeVisible();
+  await first.getByRole("button", { name: "Generate voice", exact: true }).click();
+  await expect(first.getByLabel("Candidate 1 for line 1", { exact: true })).toBeVisible();
   const brief = page.getByLabel("Dialogue brief and editorial checks", { exact: true });
   await brief.locator("summary").first().click();
   await brief.getByLabel("Scene summary", { exact: true }).fill("Two friends are fishing by a river. Bank means the river shore, not a financial institution.");
@@ -32,8 +39,11 @@ test("actual local model alternatives, explicit language review, safe applicatio
   const panel = page.getByLabel("Model dialogue alternatives", { exact: true });
   await panel.locator("summary").first().click();
   await panel.getByLabel("Lines to adapt", { exact: true }).selectOption({ label: "Line 1 · Meet me by the bank." });
+  await panel.getByLabel("Measured timing feedback", { exact: true }).selectOption({ index: 1 });
+  const timingCandidateId = await panel.getByLabel("Measured timing feedback", { exact: true }).inputValue();
+  expect(timingCandidateId).not.toBe("");
   await panel.getByRole("button", { name: "Generate dialogue alternatives", exact: true }).click();
-  await expect(panel.getByRole("button", { name: "Inspect alternatives 1", exact: true })).toBeVisible({ timeout: 120_000 });
+  await expect(panel.getByRole("button", { name: "Inspect alternatives 1", exact: true })).toBeVisible({ timeout: 480_000 });
   await expect(first.getByLabel("Malayalam", { exact: true })).toHaveValue("പഴയ തിരുത്തിയ വരി");
   await panel.getByRole("button", { name: "Inspect alternatives 1", exact: true }).click();
   const results = panel.getByRole("region", { name: "Model dialogue results", exact: true });
@@ -46,6 +56,13 @@ test("actual local model alternatives, explicit language review, safe applicatio
   expect(report.brief.version).toBe(1);
   expect(report.lines).toHaveLength(1);
   expect(report.lines[0].alternatives).toHaveLength(2);
+  expect(report.prompt_version).toBe("cinema-dialogue-v2");
+  expect(report.lines[0].timing_feedback.candidate_id).toBe(timingCandidateId);
+  expect(report.lines[0].timing_feedback.raw_sha256).toMatch(/^[0-9a-f]{64}$/);
+  expect(report.lines[0].timing_feedback.demo).toBe(true);
+  expect(report.lines[0].timing_feedback.raw_sample_count / 48).toBeCloseTo(report.lines[0].timing_feedback.raw_duration_ms, 0);
+  await expect(results.getByRole("region", { name: "Measured synthesized timing feedback", exact: true })).toContainText("DEMO TONES");
+  await expect(results.getByRole("region", { name: "Measured synthesized timing feedback", exact: true })).toContainText("Synthesize the chosen new text and measure again");
   expect(report.runtime.peak_rss_mib).toBeGreaterThan(500);
   expect(report.runtime.peak_rss_mib).toBeLessThan(10 * 1024);
   expect(report.runtime.threads).toBe(4);

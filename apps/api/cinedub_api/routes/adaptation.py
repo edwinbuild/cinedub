@@ -18,6 +18,8 @@ def require_report(session, artifact_id):
         raise HTTPException(404, "Dialogue adaptation report not found")
     try:
         return read_adaptation_report(session, artifact)
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
     except (OSError, ValueError, KeyError) as exc:
         raise HTTPException(
             409, "Dialogue alternatives are unavailable or changed; adapt again"

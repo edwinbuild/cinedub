@@ -3,7 +3,9 @@
 import unicodedata
 from pathlib import Path
 
+from .adaptation_timing import validate_timing_feedback
 from .config import get_settings
+from .consent import artifact_block_reason
 from .dialogue_prompt import GENERATION, PROMPT_VERSION, adaptation_requests, request_digest
 from .dialogue_review import build_review, context_lines, latest_brief, review_findings
 from .media import file_digest
@@ -88,6 +90,7 @@ def make_report(inputs, project_id, values, runtime):
         lines.append(
             {
                 **evidence.model_dump(),
+                "timing_feedback": inputs.get("timing_feedback", {}).get(evidence.segment_id),
                 "alternatives": alternatives,
                 "model_notes": value["output"]["notes"],
                 **{
@@ -150,10 +153,16 @@ def adaptation_freshness(session, artifact_id, inputs, report):
             applied.append(segment.id)
         elif actual["translated_text"] != saved["translated_text"]:
             return "Saved translation or surrounding context changed; adapt again", []
+    try:
+        validate_timing_feedback(session, report.project_id, inputs)
+    except (OSError, ValueError) as exc:
+        return f"Timing feedback is unavailable or changed: {exc}", applied
     return None, applied
 
 
 def read_adaptation_report(session, artifact):
+    if artifact_block_reason(session, artifact):
+        raise PermissionError("Dialogue alternatives contain revoked timing-take provenance")
     path = Path(artifact.path).resolve()
     if (
         not path.is_relative_to(get_settings().storage_root.resolve())
@@ -197,6 +206,8 @@ def read_adaptation_report(session, artifact):
             line.segment_id != value.segment_id
             or any(getattr(line, key) != item for key, item in context[line.segment_id].items())
             or line.segment_version != inputs["observed_versions"][line.segment_id]
+            or (line.timing_feedback.model_dump() if line.timing_feedback else None)
+            != inputs.get("timing_feedback", {}).get(line.segment_id)
             or line.model_notes != value.output.notes
             or any(
                 getattr(line, key) != getattr(value, key)

@@ -13,7 +13,7 @@ from cinedub_api.database import SessionLocal
 from cinedub_api.dialogue_adaptation import script_warnings
 from cinedub_api.dialogue_prompt import GENERATION, PROMPT_VERSION, request_digest
 from cinedub_api.local_dialogue_runner import decode_generation, generate
-from cinedub_api.models import Artifact, Job, ProviderRun, Segment, SegmentEdit
+from cinedub_api.models import Artifact, Job, Project, ProviderRun, Segment, SegmentEdit
 from cinedub_api.providers import ProviderRegistry
 from cinedub_api.providers.local_dialogue import (
     ENGINE_COMMIT,
@@ -25,7 +25,9 @@ from cinedub_api.providers.local_dialogue import (
     verify_runtime,
 )
 from cinedub_api.worker import claim_job, process_once, recover_jobs
+from test_cloning import setup_clone, stage
 from test_dialogue_review import brief_url, content, scene
+from test_voice_workflow import prepare_reviewed_scene
 
 
 @pytest.fixture
@@ -105,6 +107,258 @@ async def adapt(client, session, project, **extra):
     response = await client.get(f"/dialogue-adaptation-reports/{artifact_id}")
     assert response.status_code == 200, response.text
     return job, artifact_id, response.json()
+
+
+@pytest.mark.anyio
+async def test_measured_raw_take_feedback_is_frozen_readonly_and_survives_application(
+    client, session, adapter
+):
+    detail = await prepare_reviewed_scene(client, session)
+    project = session.get(Project, detail["id"])
+    line = detail["segments"][0]
+    candidate = session.get(Artifact, line["selected_candidate_id"])
+    job, artifact_id, report = await adapt(
+        client, session, project, segment_ids=[line["id"]], candidate_ids=[candidate.id]
+    )
+    measured = report["lines"][0]["timing_feedback"]
+    assert measured == job.input_json["timing_feedback"][line["id"]]
+    assert measured["candidate_id"] == candidate.id and measured["demo"]
+    assert measured["raw_sha256"] == candidate.metadata_json["raw_sha256"]
+    assert measured["raw_sample_count"] / 48 == pytest.approx(measured["raw_duration_ms"], abs=0.5)
+    assert measured["required_speed_ratio"] == measured["raw_sample_count"] / (
+        measured["target_duration_ms"] * 48
+    )
+    supplied = adapter["calls"][0]["lines"][0]["data"]["measured_timing_feedback"]
+    assert supplied == {key: measured[key] for key in supplied}
+    assert set(supplied) == {
+        "raw_duration_ms",
+        "target_duration_ms",
+        "required_speed_ratio",
+        "max_safe_speedup",
+        "safe_speedup_exceeded",
+        "demo",
+        "evaluation_fixture",
+    }
+    assert (
+        "raw_sha256" not in supplied and "voice" not in supplied and "candidate_id" not in supplied
+    )
+    assert job.input_json["voices"][line["id"]] == measured["voice"]
+    assert (await client.get(f"/projects/{project.id}")).json()["segments"] == detail["segments"]
+    cached = await create_job(
+        client, project, segment_ids=[line["id"]], candidate_ids=[candidate.id]
+    )
+    assert cached == job.id
+    plain, _, plain_report = await adapt(client, session, project, segment_ids=[line["id"]])
+    assert plain.id != job.id and plain_report["lines"][0]["timing_feedback"] is None
+    applied = await client.post(
+        f"/dialogue-adaptation-reports/{artifact_id}/apply",
+        json={
+            "segment_id": line["id"],
+            "kind": "concise",
+            "expected_version": line["version"],
+            "language_reviewed": True,
+            "replace_reviewed_text": True,
+            "issues_reviewed": True,
+        },
+    )
+    assert applied.status_code == 200, applied.text
+    assert (
+        applied.json()["selected_candidate_id"] is None
+        and applied.json()["status"] == "needs_review"
+    )
+    reread = (await client.get(f"/dialogue-adaptation-reports/{artifact_id}")).json()
+    assert reread["stale_reason"] is None and reread["applied_line_ids"] == [line["id"]]
+    assert reread["lines"][0]["timing_feedback"] == measured
+    raw = Path(candidate.path).parent / "raw.wav"
+    original_raw = raw.read_bytes()
+    raw.write_bytes(original_raw + b"changed after publication")
+    stale = (await client.get(f"/dialogue-adaptation-reports/{artifact_id}")).json()
+    assert "Timing feedback" in stale["stale_reason"]
+    blocked = await client.post(
+        f"/dialogue-adaptation-reports/{artifact_id}/apply",
+        json={
+            "segment_id": line["id"],
+            "kind": "faithful",
+            "expected_version": applied.json()["version"],
+            "language_reviewed": True,
+            "replace_reviewed_text": True,
+            "issues_reviewed": True,
+        },
+    )
+    assert blocked.status_code == 409
+    raw.write_bytes(original_raw)
+    artifact = session.get(Artifact, artifact_id)
+    value = json.loads(Path(artifact.path).read_text())
+    value["lines"][0]["timing_feedback"]["raw_duration_ms"] += 1
+    Path(artifact.path).write_text(json.dumps(value))
+    from cinedub_api.media import file_digest
+
+    artifact.metadata_json = {**artifact.metadata_json, "sha256": file_digest(artifact.path)}
+    session.commit()
+    assert (await client.get(f"/dialogue-adaptation-reports/{artifact_id}")).status_code == 409
+
+
+@pytest.mark.anyio
+async def test_timing_feedback_rejects_duplicates_wrong_lines_stale_voice_and_unverified_legacy_raw(
+    client, session, adapter
+):
+    detail = await prepare_reviewed_scene(client, session)
+    project = session.get(Project, detail["id"])
+    first, second = detail["segments"]
+    candidate = session.get(Artifact, first["selected_candidate_id"])
+    url = f"/projects/{project.id}/jobs"
+    for ids in ([candidate.id, candidate.id], [second["selected_candidate_id"]], ["missing"]):
+        response = await client.post(
+            url,
+            json={"stage": "adapt_dialogue", "segment_ids": [first["id"]], "candidate_ids": ids},
+        )
+        assert response.status_code == 422, response.text
+    other, _, _ = scene(session)
+    assert (
+        await client.post(
+            f"/projects/{other.id}/jobs",
+            json={"stage": "adapt_dialogue", "candidate_ids": [candidate.id]},
+        )
+    ).status_code == 422
+    original = dict(candidate.metadata_json)
+    candidate.metadata_json = {key: value for key, value in original.items() if key != "raw_sha256"}
+    session.commit()
+    rejected = await client.post(
+        url, json={"stage": "adapt_dialogue", "candidate_ids": [candidate.id]}
+    )
+    assert rejected.status_code == 422 and "raw checksum" in rejected.text
+    candidate.metadata_json = original
+    session.commit()
+    changed = await client.post(
+        f"/speakers/{first['speaker_id']}/stock-voice",
+        json={"provider": "fake", "voice_id": "speaker-a", "pace": 1.05},
+    )
+    assert changed.status_code == 200
+    rejected = await client.post(
+        url, json={"stage": "adapt_dialogue", "candidate_ids": [candidate.id]}
+    )
+    assert rejected.status_code == 422 and "voice changed" in rejected.text
+    assert not adapter["calls"]
+
+
+@pytest.mark.anyio
+async def test_too_long_raw_candidate_supplies_measured_overrun_without_selecting_it(
+    client, session, adapter
+):
+    detail = await prepare_reviewed_scene(client, session)
+    project = session.get(Project, detail["id"])
+    line = detail["segments"][0]
+    changed = await client.patch(
+        f"/segments/{line['id']}",
+        json={"end_ms": line["start_ms"] + 200, "expected_version": line["version"]},
+    )
+    assert changed.status_code == 200, changed.text
+    approved = await client.patch(
+        f"/segments/{line['id']}",
+        json={"status": "approved", "expected_version": changed.json()["version"]},
+    )
+    assert approved.status_code == 200
+    response = await client.post(
+        f"/projects/{project.id}/jobs",
+        json={"stage": "synthesize", "segment_ids": [line["id"]], "force_new": True},
+    )
+    assert response.status_code == 202 and process_once(session)
+    candidate = (
+        session.query(Artifact)
+        .filter(Artifact.job_id == response.json()["id"], Artifact.kind == "dialogue_candidate")
+        .one()
+    )
+    assert candidate.metadata_json["fit_status"] == "too_long"
+    candidate.metadata_json = {
+        key: value for key, value in candidate.metadata_json.items() if key != "raw_sha256"
+    }
+    session.commit()  # Older too-long takes already have a checksum of their raw audio.
+    _, _, report = await adapt(
+        client, session, project, segment_ids=[line["id"]], candidate_ids=[candidate.id]
+    )
+    measured = report["lines"][0]["timing_feedback"]
+    assert (
+        measured["safe_speedup_exceeded"]
+        and measured["required_speed_ratio"] > measured["max_safe_speedup"]
+    )
+    assert measured["raw_duration_ms"] > measured["target_duration_ms"] == 200
+    assert session.get(Segment, line["id"]).selected_candidate_id is None
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("during_inference", [False, True])
+async def test_changed_raw_feedback_stops_publication(client, session, adapter, during_inference):
+    detail = await prepare_reviewed_scene(client, session)
+    project = session.get(Project, detail["id"])
+    candidate = session.get(Artifact, detail["segments"][0]["selected_candidate_id"])
+    job_id = await create_job(client, project, candidate_ids=[candidate.id])
+    raw = Path(candidate.path).parent / "raw.wav"
+
+    def change():
+        raw.write_bytes(raw.read_bytes() + b"changed")
+
+    if during_inference:
+        adapter["on_complete"] = change
+    else:
+        change()
+    assert process_once(session)
+    session.expire_all()
+    job = session.get(Job, job_id)
+    assert job.status == "failed" and "audio bytes changed" in job.error_message
+    assert not session.query(Artifact).filter(Artifact.job_id == job.id).count()
+    assert len(adapter["calls"]) == int(during_inference)
+
+
+@pytest.mark.anyio
+async def test_clone_timing_revocation_quarantines_alternatives_and_cancels_pending_adaptation(
+    client, session, adapter
+):
+    detail, _, payload = await setup_clone(client, session)
+    profile = (await client.post(f"/projects/{detail['id']}/voice-profiles", json=payload)).json()
+    await stage(
+        client,
+        session,
+        detail["id"],
+        {"stage": "prepare_reference", "voice_profile_id": profile["id"]},
+    )
+    detail = await stage(
+        client,
+        session,
+        detail["id"],
+        {
+            "stage": "register_voice",
+            "provider": "fake",
+            "voice_profile_id": profile["id"],
+            "reference_reviewed": True,
+        },
+    )
+    speaker = detail["speakers"][0]
+    selected = await client.post(
+        f"/speakers/{speaker['id']}/voice-profile",
+        json={"profile_id": profile["id"], "expected_profile_id": speaker["voice_profile_id"]},
+    )
+    assert selected.status_code == 200, selected.text
+    detail = await stage(client, session, detail["id"], {"stage": "synthesize", "force_new": True})
+    candidate = next(
+        item
+        for item in detail["artifacts"]
+        if item["kind"] == "dialogue_candidate"
+        and item["metadata_json"]["voice"]["profile_id"] == profile["id"]
+    )
+    project = session.get(Project, detail["id"])
+    _, artifact_id, _ = await adapt(client, session, project, candidate_ids=[candidate["id"]])
+    queued_id = await create_job(client, project, candidate_ids=[candidate["id"]], force_new=True)
+    revoked = await client.post(
+        f"/voice-profiles/{profile['id']}/revoke",
+        json={"attested_by": "Synthetic fixture rights holder"},
+    )
+    assert revoked.status_code == 200
+    session.expire_all()
+    assert session.get(Job, queued_id).status == "cancelled"
+    assert (await client.get(f"/dialogue-adaptation-reports/{artifact_id}")).status_code == 403
+    for url in (f"/artifacts/{artifact_id}/download", f"/artifacts/{artifact_id}/content"):
+        assert (await client.get(url, headers={"Range": "bytes=0-3"})).status_code == 403
+        assert (await client.head(url)).status_code == 403
 
 
 @pytest.mark.anyio

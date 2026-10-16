@@ -2,6 +2,7 @@
 
 from sqlalchemy import select
 
+from .adaptation_timing import validate_timing_feedback
 from .config import get_settings
 from .dialogue_adaptation import make_report, read_adaptation_report, validate_results
 from .dialogue_prompt import GENERATION, PROMPT_VERSION, adaptation_requests
@@ -31,6 +32,7 @@ def process_adapt_dialogue(session, job):
     reason = stale_reason(session, job.project_id, inputs)
     if reason:
         raise ValueError(reason)
+    validate_timing_feedback(session, job.project_id, inputs)
     directory = get_settings().storage_root / job.project_id / "dialogue-adaptation" / job.id
     completed = validate_results(
         inputs, job.project_id, job.checkpoint_json.get("adaptation_completed_lines", [])
@@ -45,6 +47,7 @@ def process_adapt_dialogue(session, job):
         reason = stale_reason(session, job.project_id, inputs)
         if reason:
             raise ValueError(reason)
+        validate_timing_feedback(session, job.project_id, inputs)
         check_cancel(session, job)
         job.progress = len(values) / len(inputs["review_ids"]) * 0.95
         job.phase = "adapting_dialogue"
@@ -90,6 +93,7 @@ def process_adapt_dialogue(session, job):
     reason = stale_reason(session, job.project_id, inputs)
     if reason:
         raise ValueError(reason)
+    validate_timing_feedback(session, job.project_id, inputs)
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / "dialogue-alternatives.json"
     path.write_text(report.model_dump_json(indent=2), encoding="utf-8")
@@ -108,6 +112,10 @@ def process_adapt_dialogue(session, job):
             "sha256": file_digest(path),
             "prompt_version": PROMPT_VERSION,
             "context_supplied_to_model": True,
+            "candidates": {
+                key: value["candidate_id"]
+                for key, value in inputs.get("timing_feedback", {}).items()
+            },
         },
     )
     session.add(artifact)

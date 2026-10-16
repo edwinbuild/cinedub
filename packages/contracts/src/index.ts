@@ -700,6 +700,7 @@ export interface DialogueAdaptationLine {
   character_direction: CharacterDirection | null;
   matched_glossary: Array<GlossaryTerm>;
   findings: Array<DialogueFinding>;
+  timing_feedback: DialogueTimingFeedback | null;
   alternatives: Array<DialogueAlternative>;
   model_notes: string;
   prompt_sha256: string;
@@ -714,6 +715,23 @@ export interface DialogueAlternative {
   findings: Array<DialogueFinding>;
   warnings: Array<string>;
   eligible_for_application: boolean;
+}
+
+export interface DialogueTimingFeedback {
+  candidate_id: string;
+  candidate_sha256: string;
+  raw_sha256: string;
+  raw_sample_count: number;
+  raw_sample_rate: 48000;
+  raw_duration_ms: number;
+  target_duration_ms: number;
+  required_speed_ratio: number;
+  max_safe_speedup: number;
+  safe_speedup_exceeded: boolean;
+  signature: string;
+  voice: Record<string, unknown>;
+  demo: boolean;
+  evaluation_fixture: boolean;
 }
 
 export interface DialogueAdaptationReport {

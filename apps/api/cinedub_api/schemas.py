@@ -415,7 +415,25 @@ class DialogueNativeLine(BaseModel):
     latency_ms: int = Field(ge=0)
 
 
+class DialogueTimingFeedback(BaseModel):
+    candidate_id: str
+    candidate_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    raw_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    raw_sample_count: int = Field(gt=0)
+    raw_sample_rate: Literal[48000] = 48000
+    raw_duration_ms: int = Field(gt=0)
+    target_duration_ms: int = Field(gt=0)
+    required_speed_ratio: float = Field(gt=0, allow_inf_nan=False)
+    max_safe_speedup: float = Field(ge=1, allow_inf_nan=False)
+    safe_speedup_exceeded: bool
+    signature: str
+    voice: dict
+    demo: bool = False
+    evaluation_fixture: bool = False
+
+
 class DialogueAdaptationLine(DialogueReviewLine):
+    timing_feedback: DialogueTimingFeedback | None = None
     alternatives: list[DialogueAlternative]
     model_notes: str
     prompt_sha256: str
