@@ -25,6 +25,11 @@ export CINEDUB_WEB_ORIGIN=http://127.0.0.1:3011
 export NEXT_PUBLIC_CINEDUB_API_URL=http://127.0.0.1:8011
 export PYTHONPATH=apps/api
 
+if [[ "${CINEDUB_E2E_LAUNCHER:-}" == "1" ]]; then
+  export PORT=3011 CINEDUB_API_PORT=8011 CINEDUB_API_HOST=127.0.0.1
+  exec bash scripts/dev.sh
+fi
+
 cleanup() {
   kill "${api_pid:-}" "${worker_pid:-}" "${web_pid:-}" 2>/dev/null || true
 }

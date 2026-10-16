@@ -12,10 +12,11 @@ Requirements: Linux, Python 3.12+, Node.js 22+, npm, uv, and FFmpeg/ffprobe. Loc
 cp .env.example .env
 uv sync --group dev
 npm ci
+npm run doctor
 npm run dev
 ```
 
-Copy the environment example only on first setup. Keep an existing `.env` and its credentials. The UI opens at <http://127.0.0.1:3000>, with API documentation at <http://127.0.0.1:8000/docs>. Keep the terminal open and use Ctrl+C to stop the web, API and worker.
+Copy the environment example only on first setup. Keep an existing `.env` and its credentials. `doctor` checks local prerequisites and ports without creating or upgrading a database, loading models or calling providers. Missing Sarvam credentials produce a warning; editing and media ingest can still run. The UI opens at <http://127.0.0.1:3000>, with API documentation at <http://127.0.0.1:8000/docs>. Wait for **CineDub local workspace ready**, keep the terminal open and use Ctrl+C to stop the web, API, worker and their owned media/model children. Stopping cannot undo or refund an already submitted paid request.
 
 If port 3000 belongs to another application:
 
@@ -23,7 +24,7 @@ If port 3000 belongs to another application:
 PORT=3001 npm run dev
 ```
 
-Open <http://127.0.0.1:3001>. The launcher derives the allowed browser origin from this port and passes an explicit port to Next.js rather than silently moving to a different origin. Run only one API and worker against a local workspace. The worker holds an exclusive SQLite-database lock (or a storage-directory lock for other databases).
+Open <http://127.0.0.1:3001>. Use the same `PORT=3001` prefix with `npm run doctor`. The launcher derives the allowed browser origin from this port; set `CINEDUB_API_PORT` for a different API port. Conflicting shell URL/origin overrides are refused, not silently redirected. Both services bind to loopback. Run only one editor dev server per checkout and one worker per workspace; if a service fails, the supervisor stops its remaining services. Never kill another application's port owner or delete a lock file to bypass a refusal. See [launcher behavior and limits](docs/decisions/0015-local-runtime-supervision.md). This launcher supports Linux/SQLite, not a desktop installer or production service manager.
 
 SQLite, local filesystem artifacts and a separate database-backed worker are the development defaults. Before upgrading a previous schema, application startup creates a consistent sibling database-only `.bak` backup. Migration 0002 preserves existing dialogue and approvals in a legacy/demo revision; 0003 adds candidates; 0004 adds scoped clone consent and explicit speaker voice selection; 0005 adds reviewed source-bound stems; 0006 adds mix renders and listening acceptance history; 0007 adds immutable dialogue briefs; 0008 adds separate emotion reviews; 0009 preserves retired originals during structural timeline edits. Stock choices survive upgrade; legacy generic clone approvals require new scoped consent. Dropping history through a downgrade is intentionally unsupported.
 

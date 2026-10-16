@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "dev": "bash scripts/dev.sh",
+    "doctor": "PYTHONPATH=apps/api .venv/bin/python scripts/local-runtime.py check",
     "dev:web": "npm run dev --workspace @cinedub/web",
     "build:web": "npm run build --workspace @cinedub/web",
     "lint:web": "npm run lint --workspace @cinedub/web",
