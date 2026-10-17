@@ -42,7 +42,7 @@ from .models import (
     Speaker,
     TimelineRevision,
 )
-from .processing import process_transcribe
+from .processing import check_cancel, process_transcribe
 from .processing import process_translate as process_real_translate
 from .providers.retry import safe_error
 from .separation_processing import process_separate
@@ -361,6 +361,16 @@ PROCESSORS = {
 }
 
 
+def _finish_cancelled(session: Session, job: Job, message: str) -> None:
+    job.status = "cancelled"
+    job.phase = "cancelled"
+    job.error_code = "cancelled"
+    job.error_message = message
+    job.retryable = False
+    job.finished_at = datetime.now(UTC)
+    session.get(Project, job.project_id).status = "review"
+
+
 def claim_job(session: Session) -> Job | None:
     job = session.scalar(
         select(Job).where(Job.status == "queued").order_by(Job.created_at).limit(1)
@@ -403,6 +413,9 @@ def _process_once(session: Session) -> bool:
         return False
     project = session.get(Project, job.project_id)
     try:
+        # Cancellation may have been committed while claiming or before a restart.
+        # Do not enter a processor (which may publish artifacts or call a provider).
+        check_cancel(session, job)
         processor = PROCESSORS[job.stage]
         output = processor(session, job)
         session.refresh(job)
@@ -421,12 +434,7 @@ def _process_once(session: Session) -> bool:
     except InterruptedError as exc:
         session.rollback()
         job = session.get(Job, job.id)
-        project = session.get(Project, job.project_id)
-        job.status = "cancelled"
-        job.phase = "cancelled"
-        job.error_code = "cancelled"
-        job.error_message = str(exc)
-        project.status = "review"
+        _finish_cancelled(session, job, str(exc))
     except Exception as exc:  # worker boundary records structured failures
         if is_storage_capacity_error(exc):
             raise
@@ -485,6 +493,13 @@ def recover_jobs(session: Session) -> None:
             )
             job.finished_at = datetime.now(UTC)
             session.get(Project, job.project_id).status = "failed"
+        elif job.cancel_requested:
+            _finish_cancelled(
+                session,
+                job,
+                "Cancellation retained after restart; "
+                "any submitted provider work may still be billed",
+            )
         else:
             job.status = "queued"
             if job.stage == "transcribe" and job.remote_job_id and job.phase == "creating":

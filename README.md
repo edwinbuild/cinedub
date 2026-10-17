@@ -46,7 +46,7 @@ sha256sum --check SHA256SUMS
 
 The bundle contains committed source, installation instructions and example configuration, plus a separate manifest binding the commit, version, dependency locks and archive checksum. It refuses tracked `OLD/`, private configuration, models, runtime data, dependency folders and unsafe archive entries. Ignored and uncommitted files are never copied. Existing output directories are never overwritten. Only package trusted, reviewed commits: path checks are not a general secret scanner. Checksums detect accidental changes, not authenticity; there is no signature or release approval.
 
-Extract into a new empty workspace, then follow **Run locally** above and configure your own `.env`; no dependencies, system tools, models or user projects are bundled. Optional models still require explicit setup. Creating a bundle makes no network/provider calls and does not publish a GitHub release. The archive has no Git history: packaging and committed-snapshot rehearsal commands require the original Git checkout. This source handoff is not a desktop installer, supported-device certification or cinematic-quality acceptance.
+Extract into a new empty workspace, then follow **Local setup** above and configure your own `.env`; no dependencies, system tools, models or user projects are bundled. Optional models still require explicit setup. Creating a bundle makes no network/provider calls and does not publish a GitHub release. The archive has no Git history: packaging and committed-snapshot rehearsal commands require the original Git checkout. This source handoff is not a desktop installer, supported-device certification or cinematic-quality acceptance.
 
 ## Use real Sarvam processing
 
