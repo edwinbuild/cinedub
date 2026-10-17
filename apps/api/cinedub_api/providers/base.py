@@ -58,6 +58,7 @@ class VoiceSynthesizer(Protocol):
         voice_id: str | None,
         voice_kind: str = "preset",
         pace: float = 1.0,
+        variation: float | None = None,
     ) -> SynthesisResult: ...
 
 

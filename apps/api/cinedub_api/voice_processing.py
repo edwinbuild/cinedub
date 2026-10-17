@@ -13,7 +13,7 @@ from .models import Artifact, MediaAsset, ProviderRun, Segment, VoiceProfile
 from .processing import charge, check_cancel, checkpoint, split_translation
 from .providers import ProviderRegistry
 from .providers.retry import retry_safe
-from .voices import candidate_signature
+from .voices import candidate_signature, stock_variation
 
 
 def process_synthesize(session, job):
@@ -39,6 +39,14 @@ def process_synthesize(session, job):
             continue
         line = session.get(Segment, snapshot["id"])
         voice = job.input_json["voices"][snapshot["id"]]
+        generation = {}
+        if job.provider == "sarvam" and voice["voice_kind"] == "preset":
+            if "variation" not in voice:
+                raise ValueError(
+                    "Legacy stock job has no frozen variation; "
+                    "inspect usage and submit a fresh request"
+                )
+            generation["variation"] = stock_variation(voice["variation"])
         profile = session.get(VoiceProfile, voice["profile_id"])
         if (
             not line
@@ -83,13 +91,16 @@ def process_synthesize(session, job):
 
             started = time.monotonic()
             result = retry_safe(
-                lambda text=text, path=path, voice=voice: provider.synthesize(
-                    text,
-                    job.input_json["target_language"],
-                    path,
-                    voice_id=voice["voice_id"],
-                    voice_kind=voice["voice_kind"],
-                    pace=voice["pace"],
+                lambda text=text, path=path, voice=voice, generation=generation: (
+                    provider.synthesize(
+                        text,
+                        job.input_json["target_language"],
+                        path,
+                        voice_id=voice["voice_id"],
+                        voice_kind=voice["voice_kind"],
+                        pace=voice["pace"],
+                        **generation,
+                    )
                 ),
                 lambda: check_cancel(session, job),
                 before_attempt,

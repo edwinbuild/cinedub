@@ -188,7 +188,8 @@ def test_timing_fit_pads_short_audio_and_rejects_unsafe_speedup(tmp_path):
     assert rejected["fit_status"] == "too_long" and not (tmp_path / "rejected.wav").exists()
 
 
-def test_sarvam_stock_voice_payload_and_audio(monkeypatch, tmp_path):
+@pytest.mark.parametrize("variation", [None, 0.82])
+def test_sarvam_stock_voice_payload_and_audio(monkeypatch, tmp_path, variation):
     payloads = []
     data = wav(1)
 
@@ -202,9 +203,16 @@ def test_sarvam_stock_voice_payload_and_audio(monkeypatch, tmp_path):
 
     monkeypatch.setattr(httpx, "post", post)
     result = SarvamProvider("test-only", "https://api.invalid").synthesize(
-        "മലയാളം", "ml-IN", tmp_path / "voice.wav", voice_id="ritu", voice_kind="preset", pace=1.1
+        "മലയാളം",
+        "ml-IN",
+        tmp_path / "voice.wav",
+        voice_id="ritu",
+        voice_kind="preset",
+        pace=1.1,
+        variation=variation,
     )
     assert result.audio_path.read_bytes() == data
     assert payloads[0][0].endswith("/text-to-speech")
     assert payloads[0][1]["speaker"] == "ritu" and payloads[0][1]["model"] == "bulbul:v3"
     assert "pitch" not in payloads[0][1] and "loudness" not in payloads[0][1]
+    assert payloads[0][1]["temperature"] == (variation if variation is not None else 0.6)

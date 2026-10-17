@@ -1,4 +1,5 @@
 import base64
+import math
 import re
 from pathlib import Path
 
@@ -59,7 +60,14 @@ class SarvamProvider:
         voice_id: str | None,
         voice_kind: str = "clone",
         pace: float = 1.0,
+        variation: float | None = None,
     ) -> SynthesisResult:
+        if variation is not None and (
+            voice_kind != "preset" or not math.isfinite(variation) or not 0.01 <= variation <= 1
+        ):
+            raise ValueError(
+                "Generation variation requires a stock voice and a value from 0.01 to 1"
+            )
         if not voice_id:
             raise ValueError("A saved Sarvam voice_id is required for consented cloning")
         if voice_kind == "preset":
@@ -72,6 +80,7 @@ class SarvamProvider:
                     "speaker": voice_id,
                     "model": "bulbul:v3",
                     "pace": pace,
+                    "temperature": variation if variation is not None else 0.6,
                     "speech_sample_rate": 24000,
                     "output_audio_codec": "wav",
                 },

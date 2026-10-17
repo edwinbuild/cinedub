@@ -102,6 +102,7 @@ jobs:
           tests/e2e/speaker-reuse.spec.ts
           tests/e2e/grouped-edits.spec.ts
           tests/e2e/group-history.spec.ts
+          tests/e2e/stock-variation.spec.ts
       - name: Confirm immutable locks and no downloaded weights
         run: |
           git diff --exit-code -- uv.lock package-lock.json packages/contracts/src/index.ts

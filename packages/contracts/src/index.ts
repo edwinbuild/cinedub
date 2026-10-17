@@ -503,6 +503,9 @@ export interface StockVoiceAssignment {
   provider: "fake" | "sarvam";
   voice_id: string;
   pace?: number;
+  variation?: number | null;
+  expected_profile_id?: string | null;
+  expected_profile_version?: number | null;
 }
 
 export interface VoiceChoice {

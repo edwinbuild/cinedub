@@ -54,7 +54,7 @@ from .schemas import JobCreate, JobEstimate
 from .speech_emotion import freeze_emotion
 from .take_analysis import freeze_take_analysis
 from .timeline import revision_segments
-from .voices import candidate_signature
+from .voices import candidate_signature, stock_variation
 
 ACTIVE = ("queued", "running")
 
@@ -533,6 +533,13 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
                         if provider == "sarvam"
                         else "deterministic-fixture-v1",
                     }
+                    if provider == "sarvam" and profile.voice_kind == "preset":
+                        try:
+                            voices[line.id]["variation"] = stock_variation(
+                                profile.settings_json.get("variation", 0.6)
+                            )
+                        except ValueError as exc:
+                            raise HTTPException(422, str(exc)) from exc
                 else:
                     artifact = (
                         session.get(Artifact, line.selected_candidate_id)

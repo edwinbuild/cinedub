@@ -91,6 +91,7 @@ def preview(session, target_id, source_id, copy_stock_voice):
                 provider=voice["provider"],
                 voice_id=voice["voice_id"],
                 pace=voice["settings"].get("pace", 1),
+                variation=voice["settings"].get("variation"),
             )
         except ValueError:
             raise HTTPException(422, "Historical stock voice settings are invalid") from None
@@ -207,7 +208,14 @@ async def apply_reuse(target_id: str, payload: SpeakerReuseApply, session: Sessi
             provider_voice_id=voice["voice_id"],
             voice_kind="preset",
             consent_status="not_required",
-            settings_json={"pace": voice["settings"].get("pace", 1)},
+            settings_json={
+                "pace": voice["settings"].get("pace", 1),
+                **(
+                    {"variation": voice["settings"]["variation"]}
+                    if "variation" in voice["settings"]
+                    else {}
+                ),
+            },
             registration_status="ready",
         )
         session.add(profile)

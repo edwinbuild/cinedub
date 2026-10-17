@@ -2,8 +2,21 @@
 
 import hashlib
 import json
+import math
 
 from .schemas import VoiceChoice
+
+
+def stock_variation(value) -> float:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or not 0.01 <= value <= 1
+    ):
+        raise ValueError("Stock generation variation must be a finite number from 0.01 to 1")
+    return float(value)
+
 
 # Bulbul v3 catalog checked against Sarvam's official REST documentation on 2026-10-14.
 # Pinning the model prevents accidentally sending v3 names to v4 persona models.

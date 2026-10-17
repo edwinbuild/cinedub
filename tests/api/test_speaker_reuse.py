@@ -67,6 +67,21 @@ async def preview(client, source, target, copy=True):
     )
 
 
+@pytest.mark.anyio
+async def test_sarvam_stock_reuse_preserves_explicit_variation(client, session, actors):
+    project, source, target, voice, line = actors
+    voice.provider = "sarvam"
+    voice.provider_voice_id = "ritu"
+    voice.settings_json = {"pace": 1.1, "variation": 0.82}
+    session.commit()
+    result = (await preview(client, source, target)).json()
+    response = await apply(client, source, target, result["fingerprint"])
+    assert response.status_code == 200
+    session.expire_all()
+    copied = session.get(VoiceProfile, target.voice_profile_id)
+    assert copied.settings_json == {"pace": 1.1, "variation": 0.82}
+
+
 async def apply(client, source, target, fingerprint, **extra):
     return await client.post(
         f"/speakers/{target.id}/reuse",

@@ -899,9 +899,21 @@ class ConsentRecordRead(ORMModel):
 
 
 class StockVoiceAssignment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     provider: Literal["fake", "sarvam"]
     voice_id: str = Field(min_length=1, max_length=120)
     pace: float = Field(default=1.0, ge=0.5, le=2.0)
+    variation: float | None = Field(default=None, ge=0.01, le=1.0, allow_inf_nan=False, strict=True)
+    expected_profile_id: str | None = None
+    expected_profile_version: int | None = Field(default=None, ge=1)
+
+    @model_validator(mode="after")
+    def supported_variation(self):
+        if self.variation is not None and self.provider != "sarvam":
+            raise ValueError("Generation variation is supported only for Sarvam stock voices")
+        if self.expected_profile_version is not None and self.expected_profile_id is None:
+            raise ValueError("A profile version requires its profile ID")
+        return self
 
 
 class VoiceChoice(BaseModel):

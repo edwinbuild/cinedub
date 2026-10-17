@@ -44,7 +44,10 @@ class FakeProvider:
         voice_id: str | None,
         voice_kind: str = "preset",
         pace: float = 1.0,
+        variation: float | None = None,
     ) -> SynthesisResult:
+        if variation is not None:
+            raise ValueError("Demo tones do not support speech generation variation")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         sample_rate = 24_000
         duration = max(0.7, min(4.0, len(text) / 15))

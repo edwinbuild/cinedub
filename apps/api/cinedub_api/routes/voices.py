@@ -36,7 +36,7 @@ from ..schemas import (
     VoiceProfileRead,
     VoiceProfileSelection,
 )
-from ..voices import candidate_signature, stock_catalog
+from ..voices import candidate_signature, stock_catalog, stock_variation
 
 router = APIRouter(tags=["voices"])
 
@@ -54,6 +54,17 @@ async def assign_stock_voice(speaker_id: str, payload: StockVoiceAssignment, ses
         raise HTTPException(404, "Speaker not found")
     if payload.voice_id not in {voice.id for voice in stock_catalog(payload.provider)}:
         raise HTTPException(422, "Voice does not belong to this provider/model catalog")
+    if "expected_profile_id" in payload.model_fields_set:
+        selected = (
+            session.get(VoiceProfile, speaker.voice_profile_id)
+            if speaker.voice_profile_id
+            else None
+        )
+        if speaker.voice_profile_id != payload.expected_profile_id or (
+            payload.expected_profile_version is not None
+            and (not selected or selected.version != payload.expected_profile_version)
+        ):
+            raise HTTPException(409, "Selected voice changed; refresh before saving voice settings")
     profile = session.scalar(
         select(VoiceProfile)
         .where(
@@ -63,16 +74,31 @@ async def assign_stock_voice(speaker_id: str, payload: StockVoiceAssignment, ses
         )
         .order_by(VoiceProfile.updated_at.desc())
     )
+    voice_settings = {"pace": payload.pace}
+    if payload.provider == "sarvam":
+        try:
+            voice_settings["variation"] = stock_variation(
+                payload.variation
+                if payload.variation is not None
+                else profile.settings_json.get("variation", 0.6)
+                if profile
+                else 0.6
+            )
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+    previous = dict(profile.settings_json) if profile else {}
+    if profile and payload.provider == "sarvam":
+        previous.setdefault("variation", 0.6)
     if profile:
         if (
             profile.provider_voice_id == payload.voice_id
-            and profile.settings_json == {"pace": payload.pace}
+            and previous == voice_settings
             and speaker.voice_profile_id == profile.id
         ):
             return profile
         profile.version += 1
         profile.provider_voice_id = payload.voice_id
-        profile.settings_json = {"pace": payload.pace}
+        profile.settings_json = voice_settings
     else:
         profile = VoiceProfile(
             project_id=speaker.project_id,
@@ -82,7 +108,7 @@ async def assign_stock_voice(speaker_id: str, payload: StockVoiceAssignment, ses
             provider_voice_id=payload.voice_id,
             consent_status="not_required",
             voice_kind="preset",
-            settings_json={"pace": payload.pace},
+            settings_json=voice_settings,
             registration_status="ready",
         )
         session.add(profile)
