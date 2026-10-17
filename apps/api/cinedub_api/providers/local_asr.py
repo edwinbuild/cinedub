@@ -4,6 +4,7 @@ Inference runs in a disposable process: its model memory is released at the end,
 and cancellation/deadlines can stop native inference, not just the Python iterator.
 """
 
+import copy
 import hashlib
 import importlib.util
 import json
@@ -13,12 +14,11 @@ import sys
 import time
 from pathlib import Path
 
+from ..local_asr_profile import MODEL_ID, MODEL_REVISION, build_profile, validate_result
+from ..local_asr_profile import MODEL_NAME as MODEL_NAME
 from ..workspace_lock import child_lease_environment, child_process_options
 
-MODEL_ID = "Systran/faster-whisper-small.en"
-MODEL_REVISION = "d1d751a5f8271d482d14ca55d9e2deeebbae577f"
 MODEL_FILES = ("config.json", "model.bin", "tokenizer.json", "vocabulary.txt")
-MODEL_NAME = f"{MODEL_ID}@{MODEL_REVISION}"
 
 
 def read_manifest(directory: Path, *, verify: bool = False) -> dict:
@@ -46,21 +46,30 @@ def availability(directory: Path) -> tuple[bool, str]:
         read_manifest(directory)
     except (OSError, ValueError, TypeError, KeyError):
         return False, "Pinned local ASR model is not ready; run scripts/setup-local-asr.py"
+    try:
+        build_profile()
+    except ValueError as error:
+        return False, str(error)
     return True, "Offline English ASR · CPU int8 · manual speaker assignment (no diarization)"
 
 
 class LocalTranscriber:
     name = "local"
 
-    def __init__(self, directory: Path, threads: int = 4, timeout_seconds: int = 600):
+    def __init__(self, directory: Path, threads: int = 4, timeout_seconds: int = 600, profile=None):
         self.directory = directory.resolve()
         self.threads = threads
         self.timeout_seconds = timeout_seconds
+        self.profile = copy.deepcopy(profile) if profile is not None else build_profile(threads)
+        if self.profile != build_profile(threads):
+            raise ValueError("Local ASR decoding/runtime profile changed; submit a new job")
 
     def transcribe(self, audio_path: Path, output_dir: Path, cancel) -> dict:
-        read_manifest(self.directory, verify=True)
+        installation = read_manifest(self.directory, verify=True)
         output_dir.mkdir(parents=True, exist_ok=True)
         output_path = (output_dir / "local-result.json").resolve()
+        profile_path = output_dir / "local-profile.json"
+        profile_path.write_text(json.dumps(self.profile), encoding="utf-8")
         # No credentials or arbitrary user model code are passed to the child.
         env = {
             key: value
@@ -89,6 +98,8 @@ class LocalTranscriber:
             str(output_path),
             "--threads",
             str(self.threads),
+            "--profile",
+            str(profile_path.resolve()),
         ]
         started = time.monotonic()
         with (output_dir / "inference.log").open("w") as log:
@@ -113,6 +124,7 @@ class LocalTranscriber:
                         process.kill()
                         process.wait(timeout=5)
         payload = json.loads(output_path.read_text(encoding="utf-8"))
-        if payload.get("local_metadata", {}).get("model") != MODEL_NAME:
-            raise ValueError("Local ASR returned mismatched model provenance")
+        if read_manifest(self.directory, verify=True) != installation:
+            raise ValueError("Local ASR installation changed during inference")
+        validate_result(payload, self.profile, installation["sha256"])
         return payload

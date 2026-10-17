@@ -25,6 +25,16 @@ test("real offline English ASR and manual speaker review", async ({ page }) => {
     const line = page.getByRole("article", { name: "Dialogue line 1", exact: true });
     await expect(line).toBeVisible({ timeout: 90_000 });
     await expect(line.getByLabel("English", { exact: true })).toHaveValue(/welcome/i);
+    const projectId = page.url().split("/").at(-1)!;
+    const detail = await (await page.request.get(`http://127.0.0.1:8011/projects/${projectId}`)).json();
+    const artifact = detail.artifacts.find((item: { kind: string }) => item.kind === "raw_transcript");
+    const raw = await (await page.request.get(`http://127.0.0.1:8011${artifact.content_url}`)).json();
+    const metadata = raw.local_metadata;
+    expect(metadata.asr_profile.version).toBe("english-asr-v1");
+    expect(metadata.asr_profile.transcribe_options.initial_prompt).toBeNull();
+    expect(metadata.decoder_segments).toHaveLength(raw.diarized_transcript.entries.length);
+    expect(metadata.decoder_segments.every((item: { temperature: number }) => metadata.asr_profile.transcribe_options.temperature.includes(item.temperature))).toBe(true);
+    expect(metadata.sampling_segments).toBe(metadata.decoder_segments.filter((item: { temperature: number }) => item.temperature > 0).length);
     await expect(page.getByText("DEMO FIXTURE", { exact: true })).toHaveCount(0);
     await expect(line.getByLabel("Speaker for line 1")).toHaveValue("");
     await page.getByRole("button", { name: "Add speaker", exact: true }).click();

@@ -19,6 +19,7 @@ from .consent import (
 )
 from .dialogue_prompt import GENERATION, PROMPT_VERSION
 from .dialogue_review import freeze_dialogue_review
+from .local_asr_profile import build_profile
 from .mixes import freeze_background
 from .models import (
     Artifact,
@@ -398,6 +399,7 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
                     "model": MODEL_NAME,
                     "local_model_dir": str(settings.local_asr_model_dir.resolve()),
                     "local_model_manifest": read_manifest(settings.local_asr_model_dir),
+                    "asr_profile": build_profile(settings.local_asr_threads),
                     "threads": settings.local_asr_threads,
                     "timeout_seconds": settings.local_asr_timeout_seconds,
                     "unit_rate_inr": 0,

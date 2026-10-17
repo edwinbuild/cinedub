@@ -9,6 +9,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from .config import get_settings
+from .local_asr_profile import validate_result
 from .models import Artifact, Job, MediaAsset, Project, ProviderRun, Segment, StemSet
 from .providers import ProviderRegistry
 from .providers.local_asr import read_manifest
@@ -105,6 +106,10 @@ def process_transcribe(session: Session, job: Job) -> dict:
             check_cancel(session, job)
 
         if job.provider == "local":
+            if not job.input_json.get("asr_profile"):
+                raise ValueError(
+                    "Legacy local ASR job lacks frozen decoding settings; submit a new job"
+                )
             directory = Path(job.input_json["local_model_dir"])
             if read_manifest(directory) != job.input_json["local_model_manifest"]:
                 raise ValueError("Local model changed since scheduling; submit a new job")
@@ -113,6 +118,10 @@ def process_transcribe(session: Session, job: Job) -> dict:
             payload = provider.transcribe(Path(audio.path), output_dir, cancel)
         else:
             payload = _batch_transcribe(session, job, audio, output_dir, cancel)
+    if job.provider == "local" and job.input_json.get("asr_profile"):
+        validate_result(
+            payload, job.input_json["asr_profile"], job.input_json["local_model_manifest"]["sha256"]
+        )
     staging_path = output_dir / "raw-transcript.part"
     staging_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     staging_path.replace(raw_path)
@@ -198,6 +207,12 @@ def _import_result(session, job, project, source, model, raw_path, payload):
         warnings.append(
             "Local ASR has no diarization; create speakers and assign every line manually"
         )
+        if not job.input_json.get("asr_profile"):
+            warnings.append("Historical local ASR result has no frozen decoding/fallback profile")
+        elif payload["local_metadata"]["sampling_segments"]:
+            warnings.append(
+                "Local ASR used sampling fallback; transcript can vary and needs review"
+            )
     checkpoint(session, job, "importing")
     revision = import_transcript(
         session,
@@ -227,6 +242,11 @@ def _import_result(session, job, project, source, model, raw_path, payload):
                     "source_asset_id": source.id,
                     "remote_job_id": job.remote_job_id,
                     "local_inference": payload.get("local_metadata"),
+                    **(
+                        {"asr_profile": job.input_json["asr_profile"]}
+                        if job.provider == "local" and job.input_json.get("asr_profile")
+                        else {}
+                    ),
                 },
                 latency_ms=payload.get("local_metadata", {}).get("latency_ms", 0),
                 estimated_cost_inr=job.charged_estimate_inr,

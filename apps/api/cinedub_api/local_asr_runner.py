@@ -1,17 +1,35 @@
 """Bounded offline inference entrypoint; invoked only by the worker adapter."""
 
 import argparse
+import copy
 import json
 import resource
 import time
 import wave
 from pathlib import Path
 
+from .local_asr_profile import build_profile, validate_result
 from .providers.local_asr import MODEL_NAME, read_manifest
 
 
-def run(model_dir: Path, audio: Path, output: Path, threads: int) -> dict:
-    read_manifest(model_dir, verify=True)
+def decoder_evidence(segment, index):
+    # VAD restoration can retain NumPy scalars; validate canonical JSON numbers.
+    return {
+        "index": index,
+        "start": float(segment.start),
+        "end": float(segment.end),
+        "temperature": float(segment.temperature),
+        "avg_logprob": float(segment.avg_logprob),
+        "compression_ratio": float(segment.compression_ratio),
+        "no_speech_prob": float(segment.no_speech_prob),
+    }
+
+
+def run(model_dir: Path, audio: Path, output: Path, threads: int, profile=None) -> dict:
+    profile = build_profile(threads) if profile is None else profile
+    if profile != build_profile(threads):
+        raise ValueError("Local ASR profile/runtime differs from the scheduled request")
+    installation = read_manifest(model_dir, verify=True)
     # Linux-only application profile. Cap virtual memory and native thread count.
     memory_limit = 10 * 1024**3
     resource.setrlimit(resource.RLIMIT_AS, (memory_limit, memory_limit))
@@ -36,23 +54,15 @@ def run(model_dir: Path, audio: Path, output: Path, threads: int) -> dict:
     started = time.monotonic()
     model = WhisperModel(
         str(model_dir),
-        device="cpu",
-        compute_type="int8",
-        cpu_threads=threads,
-        num_workers=1,
-        local_files_only=True,
+        **copy.deepcopy(profile["model_options"]),
     )
     segments, info = model.transcribe(
         samples,
-        language="en",
-        beam_size=5,
-        word_timestamps=True,
-        vad_filter=True,
-        condition_on_previous_text=False,
-        vad_parameters={"min_silence_duration_ms": 500},
+        **copy.deepcopy(profile["transcribe_options"]),
     )
-    entries, words = [], []
+    entries, words, decoding = [], [], []
     for segment in segments:
+        decoding.append(decoder_evidence(segment, len(entries)))
         entries.append(
             {
                 "transcript": segment.text.strip(),
@@ -76,6 +86,10 @@ def run(model_dir: Path, audio: Path, output: Path, threads: int) -> dict:
         "words": words,
         "local_metadata": {
             "model": MODEL_NAME,
+            "asr_profile": profile,
+            "model_sha256": installation["sha256"],
+            "decoder_segments": decoding,
+            "sampling_segments": sum(segment["temperature"] > 0 for segment in decoding),
             "device": "cpu",
             "compute_type": "int8",
             "threads": threads,
@@ -86,6 +100,9 @@ def run(model_dir: Path, audio: Path, output: Path, threads: int) -> dict:
             "peak_rss_mib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1),
         },
     }
+    if read_manifest(model_dir, verify=True) != installation or build_profile(threads) != profile:
+        raise ValueError("Local ASR installation or runner/runtime changed during inference")
+    validate_result(payload, profile, installation["sha256"])
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_suffix(".part")
     temporary.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
@@ -99,5 +116,12 @@ if __name__ == "__main__":
     parser.add_argument("--audio", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--threads", type=int, choices=range(1, 9), default=4)
+    parser.add_argument("--profile", type=Path, required=True)
     arguments = parser.parse_args()
-    run(arguments.model_dir, arguments.audio, arguments.output, arguments.threads)
+    run(
+        arguments.model_dir,
+        arguments.audio,
+        arguments.output,
+        arguments.threads,
+        json.loads(arguments.profile.read_text(encoding="utf-8")),
+    )

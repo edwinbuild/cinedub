@@ -87,6 +87,8 @@ The laptop profile uses CPU int8, four threads, one scene/job at a time, a ten-m
 
 Local ASR recognizes English and stores estimated word timings in the raw transcript. It does **not** identify speakers or perform forced alignment. Use **Add speaker**, assign each line and save. Empty translations can still be filled after speaker correction; existing human-written translations are protected. Sarvam diarization remains an alternative selected through routing, with no silent fallback or paid calls.
 
+New local transcription jobs freeze the `english-asr-v1` decoding profile, runtime versions, runner hash and model checksums. Raw transcript evidence records each decoded segment's selected temperature and diagnostics; sampling fallback produces a review warning, not a deterministic-quality claim. Changed settings/runtime/runner inputs create a different cache identity. Old queued local jobs without a profile must be submitted afresh; existing historical raw results remain readable with an explicit missing-profile warning. Restart API/worker after upgrading, and use a fresh transcription request rather than repeatedly retrying a legacy job. [Profile and compatibility details](docs/decisions/0003-bounded-offline-asr.md).
+
 ## Optional local dialogue/music/effects separation
 
 Install only if needed; keep installed extras on subsequent syncs:

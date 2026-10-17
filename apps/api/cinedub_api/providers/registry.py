@@ -98,6 +98,7 @@ class ProviderRegistry:
                 Path(values.get("local_model_dir", self.settings.local_asr_model_dir)),
                 values.get("threads", self.settings.local_asr_threads),
                 values.get("timeout_seconds", self.settings.local_asr_timeout_seconds),
+                profile=values.get("asr_profile"),
             )
         if selected == "sarvam":
             return SarvamTranscriber(
