@@ -7,6 +7,9 @@ import type {
   Segment,
   SegmentBatchUpdate,
   SegmentBatchResult,
+  EditGroupSummary,
+  EditGroupHistory,
+  EditGroupRestore,
   SegmentHistory,
   SegmentHistoryAction,
   SegmentSplit,
@@ -64,6 +67,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  editGroups: (projectId: string, revisionId: string) =>
+    request<EditGroupSummary[]>(`/projects/${projectId}/edit-groups?revision_id=${encodeURIComponent(revisionId)}`),
+  editGroup: (projectId: string, groupId: string) =>
+    request<EditGroupHistory>(`/projects/${projectId}/edit-groups/${groupId}`),
+  restoreEditGroup: (projectId: string, groupId: string, payload: EditGroupRestore) =>
+    request<SegmentBatchResult>(`/projects/${projectId}/edit-groups/${groupId}/restore`, {
+      method: "POST", body: JSON.stringify(payload),
+    }),
   updateSegments: (projectId: string, payload: SegmentBatchUpdate) =>
     request<SegmentBatchResult>(`/projects/${projectId}/segments`, {
       method: "PATCH", body: JSON.stringify(payload),

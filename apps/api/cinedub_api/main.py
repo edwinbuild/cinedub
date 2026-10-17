@@ -46,6 +46,7 @@ from .routes.alignment import router as alignment_router
 from .routes.batch_editing import router as batch_editing_router
 from .routes.dialogue import router as dialogue_router
 from .routes.emotion import router as emotion_router
+from .routes.group_history import router as group_history_router
 from .routes.history import router as history_router
 from .routes.mixes import router as mixes_router
 from .routes.speaker_reuse import router as speaker_reuse_router
@@ -125,6 +126,7 @@ app.include_router(history_router)
 app.include_router(structure_router)
 app.include_router(speaker_reuse_router)
 app.include_router(batch_editing_router)
+app.include_router(group_history_router)
 
 
 def artifact_read(artifact: Artifact, session: Session | None = None) -> ArtifactRead:

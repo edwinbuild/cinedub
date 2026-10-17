@@ -322,12 +322,50 @@ export interface SegmentBatchResult {
   lines: Array<Segment>;
 }
 
+export interface EditGroupSummary {
+  group_id: string;
+  created_at: string;
+  line_count: number;
+}
+
+export interface EditGroupLine {
+  segment_id: string;
+  expected_version: number;
+  expected_edit_id: string;
+  index: number;
+  before: SegmentContent;
+  after: SegmentContent;
+}
+
 export interface SegmentContent {
   source_text: string;
   translated_text: string;
   start_ms: number;
   end_ms: number;
   speaker_id: string | null;
+}
+
+export interface EditGroupHistory {
+  group_id: string;
+  revision_id: string;
+  lines: Array<EditGroupLine>;
+  excluded_nonmaterial_count: number;
+  can_undo: boolean;
+  can_redo: boolean;
+  unavailable_reason: string | null;
+}
+
+export interface EditGroupVersion {
+  segment_id: string;
+  expected_version: number;
+  expected_edit_id: string;
+}
+
+export interface EditGroupRestore {
+  revision_id: string;
+  action: "undo" | "redo";
+  lines: Array<EditGroupVersion>;
+  restoration_confirmed?: boolean;
 }
 
 export interface SegmentHistoryEntry {

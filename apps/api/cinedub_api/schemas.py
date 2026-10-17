@@ -237,6 +237,46 @@ class SegmentBatchResult(BaseModel):
     lines: list[SegmentRead]
 
 
+class EditGroupSummary(BaseModel):
+    group_id: str
+    created_at: datetime
+    line_count: int
+
+
+class EditGroupLine(BaseModel):
+    segment_id: str
+    expected_version: int
+    expected_edit_id: str
+    index: int
+    before: SegmentContent
+    after: SegmentContent
+
+
+class EditGroupHistory(BaseModel):
+    group_id: str
+    revision_id: str
+    lines: list[EditGroupLine]
+    excluded_nonmaterial_count: int
+    can_undo: bool
+    can_redo: bool
+    unavailable_reason: str | None
+
+
+class EditGroupVersion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    segment_id: str = Field(min_length=1, max_length=100)
+    expected_version: int = Field(ge=1)
+    expected_edit_id: str = Field(min_length=1, max_length=100)
+
+
+class EditGroupRestore(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    revision_id: str = Field(min_length=1, max_length=100)
+    action: Literal["undo", "redo"]
+    lines: list[EditGroupVersion] = Field(min_length=1, max_length=100)
+    restoration_confirmed: bool = False
+
+
 class SegmentHistoryEntry(BaseModel):
     id: str
     version: int

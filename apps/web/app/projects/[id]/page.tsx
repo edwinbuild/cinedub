@@ -8,6 +8,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeE
 import { DialogueLine, type GroupedDraft } from "@/components/dialogue-line";
 import { DialogueTimeline } from "@/components/dialogue-timeline";
 import { StructurePanel } from "@/components/structure-panel";
+import { GroupHistoryPanel } from "@/components/group-history-panel";
 import { ScenePlayer } from "@/components/scene-player";
 import { VoicePanel } from "@/components/voice-panel";
 import { SpeakerReusePanel } from "@/components/speaker-reuse-panel";
@@ -349,6 +350,9 @@ export default function ProjectPage() {
           }} />)}
           {!project.segments.length && <div className="timelineEmpty"><strong>{activeRevision ? "No speech detected" : "Your dialogue will appear here"}</strong>
             <span>{activeRevision ? "Try a clearer source or retranscribe into a new revision." : "Import a scene, wait for preparation, then transcribe it."}</span></div>}</DialogueTimeline>
+        {project.active_revision_id && <GroupHistoryPanel key={`group-history:${project.active_revision_id}`} project={project}
+          disabled={locked} unsaved={dirtyIds.size > 0 || structureDirty || panelDraftIds.size > 0 || referenceDirty}
+          onApply={structureAction} />}
         {project.active_revision_id && <StructurePanel key={`structure:${project.active_revision_id}`} project={project}
           disabled={locked} unsaved={dirtyIds.size > 0} onApply={structureAction} onDirty={setStructureDirty}
           onPlayRange={playRange} canPlay={!!sourceReady && timelineMatches} />}
