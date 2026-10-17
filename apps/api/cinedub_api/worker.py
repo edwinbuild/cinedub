@@ -193,6 +193,9 @@ def process_demo_pipeline(session: Session, job: Job) -> dict:
 
 
 def process_ingest(session: Session, job: Job) -> dict:
+    def cancel():
+        check_cancel(session, job)
+
     existing = session.scalars(select(Artifact).where(Artifact.job_id == job.id)).all()
     if existing:
         return {"artifact_ids": [item.id for item in existing]}
@@ -203,10 +206,10 @@ def process_ingest(session: Session, job: Job) -> dict:
     output_dir = settings.storage_root / job.project_id / "ingest" / job.id
     audio_path = output_dir / "source-48khz.wav"
     _update_progress(session, job, 0, "extracting_audio")
-    extract_audio(source_path, audio_path)
+    extract_audio(source_path, audio_path, cancel=cancel)
     _update_progress(session, job, 0.35, "creating_waveform")
     waveform_path = output_dir / "waveform.json"
-    write_waveform(audio_path, waveform_path)
+    write_waveform(audio_path, waveform_path, cancel=cancel)
     _update_progress(session, job, 0.5, "preparing_recognition_audio")
     recognition_path = output_dir / "recognition-16khz.wav"
     run_ffmpeg(
@@ -220,7 +223,8 @@ def process_ingest(session: Session, job: Job) -> dict:
             "-c:a",
             "pcm_s16le",
             str(recognition_path),
-        ]
+        ],
+        cancel=cancel,
     )
     artifacts = [
         Artifact(
@@ -262,7 +266,7 @@ def process_ingest(session: Session, job: Job) -> dict:
     if has_video:
         _update_progress(session, job, 0.7, "creating_video_proxy")
         proxy_path = output_dir / "preview.mp4"
-        create_preview_proxy(source_path, proxy_path)
+        create_preview_proxy(source_path, proxy_path, cancel=cancel)
         artifacts.append(
             Artifact(
                 project_id=job.project_id,
@@ -274,6 +278,7 @@ def process_ingest(session: Session, job: Job) -> dict:
                 metadata_json={"purpose": "browser-preview", "source_asset_id": source.id},
             )
         )
+    cancel()
     session.add_all(artifacts)
     session.commit()
     return {"artifact_ids": [artifact.id for artifact in artifacts]}
