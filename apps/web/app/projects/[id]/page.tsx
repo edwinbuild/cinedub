@@ -4,8 +4,8 @@ import type { CapabilityStatus, HardwareStatus, JobRequest, ProjectDetail, Segme
 import { ArrowLeft, Film, LoaderCircle, RefreshCw, Upload } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
-import { DialogueLine } from "@/components/dialogue-line";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent } from "react";
+import { DialogueLine, type GroupedDraft } from "@/components/dialogue-line";
 import { DialogueTimeline } from "@/components/dialogue-timeline";
 import { StructurePanel } from "@/components/structure-panel";
 import { ScenePlayer } from "@/components/scene-player";
@@ -50,6 +50,19 @@ export default function ProjectPage() {
   }, []);
   const [preservedDrafts, setPreservedDrafts] = useState<Segment[]>([]);
   const dirtyRef = useRef<Set<string>>(new Set());
+  const groupedDrafts = useRef(new Map<string, GroupedDraft>());
+  const groupedFocus = useRef<HTMLElement | null>(null);
+  const timelineHeading = useRef<HTMLHeadingElement>(null);
+  useLayoutEffect(() => {
+    if (busy || !groupedFocus.current) return;
+    const target = groupedFocus.current; groupedFocus.current = null;
+    if (document.activeElement !== document.body) return;
+    if (target.isConnected && !target.matches(":disabled") && !target.closest("[hidden]")) target.focus();
+    else timelineHeading.current?.focus();
+  }, [busy]);
+  const onGroupedDraft = useCallback((lineId: string, value: GroupedDraft | null) => {
+    if (value) groupedDrafts.current.set(lineId, value); else groupedDrafts.current.delete(lineId);
+  }, []);
   const lineCache = useRef<Map<string, Segment>>(new Map());
   const mediaRef = useRef<HTMLMediaElement | null>(null);
   const loadSequence = useRef(0);
@@ -161,6 +174,27 @@ export default function ProjectPage() {
     setBusy("structure");
     try { await action(); await load(); }
     finally { setBusy(null); }
+  }
+  async function saveGroupedDrafts() {
+    if (!project?.active_revision_id || busy) return;
+    const drafts = Array.from(dirtyRef.current).map((lineId) => groupedDrafts.current.get(lineId));
+    if (!drafts.length || drafts.length > 100 || drafts.some((value) => !value || value.blocked)) {
+      setError("Grouped save is unavailable: resolve stale or removed lines and wait for individual saves. Save at most 100 dialogue drafts together."); return;
+    }
+    const ready = drafts as GroupedDraft[];
+    if (!window.confirm(`Save all ${ready.length} dialogue drafts together, including filtered-out lines? One invalid or changed line prevents the entire save. Dialogue/timing changes require review again. Other review forms are not saved.`)) return;
+    groupedFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setBusy("group-save"); setError(null); setNotice(null);
+    try {
+      const result = await api.updateSegments(id, { revision_id: project.active_revision_id, lines: ready.map((value) => value.item) });
+      const saved = new Map(result.lines.map((line) => [line.id, line]));
+      if (saved.size !== ready.length || ready.some((value) => !saved.has(value.item.segment_id))) throw new Error("Grouped save response was incomplete; refresh to inspect saved versions.");
+      ready.forEach((value) => value.accept(saved.get(value.item.segment_id)!));
+      setNotice(`${result.lines.length} dialogue drafts saved together. Changed content requires review again.`);
+      await load();
+    } catch (cause) {
+      setError(`${cause instanceof Error ? cause.message : "Grouped save failed"}. Drafts are preserved. Refresh to inspect saved versions before retrying if the connection failed.`);
+    } finally { setBusy(null); }
   }
   async function playLine(line: Segment) {
     await playRange(line.start_ms, line.end_ms);
@@ -289,7 +323,7 @@ export default function ProjectPage() {
               : <audio controls preload="metadata" src={`${API_URL}${voicePreview.content_url}`} />}
               <a className="smallButton" href={`${API_URL}${voicePreview.download_url}`}>Download dialogue preview</a></>}</section>}
         {!timelineMatches && <p className="lineWarning">The displayed timeline belongs to another source. Select its source or activate a matching revision to play individual lines.</p>}
-        <div className="timelineHeader"><div><p className="eyebrow">Dialogue timeline</p><h1>{project.segments.length} reviewable lines</h1></div>
+        <div className="timelineHeader"><div><p className="eyebrow">Dialogue timeline</p><h1 ref={timelineHeading} tabIndex={-1}>{project.segments.length} reviewable lines</h1></div>
           <span className="provenanceTag">{activeRevision ? activeRevision.provider === "fake" ? "DEMO FIXTURE" : `${activeRevision.provider} · ${activeRevision.model}` : "No transcript yet"}</span></div>
         {activeJob && <div className="jobProgress"><LoaderCircle className="spin" /><strong>{activeJob.stage} · {activeJob.phase}</strong>
           <button className="smallButton" onClick={() => jobAction(() => api.cancelJob(activeJob.id))}>Cancel</button></div>}
@@ -300,11 +334,16 @@ export default function ProjectPage() {
           disabled={locked} onSaved={load} onRun={run} onDirty={setReferenceDirty} />}
         <div className="reviewFilters" role="group" aria-label="Filter dialogue">{["all", "untranslated", "edited", "approved", "warnings"].map((value) =>
           <button key={value} className={`smallButton ${filter === value ? "selected" : ""}`} aria-pressed={filter === value} onClick={() => setFilter(value)}>{value}</button>)}</div>
+        {dirtyIds.size > 1 && <div className="lineWarning" aria-label="Grouped dialogue save">
+          <button className="smallButton" disabled={locked || dirtyIds.size > 100 || preservedDrafts.length > 0} onClick={saveGroupedDrafts}>Save all dialogue drafts together</button>
+          <p>{dirtyIds.size} dialogue drafts, including filtered-out lines. All save or none save; other review forms are excluded. Limit: 100 lines.</p>
+          {preservedDrafts.length > 0 && <p>Copy or discard removed-line drafts before grouped saving.</p>}
+        </div>}
         <DialogueTimeline>{[...project.segments, ...preservedDrafts].map((line) => <DialogueLine key={line.id} segment={line} speakers={project.speakers} artifacts={project.artifacts}
-          structureLocked={busy === "structure" || remoteTimelineChanged}
+          structureLocked={busy === "structure" || busy === "group-save" || remoteTimelineChanged}
           disabled={locked} onGenerate={(lineId) => run({ stage: "synthesize", revision_id: revisionId, segment_ids: [lineId], force_new: true })}
           active={!line.retired && timelineMatches && time >= line.start_ms && time < line.end_ms} hidden={!line.retired && hidden(line)} canPlay={!line.retired && !!sourceReady && timelineMatches}
-          onPlay={playLine} onSaved={load} onDirty={onDirty} onRegenerate={(lineId) => {
+          onPlay={playLine} onSaved={load} onDirty={onDirty} onGroupedDraft={onGroupedDraft} onRegenerate={(lineId) => {
             if (window.confirm("Generate a new translation for this saved line? It will need review again."))
               void run({ stage: "translate", revision_id: revisionId, segment_ids: [lineId], regenerate: true });
           }} />)}

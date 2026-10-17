@@ -7,7 +7,9 @@ from .models import MediaAsset, Segment, SegmentEdit, Speaker, TimelineRevision
 from .schemas import SegmentRead, SegmentUpdate
 
 
-def apply_line_edit(session, segment, payload: SegmentUpdate, *, history_metadata=None):
+def apply_line_edit(
+    session, segment, payload: SegmentUpdate, *, history_metadata=None, commit=True
+):
     if segment.retired:
         raise HTTPException(
             409, "This line was replaced by a structural edit; use current dialogue"
@@ -90,6 +92,9 @@ def apply_line_edit(session, segment, payload: SegmentUpdate, *, history_metadat
             },
         )
     )
-    session.commit()
+    if commit:
+        session.commit()
+    else:
+        session.flush()
     session.refresh(segment)
     return segment

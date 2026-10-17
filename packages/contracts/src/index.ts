@@ -298,6 +298,30 @@ export interface SegmentUpdate {
   expected_version: number;
 }
 
+export interface SegmentBatchItem {
+  source_text?: string | null;
+  start_ms?: number | null;
+  end_ms?: number | null;
+  translated_text?: string | null;
+  speaker_id?: string | null;
+  emotion_label?: string | null;
+  energy?: number | null;
+  pace?: number | null;
+  status?: "draft" | "translated" | "voiced" | "approved" | "needs_review" | null;
+  expected_version: number;
+  segment_id: string;
+}
+
+export interface SegmentBatchUpdate {
+  revision_id: string;
+  lines: Array<SegmentBatchItem>;
+}
+
+export interface SegmentBatchResult {
+  group_id: string;
+  lines: Array<Segment>;
+}
+
 export interface SegmentContent {
   source_text: string;
   translated_text: string;

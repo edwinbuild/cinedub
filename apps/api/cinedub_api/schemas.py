@@ -221,6 +221,22 @@ class SegmentContent(BaseModel):
     speaker_id: str | None
 
 
+class SegmentBatchItem(SegmentUpdate):
+    model_config = ConfigDict(extra="forbid")
+    segment_id: str = Field(min_length=1, max_length=100)
+
+
+class SegmentBatchUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    revision_id: str = Field(min_length=1, max_length=100)
+    lines: list[SegmentBatchItem] = Field(min_length=1, max_length=100)
+
+
+class SegmentBatchResult(BaseModel):
+    group_id: str
+    lines: list[SegmentRead]
+
+
 class SegmentHistoryEntry(BaseModel):
     id: str
     version: int

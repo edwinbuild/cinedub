@@ -99,6 +99,73 @@ async def test_actual_sqlite_full_returns_safe_api_error_and_preserves_edits(
         app.dependency_overrides.update(previous)
 
 
+@pytest.mark.anyio
+async def test_actual_sqlite_full_rolls_back_grouped_edits_and_retries_explicitly(
+    client, constrained_database, monkeypatch
+):
+    from cinedub_api.routes import batch_editing
+
+    connection, session, _ = constrained_database
+    project, revision, _ = scene(session)
+    lines = (
+        session.query(Segment).filter_by(project_id=project.id).order_by(Segment.index).all()[:2]
+    )
+    original = [(line.id, line.version, line.translated_text) for line in lines]
+    project_id, revision_id = project.id, revision.id
+    session.commit()
+    limit = cap_database(connection)
+    completed = []
+    apply = batch_editing.apply_line_edit
+
+    def observed(*args, **kwargs):
+        result = apply(*args, **kwargs)
+        completed.append(result.id)
+        return result
+
+    monkeypatch.setattr(batch_editing, "apply_line_edit", observed)
+
+    async def isolated_session():
+        with Session(bind=connection, expire_on_commit=False) as current:
+            yield current
+
+    previous = dict(app.dependency_overrides)
+    app.dependency_overrides[get_session] = isolated_session
+    payload = {
+        "revision_id": revision_id,
+        "lines": [
+            {
+                "segment_id": original[0][0],
+                "expected_version": original[0][1],
+                "translated_text": "Short edit",
+            },
+            {
+                "segment_id": original[1][0],
+                "expected_version": original[1][1],
+                "translated_text": "മ" * 3500,
+            },
+        ],
+    }
+    try:
+        response = await client.patch(f"/projects/{project_id}/segments", json=payload)
+        assert response.status_code == 507, response.text
+        assert completed == [original[0][0]], "First edit must have flushed before capacity failure"
+        session.expire_all()
+        for line_id, version, translated in original:
+            saved = session.get(Segment, line_id)
+            assert (saved.version, saved.translated_text) == (version, translated)
+        assert session.query(SegmentEdit).count() == 0
+        session.rollback()
+        release_database(connection, limit)
+        response = await client.patch(f"/projects/{project_id}/segments", json=payload)
+        assert response.status_code == 200, response.text
+        assert len(response.json()["lines"]) == 2
+    finally:
+        session.rollback()
+        release_database(connection, limit)
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(previous)
+
+
 @pytest.mark.parametrize("paid", [False, True])
 def test_actual_full_at_worker_final_commit_preserves_checkpoints_and_recovers_safely(
     constrained_database, monkeypatch, tmp_path, caplog, paid

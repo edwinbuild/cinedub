@@ -1,6 +1,6 @@
 "use client";
 
-import type { Artifact, Segment, Speaker } from "@cinedub/contracts";
+import type { Artifact, Segment, SegmentBatchItem, Speaker } from "@cinedub/contracts";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { VoiceCandidates } from "@/components/voice-candidates";
@@ -11,13 +11,18 @@ function draft(line: Segment) {
     start_ms: line.start_ms, end_ms: line.end_ms, speaker_id: line.speaker_id, status: line.status };
 }
 
-export function DialogueLine({ segment, speakers, artifacts, disabled, structureLocked, active, canPlay, hidden, onPlay, onSaved, onDirty, onRegenerate, onGenerate }: {
+export type GroupedDraft = {
+  item: SegmentBatchItem; blocked: boolean; accept: (saved: Segment) => void;
+};
+
+export function DialogueLine({ segment, speakers, artifacts, disabled, structureLocked, active, canPlay, hidden, onPlay, onSaved, onDirty, onRegenerate, onGenerate, onGroupedDraft }: {
   segment: Segment; speakers: Speaker[]; active: boolean; canPlay: boolean; hidden: boolean;
   onPlay: (segment: Segment) => void; onSaved: () => void; onDirty: (id: string, dirty: boolean) => void;
   onRegenerate: (id: string) => void;
   artifacts: Artifact[]; disabled: boolean;
   structureLocked: boolean;
   onGenerate: (id: string) => void;
+  onGroupedDraft: (id: string, value: GroupedDraft | null) => void;
 }) {
   const [base, setBase] = useState(segment);
   const [values, setValues] = useState(() => draft(segment));
@@ -29,6 +34,21 @@ export function DialogueLine({ segment, speakers, artifacts, disabled, structure
   const saveFocus = useRef<HTMLElement | null>(null);
   const dirty = JSON.stringify(values) !== JSON.stringify(draft(base));
   const stale = segment.version > base.version;
+
+  useEffect(() => {
+    if (!dirty) { onGroupedDraft(segment.id, null); return; }
+    const changes = Object.fromEntries(Object.entries(values).filter(([key, value]) =>
+      value !== draft(base)[key as keyof typeof values]));
+    onGroupedDraft(segment.id, {
+      item: { ...changes, segment_id: segment.id, expected_version: base.version },
+      blocked: segment.retired || saving || restoring || stale,
+      accept: (saved) => {
+        setBase(saved); setValues(draft(saved)); setError(null);
+        onDirty(segment.id, false); setNotice("Line saved in grouped edit. Review is still required unless already approved.");
+      },
+    });
+    return () => onGroupedDraft(segment.id, null);
+  }, [base, values, dirty, segment.id, segment.retired, saving, restoring, stale, onGroupedDraft, onDirty]);
 
   useLayoutEffect(() => {
     if (saving || !saveFocus.current) return;

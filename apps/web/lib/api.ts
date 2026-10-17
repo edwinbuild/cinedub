@@ -5,6 +5,8 @@ import type {
   ProjectDetail,
   ProjectSummary,
   Segment,
+  SegmentBatchUpdate,
+  SegmentBatchResult,
   SegmentHistory,
   SegmentHistoryAction,
   SegmentSplit,
@@ -62,6 +64,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  updateSegments: (projectId: string, payload: SegmentBatchUpdate) =>
+    request<SegmentBatchResult>(`/projects/${projectId}/segments`, {
+      method: "PATCH", body: JSON.stringify(payload),
+    }),
   projects: () => request<ProjectSummary[]>("/projects"),
   project: (id: string) => request<ProjectDetail>(`/projects/${id}`),
   createProject: (name: string) =>
