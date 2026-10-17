@@ -34,6 +34,20 @@ Recognized SQLite/storage-quota errors now give an actionable 507 response or st
 
 For an isolated base-install smoke check, run `npm run verify:clean-install` from a trusted checkout. It installs locked dependencies into a private temporary snapshot, without your `.env`, data or optional models, then checks build/startup and a browser upload-to-subtitle workflow. It requires installed Chrome and may use network/package caches and about 1 GiB temporary space; it keeps private results/logs for inspection and requires at least 2 GiB free space. [Scope, results and remaining machine checks](docs/evaluations/clean-install.md).
 
+## Portable source snapshot (not a published release)
+
+From a trusted Git checkout, package a reviewed commit into a **new** directory:
+
+```bash
+python3 scripts/package-source.py --ref HEAD --output /tmp/cinedub-source-handoff
+cd /tmp/cinedub-source-handoff
+sha256sum --check SHA256SUMS
+```
+
+The bundle contains committed source, installation instructions and example configuration, plus a separate manifest binding the commit, version, dependency locks and archive checksum. It refuses tracked `OLD/`, private configuration, models, runtime data, dependency folders and unsafe archive entries. Ignored and uncommitted files are never copied. Existing output directories are never overwritten. Only package trusted, reviewed commits: path checks are not a general secret scanner. Checksums detect accidental changes, not authenticity; there is no signature or release approval.
+
+Extract into a new empty workspace, then follow **Run locally** above and configure your own `.env`; no dependencies, system tools, models or user projects are bundled. Optional models still require explicit setup. Creating a bundle makes no network/provider calls and does not publish a GitHub release. The archive has no Git history: packaging and committed-snapshot rehearsal commands require the original Git checkout. This source handoff is not a desktop installer, supported-device certification or cinematic-quality acceptance.
+
 ## Use real Sarvam processing
 
 Set `SARVAM_API_KEY` privately in root `.env`. The example selects Sarvam for transcription/diarization, translation and stock-voice synthesis: `saaras:v4`, colloquial `mayura:v1`, and `bulbul:v3`. Restart the API and worker after changing configuration. Keys never enter the web configuration. Live Sarvam verification is pending; a configured adapter is not a quality guarantee.
