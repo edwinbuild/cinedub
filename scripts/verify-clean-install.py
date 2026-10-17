@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import signal
 import socket
@@ -17,6 +18,30 @@ from pathlib import Path, PurePosixPath
 ROOT = Path(__file__).resolve().parents[1]
 DRIVER_SHA256 = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 FORBIDDEN = {"OLD", ".git", ".agents", ".aws", ".codex", ".venv", "node_modules", "data", "models"}
+BASE_TESTS = [
+    "tests/api/test_clean_install.py",
+    "tests/api/test_asr_profile.py",
+    "tests/api/test_local_asr.py",
+    "tests/api/test_asr_evaluation.py",
+    "tests/api/test_emotion_benchmark.py",
+    "tests/api/test_emotion_candidate.py",
+    "tests/api/test_batch_editing.py",
+    "tests/api/test_group_history.py",
+    "tests/api/test_segment_history.py",
+    "tests/api/test_storage_capacity.py",
+]
+BASE_BROWSER_TESTS = ["tests/e2e/grouped-edits.spec.ts", "tests/e2e/group-history.spec.ts"]
+
+
+def passed_test_summary(log):
+    match = re.search(r"(\d+) passed([^\n]*)", log)
+    if (
+        not match
+        or int(match[1]) < 1
+        or any(word in match[2] for word in ("skipped", "xfailed", "xpassed", "deselected"))
+    ):
+        raise ValueError("Base regression receipt requires passing tests without exclusions")
+    return {"passed": int(match[1]), "summary": match[0].strip()}
 
 
 def validate_members(members):
@@ -82,7 +107,7 @@ def available_port():
         return connection.getsockname()[1]
 
 
-def execute(ref):
+def execute(ref, *, base_regressions=False):
     if sys.platform != "linux" or sys.version_info < (3, 12):
         raise RuntimeError("Requires Linux and Python 3.12+")
     for executable in ("git", "uv", "npm", "node", "ffmpeg", "ffprobe"):
@@ -203,6 +228,63 @@ def execute(ref):
             connection.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             connection.bind(("127.0.0.1", port))
     smoke = json.loads((logs / "browser-smoke.log").read_text().strip().splitlines()[-1])
+    regressions = None
+    if base_regressions:
+        run(
+            ["uv", "sync", "--frozen", "--group", "dev"],
+            checkout,
+            install_env,
+            logs,
+            "base-dev-install",
+        )
+        result = subprocess.check_output(
+            [python, "-c", probe], cwd=checkout, env=environment, text=True
+        )
+        regression_optional = json.loads(result)
+        run(
+            [python, "-m", "pytest", "-q", *BASE_TESTS],
+            checkout,
+            environment,
+            logs,
+            "base-regression-tests",
+        )
+        summary = passed_test_summary((logs / "base-regression-tests.log").read_text())
+        regression_env = {
+            **environment,
+            "CINEDUB_E2E_LAUNCHER": "1",
+            "CINEDUB_E2E_TRANSCRIBER": "fake",
+            "CINEDUB_E2E_BROWSER": "chrome",
+        }
+        run(
+            ["npm", "run", "test:e2e", "--", *BASE_BROWSER_TESTS],
+            checkout,
+            regression_env,
+            logs,
+            "base-browser-regressions",
+            timeout=180,
+        )
+        browser_summary = passed_test_summary((logs / "base-browser-regressions.log").read_text())
+        for port in (8011, 3011):
+            with socket.socket() as connection:
+                connection.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                connection.bind(("127.0.0.1", port))
+        subprocess.run(
+            [python, "-c", probe],
+            cwd=checkout,
+            env=environment,
+            check=True,
+            stdout=subprocess.DEVNULL,
+        )
+        if (checkout / "models").exists():
+            raise RuntimeError("Base regression tests must not install model weights")
+        regressions = {
+            "backend": summary,
+            "backend_test_files": BASE_TESTS,
+            "browser": browser_summary,
+            "browser_test_files": BASE_BROWSER_TESTS,
+            "optional_packages": regression_optional,
+            "owned_services_stopped": True,
+        }
     if lock_hashes != {
         name: hashlib.sha256((checkout / name).read_bytes()).hexdigest() for name in lock_hashes
     }:
@@ -228,6 +310,7 @@ def execute(ref):
         "doctor": True,
         "browser": smoke,
         "owned_services_stopped": True,
+        "base_regressions": regressions,
         "scope": "Fresh venv/node_modules using existing Linux host tools and package caches; "
         "not a pristine OS or live-provider test",
     }
@@ -250,9 +333,14 @@ def main():
     parser.add_argument(
         "--ref", default="HEAD", help="Committed application revision; excludes uncommitted work"
     )
+    parser.add_argument(
+        "--base-regressions",
+        action="store_true",
+        help="Also test model-free editor/ASR contracts with the dev group, no extras",
+    )
     arguments = parser.parse_args()
     try:
-        execute(arguments.ref)
+        execute(arguments.ref, base_regressions=arguments.base_regressions)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
         print(
             "Clean-install rehearsal failed; inspect its printed private directory. "

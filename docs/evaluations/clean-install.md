@@ -1,6 +1,6 @@
 # Clean base installation rehearsal
 
-The committed application at `043809a75c146e748a98aa0f9c9a53953e3c23b3` passed installation into a new Python environment and new `node_modules`, followed by build, supervised startup and a real browser workflow. No optional model packages or weights were present. The original rehearsal at `ce3fe6a2e385a47440d942d6c60dbef4eda1e495` remains historical evidence. These checks establish base-environment execution, not pristine-machine, live-provider or cinema-quality acceptance.
+The committed application at `78b7dd7d924ab166dd4c81ab23e51d5c19bfde98` passed installation into a new Python environment and new `node_modules`, followed by build, supervised startup and a real browser workflow. No optional model packages or weights were present. Earlier rehearsals at `043809a75c146e748a98aa0f9c9a53953e3c23b3` and `ce3fe6a2e385a47440d942d6c60dbef4eda1e495` remain historical evidence. These checks establish base-environment execution, not pristine-machine, live-provider or cinema-quality acceptance.
 
 ## Run the check
 
@@ -10,6 +10,8 @@ From a trusted CineDub checkout with Linux, Python 3.12+, uv, Node/npm, FFmpeg/f
 npm run verify:clean-install
 # Or choose a particular committed application revision:
 UV_CACHE_DIR=/tmp/cinedub-uv-cache uv run --no-project --python 3.12 python scripts/verify-clean-install.py --ref HEAD
+# Also check selected backend contracts and grouped editor workflows without AI extras:
+UV_CACHE_DIR=/tmp/cinedub-uv-cache uv run --no-project --python 3.12 python scripts/verify-clean-install.py --ref HEAD --base-regressions
 ```
 
 The controller uses only Python's standard library, so it does not need the original checkout's Python environment. The npm command selects the verified Python 3.12 profile through uv without loading the original project dependencies. It tests the selected committed revision, not uncommitted application edits. The snapshot installs base Python dependencies with `uv sync --frozen --no-dev` and no extras, then the locked npm graph with `npm ci`. The npm development graph includes the browser test driver. Only run reviewed, trusted commits: application code and package installation scripts execute normally; this is not a security sandbox.
@@ -22,9 +24,15 @@ The controller resolves a commit, checks tracked paths before archiving, then va
 
 The application starts on separate loopback ports with a new database/storage directory, explicit fake transcription/translation/voice routes and both Sarvam key aliases empty. Browser HTTP requests are restricted to those local origins. Synthetic audio exercises upload, FFmpeg ingest/waveform, clearly labelled fixture transcription/translation, a manual Malayalam edit, saved subtitle download and persistence after reload. Optional capabilities must report unavailable rather than download weights or pretend to run. The supervisor is stopped and both listeners must be released afterward.
 
-The completion receipt records application commit, driver hashes, unchanged dependency-lock hashes, tool versions, absent optional packages and browser/shutdown results. It is an unsigned local verification record, not an authenticity or natural-quality certificate. Runtime logs, workspace data and screenshots remain outside Git.
+The completion receipt records application commit, driver hashes, unchanged dependency-lock hashes, tool versions, absent optional packages and browser/shutdown results. The controller/browser driver come from the invoking checkout and are recorded separately from the archived application commit; uncommitted application edits are not tested. It is an unsigned local verification record, not an authenticity or natural-quality certificate. Runtime logs, workspace data and screenshots remain outside Git.
+
+With `--base-regressions`, the initial smoke still uses the base-only Python environment. Only afterward does the controller install the frozen development group, without AI extras, in the temporary checkout. It runs the explicitly listed clean-install, ASR/profile/evaluation, emotion-evaluation, grouped-edit/history and storage contracts, then two supervised grouped-save/undo/redo browser workflows. The receipt records actual passing counts and test paths separately from the initial smoke; partial/skipped test summaries cannot produce a passing receipt. Optional packages must remain absent, no root model directory may be created, dependency locks must remain unchanged and owned browser services must release their ports. This is selected regression coverage, not a full backend or browser suite.
 
 ## Observed result
+
+The current `78b7dd7` snapshot passed both the base rehearsal and a second fresh rehearsal using `--base-regressions`. In the second run, all 130 selected backend tests passed without exclusions, followed by both grouped-editor browser workflows. All five optional AI packages remained absent before and after the development-group checks; no model directory was created. Production build, doctor, synthetic upload/edit/subtitle/reload, unchanged locks and owned-service shutdown passed. The invoking driver's 28 safety/summary unit tests also passed separately in the normal development environment. This tooling-only milestone does not claim a new full-suite run; the prior ASR milestone's 312-test result remains the full backend baseline.
+
+The local completion receipt is `/tmp/cinedub-clean-install-apasj_qr/receipt.json`; its application commit and driver hashes distinguish the archived app from the current rehearsal tooling. Temporary evidence is not a durable published artifact. No paid provider, actor recording or local model was used in this check. Existing Linux tools/caches were reused; other-device, human listening and live Sarvam acceptance remain open.
 
 | Check | Result |
 | --- | --- |
