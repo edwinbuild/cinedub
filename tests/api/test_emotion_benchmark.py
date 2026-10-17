@@ -2,6 +2,9 @@
 
 import hashlib
 import importlib.util
+import io
+import json
+import wave
 from pathlib import Path
 
 import httpx
@@ -103,3 +106,74 @@ def test_download_is_bounded_and_does_not_follow_redirects():
     with httpx.Client(transport=transport, follow_redirects=False) as client:
         with pytest.raises(httpx.HTTPStatusError):
             benchmark.fetch(client, "https://example.test/audio", 5)
+
+
+@pytest.mark.parametrize("prepare_only", [True, False])
+def test_prepare_mode_is_independent_of_emotion_model(tmp_path, monkeypatch, prepare_only):
+    data = io.BytesIO()
+    with wave.open(data, "wb") as audio:
+        audio.setparams((1, 2, 16000, 0, "NONE", "not compressed"))
+        audio.writeframes(b"\0" * 22400)
+    recording = data.getvalue()
+    digest = hashlib.sha256(recording).hexdigest()
+    pointer = (
+        f"version https://git-lfs.github.com/spec/v1\noid sha256:{digest}\nsize {len(recording)}\n"
+    ).encode()
+    output = tmp_path / "prepared"
+    output.mkdir()
+    monkeypatch.setattr(benchmark.tempfile, "mkdtemp", lambda **_: str(output))
+    monkeypatch.setattr(
+        "sys.argv", ["evaluate-emotion-benchmark.py", *(["--prepare-only"] if prepare_only else [])]
+    )
+    monkeypatch.setattr(
+        benchmark, "select_cases", lambda _: [{"file": "9999_DFA_ANG_XX", "gold": "neutral"}]
+    )
+
+    def fetch(client, url, limit):
+        if url.endswith(".wav"):
+            return recording if url.startswith(benchmark.MEDIA) else pointer
+        return b"Original synthetic unit fixture; no dataset recording downloaded"
+
+    monkeypatch.setattr(benchmark, "fetch", fetch)
+    monkeypatch.setattr(
+        benchmark.subprocess, "run", lambda command, **_: Path(command[-1]).write_bytes(recording)
+    )
+    calls = []
+
+    class Recorded:
+        def __init__(self, *_):
+            calls.append("constructed")
+
+        def analyze(self, *_, **__):
+            return {
+                "provider": "local",
+                "model": benchmark.MODEL_NAME,
+                "profile": benchmark.PROFILE,
+                "metadata": {"fixture": True},
+                "lines": [
+                    {
+                        "segment_id": "sample-000",
+                        "start_ms": 0,
+                        "end_ms": 700,
+                        "status": "no_speech",
+                        "suggested_label": None,
+                        "scores": [],
+                        "score_margin": None,
+                        "speech_ms": 0,
+                        "speech_fraction": 0.0,
+                        "rms_dbfs": None,
+                        "warnings": [],
+                    }
+                ],
+            }
+
+    monkeypatch.setattr(benchmark, "LocalEmotionAnalyzer", Recorded)
+    benchmark.main()
+    manifest = json.loads((output / "manifest.json").read_text())
+    assert manifest["report"]["dataset_revision"] == benchmark.REVISION
+    assert manifest["cases"][0]["id"] == "sample-000"
+    assert (output / "scene.wav").is_file() and (output / "ATTRIBUTION.txt").is_file()
+    if prepare_only:
+        assert calls == [] and manifest["report"]["prepared_only"]
+    else:
+        assert calls == ["constructed"] and manifest["report"]["metrics"]["cases"] == 1

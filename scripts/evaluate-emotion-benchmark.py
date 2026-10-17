@@ -1,5 +1,6 @@
 """Opt-in CREMA-D diagnostic. Recordings stay in a private directory outside the repo."""
 
+import argparse
 import csv
 import hashlib
 import io
@@ -128,6 +129,13 @@ def metrics(cases, lines):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--prepare-only",
+        action="store_true",
+        help="Prepare licensed diagnostic clips without emotion inference",
+    )
+    args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     directory = Path(tempfile.mkdtemp(prefix="cinedub-crema-d-")).resolve()
     if directory.is_relative_to(root):
@@ -209,6 +217,24 @@ def main():
     with wave.open(str(scene), "wb") as audio:
         audio.setparams((1, 2, 16000, 0, "NONE", "not compressed"))
         audio.writeframes(frames)
+    (directory / "manifest.json").write_text(
+        json.dumps(
+            {
+                "cases": cases,
+                "report": {
+                    "dataset_revision": REVISION,
+                    "seed": SEED,
+                    "prepared_only": True,
+                    "duration_ms": duration,
+                    "scene_sha256": hashlib.sha256(scene.read_bytes()).hexdigest(),
+                },
+            },
+            indent=2,
+        )
+    )
+    if args.prepare_only:
+        print("Dataset prepared; no emotion model was loaded or run.")
+        return
     windows = [
         {key: case[key] for key in ("id", "start_ms", "end_ms")} | {"overlap": False}
         for case in cases
