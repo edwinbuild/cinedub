@@ -88,6 +88,7 @@ export interface Job {
   warnings_json: Array<string>;
   output_json: Record<string, unknown>;
   voice_profile_id: string | null;
+  correlation_id: string | null;
 }
 
 export interface Artifact {

@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-HEAD = "0011_artifact_lineage"
+HEAD = "0012_correlation_ids"
 
 
 def migrate(path, revision):

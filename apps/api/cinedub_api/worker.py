@@ -11,17 +11,18 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from .config import get_settings
+from .config_checks import validate_settings
 from .database import SessionLocal, create_database
 from .job_errors import InvalidJobInput, InvalidJobOutput, JobErrorCode, classify
 from .lineage import record_job_lineage
 from .models import Artifact, Job, Project
+from .observability import bound, configure_logging, log_event
 from .processing import check_cancel
 from .project_status import sync_project_status
 from .stages import STAGES, validated_inputs, validated_output
 from .storage_capacity import STORAGE_MESSAGE, StorageCapacityError, is_storage_capacity_error
 from .workspace_lock import inherit_lease, workspace_lease
 
-logger = logging.getLogger("cinedub.worker")
 settings = get_settings()
 
 
@@ -86,7 +87,17 @@ def _process_once(session: Session) -> bool:
     job = claim_job(session)
     if not job:
         return False
+    # The request that created the job keeps tracing through its provider runs and artifacts.
+    with bound(job.correlation_id or job.id):
+        return _process_claimed(session, job)
+
+
+def _process_claimed(session: Session, job: Job) -> bool:
     project = session.get(Project, job.project_id)
+    started = time.monotonic()
+    log_event(
+        "job_started", job_id=job.id, stage=job.stage, provider=job.provider, attempt=job.attempts
+    )
     try:
         # Cancellation may have been committed while claiming or before a restart.
         # Do not enter a processor (which may publish artifacts or call a provider).
@@ -114,20 +125,37 @@ def _process_once(session: Session) -> bool:
         job.status = "completed"
         job.phase = "completed"
         sync_project_status(session, project)
+        log_event(
+            "job_completed",
+            job_id=job.id,
+            stage=job.stage,
+            provider=job.provider,
+            duration_ms=round((time.monotonic() - started) * 1000),
+        )
     except InterruptedError as exc:
         session.rollback()
         job = session.get(Job, job.id)
         _finish_cancelled(session, job, str(exc))
+        log_event("job_cancelled", job_id=job.id, stage=job.stage, provider=job.provider)
     except Exception as exc:  # worker boundary records structured failures
         if is_storage_capacity_error(exc):
             raise
-        logger.error("job_id=%s stage=%s error_type=%s", job.id, job.stage, type(exc).__name__)
         session.rollback()
         job = session.get(Job, job.id)
         job.status = "failed"
         code, message = classify(exc, job)
         job.error_code, job.error_message = code, message
         job.retryable = STAGES[job.stage].retry.retryable_after(job, code)
+        log_event(
+            "job_failed",
+            logging.ERROR,
+            job_id=job.id,
+            stage=job.stage,
+            provider=job.provider,
+            error_code=str(code),
+            error_type=type(exc).__name__,
+            retryable=job.retryable,
+        )
         job.finished_at = datetime.now(UTC)
         sync_project_status(session, job.project_id)
         session.commit()
@@ -181,12 +209,14 @@ def run_worker(poll_interval: float = 1.0) -> None:
     except (DBAPIError, OSError, sqlite3.Error, StorageCapacityError) as exc:
         if not is_storage_capacity_error(exc):
             raise
-        logger.error("storage_capacity_exhausted: %s", STORAGE_MESSAGE)
+        log_event("storage_capacity_exhausted", logging.ERROR)
         raise SystemExit(1) from None
 
 
 def _run_worker(poll_interval: float) -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    configure_logging("worker")
+    for warning in validate_settings(settings):
+        log_event("configuration_warning", logging.WARNING, detail=warning)
     lock_path = worker_lock_path()
     with workspace_lease(settings.database_url, settings.storage_root), lock_path.open("a") as lock:
         try:
@@ -195,15 +225,15 @@ def _run_worker(poll_interval: float) -> None:
             raise RuntimeError("A CineDub worker is already running for this database") from exc
         with inherit_lease(lock.fileno()):
             create_database()
-            # Alembic sets the root threshold to WARN; retain worker lifecycle evidence.
-            logger.setLevel(logging.INFO)
+            # Alembic's logging config replaced handlers; restore structured worker logs.
+            configure_logging("worker")
             with SessionLocal() as session:
                 recover_jobs(session)
             _worker_loop(poll_interval)
 
 
 def _worker_loop(poll_interval: float) -> None:
-    logger.info("CineDub worker started")
+    log_event("worker_started")
     while True:
         with SessionLocal() as session:
             worked = process_once(session)

@@ -16,6 +16,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from .config import get_settings
+from .config_checks import validate_settings
 from .consent import artifact_block_reason
 from .database import SessionLocal, create_database
 from .dependencies import SessionDep, require_project
@@ -41,6 +42,7 @@ from .models import (
     VoiceProfile,
     new_id,
 )
+from .observability import HEADER, CorrelationMiddleware, configure_logging, log_event
 from .project_status import sync_project_status
 from .providers import ProviderRegistry
 from .routes.adaptation import router as adaptation_router
@@ -90,10 +92,19 @@ settings = get_settings()
 UploadDep = Annotated[UploadFile, File()]
 
 
+CONFIG_WARNINGS: list[str] = []
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    configure_logging("api")
+    CONFIG_WARNINGS[:] = validate_settings(settings)
+    for warning in CONFIG_WARNINGS:
+        log_event("configuration_warning", logging.WARNING, detail=warning)
     with workspace_lease(settings.database_url, settings.storage_root):
         create_database()
+        configure_logging("api")  # Alembic's logging config replaces handlers during upgrade.
+        log_event("api_started")
         yield
 
 
@@ -114,9 +125,11 @@ app.add_middleware(
     allow_origins=[settings.web_origin, "http://localhost:3000"],
     allow_credentials=False,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Range"],
-    expose_headers=["Content-Range", "Accept-Ranges", "Content-Length"],
+    allow_headers=["Content-Type", "Range", HEADER],
+    expose_headers=["Content-Range", "Accept-Ranges", "Content-Length", HEADER],
 )
+# Outermost: every request, including CORS preflight and errors, carries a correlation ID.
+app.add_middleware(CorrelationMiddleware)
 
 
 app.include_router(voices_router)
@@ -229,6 +242,7 @@ async def health() -> dict:
         "ffmpeg": shutil.which("ffmpeg") is not None,
         "ffprobe": shutil.which("ffprobe") is not None,
         "local_only": settings.api_host in {"127.0.0.1", "localhost"},
+        "config_warnings": CONFIG_WARNINGS,
     }
 
 

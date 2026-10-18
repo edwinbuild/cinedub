@@ -59,6 +59,7 @@ def _upgrade_database() -> None:
                     "0008_speech_emotion_reviews",
                     "0009_timeline_structure",
                     "0010_speaker_reuse",
+                    "0011_artifact_lineage",
                 }:
                     label = {
                         "0001_initial_schema": "v01",
@@ -71,6 +72,7 @@ def _upgrade_database() -> None:
                         "0008_speech_emotion_reviews": "v02-emotion",
                         "0009_timeline_structure": "v02-structure",
                         "0010_speaker_reuse": "v02-reuse",
+                        "0011_artifact_lineage": "v03-lineage",
                     }[current[0]]
                     backup = path.with_name(
                         f"{path.name}.{label}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S%f')}.bak"

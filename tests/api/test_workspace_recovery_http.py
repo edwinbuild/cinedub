@@ -139,7 +139,8 @@ def test_live_api_recovery_preserves_media_edits_and_requires_explicit_local_res
             )
             try:
                 deadline = time.monotonic() + 15
-                while "CineDub worker started" not in log.read_text():
+                # Structured JSON worker log (v0.3): one event object per line.
+                while '"event": "worker_started"' not in log.read_text():
                     assert worker.poll() is None, "Restored worker exited unexpectedly"
                     assert time.monotonic() < deadline, "Restored worker did not start"
                     time.sleep(0.05)

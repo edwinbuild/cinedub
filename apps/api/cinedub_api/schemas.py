@@ -948,6 +948,7 @@ class JobRead(ORMModel):
     warnings_json: list[str]
     output_json: dict
     voice_profile_id: str | None
+    correlation_id: str | None = None
 
 
 class ArtifactRead(ORMModel):

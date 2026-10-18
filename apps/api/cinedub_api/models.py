@@ -16,6 +16,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
+from .observability import install_model_hooks
 
 
 def new_id() -> str:
@@ -293,6 +294,7 @@ class Job(Base, TimestampMixin):
     charged_estimate_inr: Mapped[float] = mapped_column(Float, default=0.0)
     retryable: Mapped[bool] = mapped_column(Boolean, default=False)
     warnings_json: Mapped[list] = mapped_column(JSON, default=list)
+    correlation_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 
     @property
     def voice_profile_id(self) -> str | None:
@@ -320,6 +322,7 @@ class Artifact(Base, TimestampMixin):
         ForeignKey("provider_runs.id"), nullable=True
     )
     lineage_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 
 
 class ArtifactInput(Base):
@@ -370,3 +373,8 @@ class ProviderRun(Base, TimestampMixin):
     estimated_cost_inr: Mapped[float | None] = mapped_column(Float, nullable=True)
     status: Mapped[str] = mapped_column(String(32))
     warning: Mapped[str | None] = mapped_column(Text, nullable=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+
+
+# Jobs, provider runs and artifacts inherit the active request/job correlation ID on insert.
+install_model_hooks(Job, ProviderRun, Artifact)
