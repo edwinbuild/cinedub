@@ -1,9 +1,10 @@
 """Listening acceptance is separate from technical render checks and durable packaging."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select, update
 
 from ..dependencies import SessionDep
+from ..idempotency import Idempotency, request_hash
 from ..jobs import ACTIVE, write_lock
 from ..mixes import mix_read, validate_mix_snapshot
 from ..models import Job, MixRender, MixReviewRecord
@@ -14,8 +15,11 @@ router = APIRouter(tags=["mixes"])
 
 
 @router.post("/mixes/{mix_id}/review", response_model=MixRenderRead)
-async def review_mix(mix_id: str, payload: MixReview, session: SessionDep):
+async def review_mix(mix_id: str, payload: MixReview, session: SessionDep, request: Request):
     write_lock(session)
+    once = Idempotency(session, request, request_hash(mix_id, payload.model_dump(mode="json")))
+    if replay := once.replay():
+        return replay
     mix = session.get(MixRender, mix_id)
     if not mix:
         raise HTTPException(404, "Mix not found")
@@ -69,6 +73,9 @@ async def review_mix(mix_id: str, payload: MixReview, session: SessionDep):
             )
         )
     sync_project_status(session, mix.project_id)
-    session.commit()
+    session.flush()
     session.refresh(mix)
-    return mix_read(session, mix)
+    result = mix_read(session, mix)
+    once.remember(200, result.model_dump(mode="json"))
+    session.commit()
+    return result

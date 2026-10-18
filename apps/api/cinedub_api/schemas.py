@@ -968,6 +968,66 @@ class PipelineRead(ORMModel):
     finished_at: datetime | None
 
 
+class JobEvent(BaseModel):
+    type: Literal["job"]
+    job: "JobRead"
+
+
+class PipelineEvent(BaseModel):
+    type: Literal["pipeline"]
+    pipeline: PipelineRead
+
+
+class ProjectStatusEvent(BaseModel):
+    type: Literal["project"]
+    status: ProjectStatus
+
+
+class TimelineChangedEvent(BaseModel):
+    """Lines, speakers or the active revision changed: refetch the project."""
+
+    type: Literal["timeline"]
+    revision_id: str | None
+    token: str
+
+
+class ArtifactsChangedEvent(BaseModel):
+    type: Literal["artifact"]
+    token: str
+
+
+class EventError(BaseModel):
+    type: Literal["error"]
+    detail: str
+
+
+ProjectEvent = Annotated[
+    Union[  # noqa: UP007
+        JobEvent,
+        PipelineEvent,
+        ProjectStatusEvent,
+        TimelineChangedEvent,
+        ArtifactsChangedEvent,
+        EventError,
+    ],
+    Field(discriminator="type"),
+]
+
+
+class ProjectDeletion(BaseModel):
+    project_id: str
+    deleted_rows: dict[str, int]
+
+
+class StorageUsage(BaseModel):
+    root_bytes: int
+    free_bytes: int
+    projects: dict[str, int]
+    orphaned_files: int
+    orphaned_bytes: int
+    stale_job_directories: int
+
+
 class JobEstimate(BaseModel):
     estimated_cost_inr: float
     spent_estimate_inr: float
@@ -1076,6 +1136,7 @@ class ProjectDetail(ProjectRead):
     voice_profiles: list["VoiceProfileRead"]
     stem_sets: list[StemSetRead]
     mixes: list[MixRenderRead]
+    latest_pipeline: PipelineRead | None = None
 
 
 class ConsentInput(BaseModel):
@@ -1184,3 +1245,6 @@ class HardwareRead(BaseModel):
     memory_available_gib: float | None
     storage_free_gib: float
     ffmpeg_ready: bool
+
+
+JobEvent.model_rebuild()

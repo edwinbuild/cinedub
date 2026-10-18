@@ -396,5 +396,22 @@ class Pipeline(Base, TimestampMixin):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class IdempotencyKey(Base):
+    """A replayable response for a retried POST carrying the same Idempotency-Key."""
+
+    __tablename__ = "idempotency_keys"
+    __table_args__ = (UniqueConstraint("key", "route"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    key: Mapped[str] = mapped_column(String(128))
+    route: Mapped[str] = mapped_column(String(255))
+    request_hash: Mapped[str] = mapped_column(String(64))
+    status_code: Mapped[int] = mapped_column(Integer)
+    response_json: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, index=True
+    )
+
+
 # Jobs, provider runs, artifacts and pipelines inherit the active correlation ID on insert.
 install_model_hooks(Job, ProviderRun, Artifact, Pipeline)

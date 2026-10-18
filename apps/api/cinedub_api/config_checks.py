@@ -17,6 +17,10 @@ ROUTED = (
 )
 
 
+# Populated at API startup; reported (without values) by /health.
+startup_warnings: list[str] = []
+
+
 class ConfigurationError(RuntimeError):
     """The service must not start with this configuration."""
 

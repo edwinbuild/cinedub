@@ -14,6 +14,8 @@ export type JobErrorCode = "input_invalid" | "output_invalid" | "stale_input" | 
 
 export type JobRequest = IngestJobRequest | DemoPipelineJobRequest | TranscribeJobRequest | SeparateJobRequest | TranslateJobRequest | SynthesizeJobRequest | ExportJobRequest | RenderPreviewJobRequest | RenderMixJobRequest | ReviewTranslationJobRequest | AdaptDialogueJobRequest | PrepareReferenceJobRequest | RegisterVoiceJobRequest | DeleteVoiceJobRequest | AlignJobRequest | AnalyzeTakesJobRequest | AnalyzeEmotionJobRequest;
 
+export type ProjectEvent = JobEvent | PipelineEvent | ProjectStatusEvent | TimelineChangedEvent | ArtifactsChangedEvent | EventError;
+
 export interface ProjectSummary {
   id: string;
   name: string;
@@ -197,6 +199,20 @@ export interface Pipeline {
   finished_at: string | null;
 }
 
+export interface ProjectDeletion {
+  project_id: string;
+  deleted_rows: Record<string, number>;
+}
+
+export interface StorageUsage {
+  root_bytes: number;
+  free_bytes: number;
+  projects: Record<string, number>;
+  orphaned_files: number;
+  orphaned_bytes: number;
+  stale_job_directories: number;
+}
+
 export interface CharacterDirection {
   speaker_id: string;
   intent: string;
@@ -321,6 +337,7 @@ export interface ProjectDetail {
   voice_profiles: Array<VoiceProfile>;
   stem_sets: Array<StemSet>;
   mixes: Array<MixRender>;
+  latest_pipeline: Pipeline | null;
 }
 
 export interface JobEstimate {
@@ -1125,4 +1142,35 @@ export interface TranslateJobRequest {
   segment_ids?: Array<string> | null;
   regenerate?: boolean;
   stage: "translate";
+}
+
+export interface ArtifactsChangedEvent {
+  type: "artifact";
+  token: string;
+}
+
+export interface EventError {
+  type: "error";
+  detail: string;
+}
+
+export interface JobEvent {
+  type: "job";
+  job: Job;
+}
+
+export interface PipelineEvent {
+  type: "pipeline";
+  pipeline: Pipeline;
+}
+
+export interface ProjectStatusEvent {
+  type: "project";
+  status: "draft" | "processing" | "review" | "ready" | "failed";
+}
+
+export interface TimelineChangedEvent {
+  type: "timeline";
+  revision_id: string | null;
+  token: string;
 }

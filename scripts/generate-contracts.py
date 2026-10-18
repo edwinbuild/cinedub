@@ -21,6 +21,8 @@ NAMES = {
     "PipelineContinue": "PipelineContinue",
     "PipelinePlan": "PipelinePlan",
     "PipelineRead": "Pipeline",
+    "ProjectDeletion": "ProjectDeletion",
+    "StorageUsage": "StorageUsage",
     "ProjectDetail": "ProjectDetail",
     "RevisionRead": "TimelineRevision",
     "JobEstimate": "JobEstimate",
@@ -75,7 +77,7 @@ NAMES = {
     "SpeechEmotionReview": "SpeechEmotionReview",
 }
 # Discriminated unions are emitted as TypeScript union types of their member interfaces.
-UNIONS = {"JobRequest": schemas.JobCreate}
+UNIONS = {"JobRequest": schemas.JobCreate, "ProjectEvent": schemas.ProjectEvent}
 REQUESTS = {
     "PipelineCreate",
     "PipelineContinue",

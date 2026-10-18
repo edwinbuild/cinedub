@@ -1,9 +1,10 @@
 """Pipeline API: create (or preview), inspect, continue past a reviewed gate, cancel."""
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy import select
 
 from ..dependencies import SessionDep, require_project
+from ..idempotency import Idempotency, request_hash
 from ..jobs import ACTIVE, write_lock
 from ..models import Job, MediaAsset, Pipeline
 from ..pipeline import ACTIVE_PIPELINE, GATES, advance, continue_pipeline, plan_steps
@@ -25,8 +26,13 @@ def require_pipeline(session, pipeline_id: str) -> Pipeline:
     response_model=PipelineRead,
     status_code=status.HTTP_201_CREATED,
 )
-async def create_pipeline(project_id: str, payload: PipelineCreate, session: SessionDep):
+async def create_pipeline(
+    project_id: str, payload: PipelineCreate, session: SessionDep, request: Request
+):
     write_lock(session)
+    once = Idempotency(session, request, request_hash(project_id, payload.model_dump(mode="json")))
+    if replay := once.replay():
+        return replay
     project = require_project(session, project_id)
     source = session.get(MediaAsset, payload.source_asset_id)
     if not source or source.project_id != project.id:
@@ -52,6 +58,8 @@ async def create_pipeline(project_id: str, payload: PipelineCreate, session: Ses
     session.flush()
     advance(session, pipeline)
     sync_project_status(session, project)
+    session.flush()
+    once.remember(201, PipelineRead.model_validate(pipeline).model_dump(mode="json"))
     session.commit()
     session.refresh(pipeline)
     return pipeline
