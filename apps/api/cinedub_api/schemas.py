@@ -568,7 +568,9 @@ class SpeechEmotionInference(BaseModel):
     segment_id: str
     start_ms: int = Field(ge=0)
     end_ms: int = Field(gt=0)
-    status: Literal["needs_review", "ambiguous", "no_speech", "too_short", "too_long", "overlap"]
+    status: Literal[
+        "needs_review", "ambiguous", "no_speech", "too_short", "too_long", "overlap", "not_analyzed"
+    ]
     suggested_label: SpeechEmotionLabel | None
     scores: list[SpeechEmotionScore]
     score_margin: float | None = Field(ge=0, le=1, allow_inf_nan=False)

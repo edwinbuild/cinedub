@@ -376,6 +376,13 @@ def _finish_cancelled(session: Session, job: Job, message: str) -> None:
     session.get(Project, job.project_id).status = "review"
 
 
+def label_demo_artifacts(session: Session, job: Job) -> None:
+    """Every artifact from a DEMO provider stays visibly labelled, whatever its stage."""
+    for artifact in session.scalars(select(Artifact).where(Artifact.job_id == job.id)).all():
+        if artifact.metadata_json.get("demo") is not True:
+            artifact.metadata_json = {**artifact.metadata_json, "demo": True}
+
+
 def claim_job(session: Session) -> Job | None:
     job = session.scalar(
         select(Job).where(Job.status == "queued").order_by(Job.created_at).limit(1)
@@ -426,6 +433,8 @@ def _process_once(session: Session) -> bool:
         session.refresh(job)
         if job.cancel_requested:
             raise InterruptedError("Job cancelled")
+        if job.provider == "fake":
+            label_demo_artifacts(session, job)
         job.output_json = output
         job.progress = 1.0
         job.status = "completed"

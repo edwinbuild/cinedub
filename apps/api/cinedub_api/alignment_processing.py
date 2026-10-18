@@ -23,8 +23,10 @@ def process_align(session, job):
     settings, inputs = get_settings(), job.input_json
     validate_alignment_source(session, inputs, verify_files=True)
     validate_alignment_lines(session, job.project_id, inputs["revision_id"], inputs["segments"])
-    model_dir = Path(inputs["model_dir"])
-    if read_manifest(model_dir) != inputs["model_manifest"]:
+    if (
+        job.provider != "fake"
+        and read_manifest(Path(inputs["model_dir"])) != inputs["model_manifest"]
+    ):
         raise ValueError("Alignment model changed since scheduling; submit a new request")
     directory = settings.storage_root / job.project_id / "alignment" / job.id
     directory.mkdir(parents=True, exist_ok=True)
@@ -168,7 +170,7 @@ def process_align(session, job):
             job_id=job.id,
             capability="performance_analyzer",
             provider=job.provider,
-            model="acoustic-dsp-v1",
+            model=inputs.get("performance_model", "acoustic-dsp-v1"),
             parameters_json={
                 "scope": "source line energy/pitch/pauses, not emotion",
                 "alignment_model": report.model,

@@ -2,6 +2,7 @@
 
 import type { JobRequest, ProjectDetail, SpeechEmotionLine, SpeechEmotionReport, SpeechEmotionReview } from "@cinedub/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { DemoBadge } from "@/components/demo-badge";
 import { API_URL, api } from "@/lib/api";
 
 type Props = {
@@ -107,7 +108,7 @@ export function EmotionPanel({ project, sourceId, available, disabled, unsaved, 
       <button className="smallButton" disabled={busy} onClick={() => inspect(artifact.id)}>Inspect emotion report {reports.length - index}</button>
       <a className="smallButton" href={`${API_URL}${artifact.download_url}`}>Download immutable emotion evidence</a></div>)}
     {error && <p className="inlineError" role="alert">{error}</p>}
-    {report && <section aria-label="Speech-emotion results"><p>{report.model}</p>
+    {report && <section aria-label="Speech-emotion results"><p>{report.provider === "fake" && <DemoBadge label="DEMO" title="No speech-emotion analysis was performed" />}{report.model}</p>
       <p>Native peak memory: {String(report.metadata.peak_rss_mib)} MiB · no API charge</p>
       <p>Saved analysis input: {report.stem_set_id ? "reviewed dialogue stem" : "original source audio"}</p>
       {report.stale_reason && <p className="lineWarning">{report.stale_reason}</p>}

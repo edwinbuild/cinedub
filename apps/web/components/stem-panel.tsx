@@ -2,6 +2,7 @@
 
 import type { ProjectDetail, StemSet } from "@cinedub/contracts";
 import { useState } from "react";
+import { DemoBadge } from "@/components/demo-badge";
 import { API_URL, api } from "@/lib/api";
 
 function StemReviewCard({ stems, project, disabled, onSaved }: {
@@ -26,7 +27,7 @@ function StemReviewCard({ stems, project, disabled, onSaved }: {
   const previews = project.artifacts.filter((artifact) => artifact.kind === "stem_preview"
     && artifact.metadata_json.stem_set_id === stems.id);
   return <article className="stemCard" aria-label={`Stem set ${stems.id}`}>
-    <header><strong>{active ? "Approved · active source stems" : stems.status.replaceAll("_", " ")}</strong>
+    <header><strong>{stems.provider === "fake" && <DemoBadge label="DEMO STEMS" title="No separation was performed: dialogue is the original mix and music/effects are synthetic tones" />}{active ? "Approved · active source stems" : stems.status.replaceAll("_", " ")}</strong>
       <small>{new Date(stems.created_at).toLocaleString()} · review v{stems.version}</small></header>
     <p className="lineWarning">Estimated dialogue, music and effects. Listen for speech leaking into background, missing effects and stereo changes. These players audition independently of the scene timeline.</p>
     <div className="stemPlayers">{previews.map((artifact) => <div key={artifact.id}>

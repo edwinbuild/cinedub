@@ -20,6 +20,7 @@ import { PerformancePanel } from "@/components/performance-panel";
 import { EmotionPanel } from "@/components/emotion-panel";
 import { DialogueBriefPanel } from "@/components/dialogue-brief-panel";
 import { DialogueAdaptationPanel } from "@/components/dialogue-adaptation-panel";
+import { DemoBadge } from "@/components/demo-badge";
 import { API_URL, api } from "@/lib/api";
 
 export default function ProjectPage() {
@@ -260,7 +261,7 @@ export default function ProjectPage() {
         <div className="railSection"><p className="eyebrow">Process scene</p>
           <button className="pipelineButton" aria-label="Separate dialogue and background" disabled={locked || !sourceId || !separator?.available}
             onClick={() => run({ stage: "separate", source_asset_id: sourceId!, force_new: project.stem_sets.some((stems) => stems.source_asset_id === sourceId) })}>
-            <span><strong>Separate dialogue & background</strong><small>Local CPU · three stems · review required</small></span></button>
+            <span><strong>Separate dialogue & background</strong><small>{separator?.selected_provider === "fake" ? "DEMO fixture stems · no separation" : "Local CPU · three stems · review required"}</small></span></button>
           <label className="fieldLabel">Transcription audio<select aria-label="Transcription audio" value={transcriptionInput} disabled={locked}
             onChange={(event) => setPreferDialogue(event.target.value === "dialogue_stem")}>
             <option value="original">Original source audio</option><option value="dialogue_stem" disabled={!activeStems}>Reviewed dialogue stem</option></select></label>
@@ -289,7 +290,7 @@ export default function ProjectPage() {
         </div>
         <div className="railSection"><p className="eyebrow">Providers</p>{capabilities.map((item) =>
           <div className="capability" key={item.capability}><span className={item.available ? "ready" : "missing"} />
-            <div><strong>{item.capability.replaceAll("_", " ")}</strong><small>{item.selected_provider} · {item.verified ? "Verified job" : item.available ? "Adapter available" : "Unavailable"}</small>
+            <div><strong>{item.selected_provider === "fake" && <DemoBadge />}{item.capability.replaceAll("_", " ")}</strong><small>{item.selected_provider} · {item.verified ? "Verified job" : item.available ? "Adapter available" : "Unavailable"}</small>
               {item.reason && <small>{item.reason}</small>}</div></div>)}</div>
         <div className="railSection"><p className="eyebrow">Development demo</p><button className="pipelineButton" disabled={locked || !!project.revisions.length}
           onClick={() => run({ stage: "demo_pipeline", provider: "fake" })}><span><strong>Build demo timeline</strong><small>Four fixture lines; no AI calls</small></span></button></div>

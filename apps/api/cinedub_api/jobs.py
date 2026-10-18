@@ -32,6 +32,9 @@ from .models import (
     VoiceProfile,
 )
 from .providers import ProviderRegistry
+from .providers.fake_analysis import DIALOGUE_MANIFEST, EMOTION_MANIFEST
+from .providers.fake_analysis import EMOTION_PROFILE as DEMO_EMOTION_PROFILE
+from .providers.fake_media import DEMO_MODEL
 from .providers.local_alignment import MODEL_NAME as ALIGNMENT_MODEL
 from .providers.local_alignment import availability as alignment_availability
 from .providers.local_alignment import read_manifest as alignment_manifest
@@ -97,6 +100,8 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
         "analyze_emotion": settings.emotion_analyzer,
     }
     provider = payload.provider or defaults[payload.stage]
+    if provider == "fake" and not settings.demo_providers_allowed():
+        raise HTTPException(422, "DEMO providers are disabled in this environment")
     if payload.stage in {"transcribe", "translate", "synthesize", "register_voice", "delete_voice"}:
         name = {
             "transcribe": "transcriber",
@@ -147,17 +152,27 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
     )
     cost = 0.0
     if payload.stage == "analyze_emotion":
-        if provider != "local":
+        if provider not in {"local", "fake"}:
             raise HTTPException(422, "This speech-emotion adapter is not implemented")
-        ready, reason = emotion_availability(settings.local_emotion_model_dir)
-        if not ready:
-            raise HTTPException(422, reason)
+        if provider == "local":
+            ready, reason = emotion_availability(settings.local_emotion_model_dir)
+            if not ready:
+                raise HTTPException(422, reason)
         try:
             inputs.update(freeze_emotion(session, project, payload))
         except (OSError, ValueError) as exc:
             raise HTTPException(422, str(exc)) from exc
         inputs.update(
             {
+                "model": DEMO_MODEL,
+                "profile": DEMO_EMOTION_PROFILE,
+                "model_manifest": EMOTION_MANIFEST,
+                "model_dir": None,
+                "threads": 1,
+                "timeout_seconds": 60,
+            }
+            if provider == "fake"
+            else {
                 "model": EMOTION_MODEL,
                 "profile": EMOTION_PROFILE,
                 "model_manifest": emotion_manifest(settings.local_emotion_model_dir),
@@ -172,11 +187,12 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
         if payload.stage == "adapt_dialogue":
-            if provider != "local":
+            if provider not in {"local", "fake"}:
                 raise HTTPException(422, "This dialogue adapter is not implemented")
-            ready, reason = dialogue_availability(settings.local_dialogue_model_dir)
-            if not ready:
-                raise HTTPException(422, reason)
+            if provider == "local":
+                ready, reason = dialogue_availability(settings.local_dialogue_model_dir)
+                if not ready:
+                    raise HTTPException(422, reason)
             if project.source_language != "en-IN" or project.target_language != "ml-IN":
                 raise HTTPException(422, "This experimental profile supports English to Malayalam")
             try:
@@ -188,18 +204,32 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
                 inputs["voices"] = {key: value["voice"] for key, value in feedback.items()}
             inputs.update(
                 {
+                    "model": DEMO_MODEL,
+                    "model_manifest": DIALOGUE_MANIFEST,
+                    "model_dir": None,
+                    "threads": 1,
+                    "timeout_seconds": 60,
+                }
+                if provider == "fake"
+                else {
                     "model": DIALOGUE_MODEL,
                     "model_manifest": dialogue_manifest(settings.local_dialogue_model_dir),
                     "model_dir": str(settings.local_dialogue_model_dir.resolve()),
                     "threads": settings.local_dialogue_threads,
                     "timeout_seconds": settings.local_dialogue_timeout_seconds,
+                }
+            )
+            inputs.update(
+                {
                     "adaptation_provider": provider,
                     "prompt_version": PROMPT_VERSION,
                     "generation_parameters": GENERATION,
                 }
             )
     if payload.stage == "analyze_takes":
-        if provider != "local" or not take_analyzer_available():
+        if provider not in {"local", "fake"} or (
+            provider == "local" and not take_analyzer_available()
+        ):
             raise HTTPException(422, "Install the optional local acoustic analysis adapter")
         try:
             inputs.update(freeze_take_analysis(session, project, payload))
@@ -207,12 +237,18 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
             raise HTTPException(422, str(exc)) from exc
         inputs.update(
             {
-                "model": "acoustic-dsp-v1",
-                "threads": settings.local_aligner_threads,
+                "model": DEMO_MODEL if provider == "fake" else "acoustic-dsp-v1",
+                "threads": 1 if provider == "fake" else settings.local_aligner_threads,
                 "timeout_seconds": settings.local_take_analyzer_timeout_seconds,
             }
         )
-        if payload.include_target_alignment:
+        if payload.include_target_alignment and provider == "fake":
+            if settings.target_timing_aligner != "fake":
+                raise HTTPException(
+                    422, "DEMO take analysis requires the DEMO target-language aligner"
+                )
+            inputs["target_alignment_model"] = DEMO_MODEL
+        elif payload.include_target_alignment:
             if settings.target_timing_aligner != "local" or project.target_language != "ml-IN":
                 raise HTTPException(422, "This target-language alignment adapter is not installed")
             ready, reason = target_aligner_available(settings.local_target_aligner_model_dir)
@@ -228,15 +264,18 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
                 }
             )
     if payload.stage == "align":
-        if provider != "local":
+        if provider not in {"local", "fake"}:
             raise HTTPException(422, "This alignment adapter is not installed")
-        if settings.performance_analyzer != "local":
+        if settings.performance_analyzer != provider:
             raise HTTPException(
-                422, "This combined source-analysis job requires the local acoustic adapter"
+                422,
+                "This combined source-analysis job requires the matching "
+                f"{provider} acoustic adapter",
             )
-        ready, reason = alignment_availability(settings.local_aligner_model_dir)
-        if not ready:
-            raise HTTPException(422, reason)
+        if provider == "local":
+            ready, reason = alignment_availability(settings.local_aligner_model_dir)
+            if not ready:
+                raise HTTPException(422, reason)
         if project.source_language != "en-IN":
             raise HTTPException(422, "The installed aligner supports English source audio only")
         revision_id = payload.revision_id or project.active_revision_id
@@ -260,11 +299,23 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
             {
                 "project_id": project.id,
                 "performance_provider": settings.performance_analyzer,
-                "performance_model": "acoustic-dsp-v1",
-                "model": ALIGNMENT_MODEL,
-                "model_dir": str(settings.local_aligner_model_dir.resolve()),
-                "model_manifest": alignment_manifest(settings.local_aligner_model_dir),
-                "threads": settings.local_aligner_threads,
+                **(
+                    {
+                        "performance_model": DEMO_MODEL,
+                        "model": DEMO_MODEL,
+                        "model_dir": None,
+                        "model_manifest": {"demo": True},
+                        "threads": 1,
+                    }
+                    if provider == "fake"
+                    else {
+                        "performance_model": "acoustic-dsp-v1",
+                        "model": ALIGNMENT_MODEL,
+                        "model_dir": str(settings.local_aligner_model_dir.resolve()),
+                        "model_manifest": alignment_manifest(settings.local_aligner_model_dir),
+                        "threads": settings.local_aligner_threads,
+                    }
+                ),
                 "timeout_seconds": settings.local_aligner_timeout_seconds,
                 "segments": [
                     {
@@ -280,15 +331,24 @@ def prepare_job(session: Session, project: Project, payload: JobCreate) -> tuple
             }
         )
     if payload.stage == "separate":
-        if provider != "local":
+        if provider not in {"local", "fake"}:
             raise HTTPException(422, "This separator adapter is not installed")
-        ready, reason = separator_availability(settings.local_separator_model_dir)
-        if not ready:
-            raise HTTPException(422, reason)
+        if provider == "local":
+            ready, reason = separator_availability(settings.local_separator_model_dir)
+            if not ready:
+                raise HTTPException(422, reason)
         if shutil.disk_usage(settings.storage_root).free < 2 * 1024**3:
             raise HTTPException(422, "Keep at least 2 GiB free for local separation outputs")
         inputs.update(
             {
+                "model": DEMO_MODEL,
+                "model_dir": None,
+                "model_manifest": {"demo": True},
+                "threads": 1,
+                "timeout_seconds": 60,
+            }
+            if provider == "fake"
+            else {
                 "model": SEPARATOR_MODEL,
                 "model_dir": str(settings.local_separator_model_dir.resolve()),
                 "model_manifest": separator_manifest(settings.local_separator_model_dir),

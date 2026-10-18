@@ -2,6 +2,13 @@ from dataclasses import dataclass
 
 from ..config import Settings
 from .fake import FakeProvider
+from .fake_analysis import (
+    FakeAligner,
+    FakeDialogueAdapter,
+    FakeEmotionAnalyzer,
+    FakeTakeAnalyzer,
+)
+from .fake_media import FakeSeparator, FakeTranscriber
 from .local_alignment import LocalAligner
 from .local_alignment import availability as alignment_availability
 from .local_asr import LocalTranscriber, availability
@@ -17,6 +24,8 @@ from .local_take_analysis import availability as take_analysis_availability
 from .local_target_alignment import availability as target_alignment_availability
 from .sarvam import SarvamProvider
 from .transcription import SarvamTranscriber
+
+DEMO_REASON = "DEMO fixture — deterministic, not a quality result"
 
 
 @dataclass(frozen=True)
@@ -48,6 +57,8 @@ class ProviderRegistry:
         raise ValueError(f"Translator provider '{selected}' is not installed")
 
     def dialogue_adapter(self, name: str | None = None, options: dict | None = None):
+        if (name or self.settings.dialogue_adapter) == "fake":
+            return FakeDialogueAdapter()
         if (name or self.settings.dialogue_adapter) != "local":
             raise ValueError("This dialogue adaptation adapter is not installed")
         values = options or {}
@@ -66,6 +77,8 @@ class ProviderRegistry:
         raise ValueError(f"Voice provider '{selected}' is not installed")
 
     def emotion_analyzer(self, name: str | None = None, options: dict | None = None):
+        if (name or self.settings.emotion_analyzer) == "fake":
+            return FakeEmotionAnalyzer()
         if (name or self.settings.emotion_analyzer) != "local":
             raise ValueError("This speech-emotion adapter is not installed")
         values = options or {}
@@ -79,6 +92,8 @@ class ProviderRegistry:
         return self.voice_synthesizer(name)
 
     def stem_separator(self, name: str | None = None, options: dict | None = None):
+        if (name or self.settings.stem_separator) == "fake":
+            return FakeSeparator()
         if (name or self.settings.stem_separator) != "local":
             raise ValueError("This stem separator adapter is not installed")
         values = options or {}
@@ -90,6 +105,8 @@ class ProviderRegistry:
 
     def transcriber(self, name: str | None = None, options: dict | None = None):
         selected = name or self.settings.transcriber
+        if selected == "fake":
+            return FakeTranscriber()
         if selected == "local":
             from pathlib import Path
 
@@ -107,6 +124,8 @@ class ProviderRegistry:
         raise ValueError(f"Batch transcription provider '{selected}' is unavailable")
 
     def aligner(self, name: str | None = None, options: dict | None = None):
+        if (name or self.settings.timing_aligner) == "fake":
+            return FakeAligner()
         if (name or self.settings.timing_aligner) != "local":
             raise ValueError("This alignment adapter is not installed")
         values = options or {}
@@ -122,6 +141,8 @@ class ProviderRegistry:
         return LocalPerformanceAnalyzer()
 
     def take_analyzer(self, name: str | None = None, options: dict | None = None):
+        if (name or self.settings.performance_analyzer) == "fake":
+            return FakeTakeAnalyzer()
         if (name or self.settings.performance_analyzer) != "local":
             raise ValueError("This source/take performance adapter is not installed")
         values = options or {}
@@ -167,12 +188,26 @@ class ProviderRegistry:
             ("translation_reviewer", "local"),
             ("dialogue_adapter", "local"),
             ("emotion_analyzer", "local"),
+            *(
+                (capability, "fake")
+                for capability in (
+                    "stem_separator",
+                    "timing_aligner",
+                    "target_timing_aligner",
+                    "performance_analyzer",
+                    "dialogue_adapter",
+                    "emotion_analyzer",
+                )
+            ),
         }
         result = []
         for capability, provider in values.items():
             available = (capability, provider) in implemented
             reason = None
-            if provider == "sarvam" and not sarvam_ready:
+            if provider == "fake" and not self.settings.demo_providers_allowed():
+                available = False
+                reason = "DEMO providers are disabled in this environment"
+            elif provider == "sarvam" and not sarvam_ready:
                 available = False
                 reason = "SARVAM_API_KEY is not configured"
             elif not available:
@@ -237,6 +272,8 @@ class ProviderRegistry:
                     "Experimental English audio-only hints, four classes; "
                     "human review required, scores are not calibrated confidence"
                 )
+            if provider == "fake" and available and capability not in {"voice_cloner"}:
+                reason = DEMO_REASON
             result.append(
                 Capability(
                     capability, provider, available, reason, configured, is_implemented, False

@@ -20,6 +20,15 @@ export CINEDUB_STORAGE_ROOT="$test_state/storage"
 export CINEDUB_TRANSCRIBER=${CINEDUB_E2E_TRANSCRIBER:-fake}
 export CINEDUB_DIARIZER=fake CINEDUB_TRANSLATOR=fake
 export CINEDUB_VOICE_SYNTHESIZER=fake
+# Every model-backed stage defaults to its labelled DEMO provider; opt-in specs select local models.
+local_or_fake() { [[ "${1:-}" == "1" ]] && echo local || echo fake; }
+acoustic=$(local_or_fake "$( [[ "${CINEDUB_E2E_ALIGNMENT:-}${CINEDUB_E2E_PERFORMANCE:-}" == *1* ]] && echo 1)")
+export CINEDUB_STEM_SEPARATOR=$(local_or_fake "${CINEDUB_E2E_SEPARATOR:-}")
+export CINEDUB_TIMING_ALIGNER=$(local_or_fake "${CINEDUB_E2E_ALIGNMENT:-}")
+export CINEDUB_PERFORMANCE_ANALYZER=$acoustic
+export CINEDUB_TARGET_TIMING_ALIGNER=$(local_or_fake "${CINEDUB_E2E_PERFORMANCE:-}")
+export CINEDUB_DIALOGUE_ADAPTER=$(local_or_fake "${CINEDUB_E2E_ADAPTATION:-}")
+export CINEDUB_EMOTION_ANALYZER=$(local_or_fake "${CINEDUB_E2E_EMOTION:-}")
 export SARVAM_API_KEY="" CINEDUB_SARVAM_API_KEY=""
 export CINEDUB_WEB_ORIGIN=http://127.0.0.1:3011
 export NEXT_PUBLIC_CINEDUB_API_URL=http://127.0.0.1:8011

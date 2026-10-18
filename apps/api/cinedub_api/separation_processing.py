@@ -27,8 +27,9 @@ def process_separate(session, job):
     expected_hash = job.input_json.get("source_sha256") or job.checkpoint_json.get("source_sha256")
     if expected_hash and source_hash != expected_hash:
         raise ValueError("Source media changed since scheduling")
-    model_dir = Path(job.input_json["model_dir"])
-    if read_manifest(model_dir) != job.input_json["model_manifest"]:
+    if job.provider != "fake" and (
+        read_manifest(Path(job.input_json["model_dir"])) != job.input_json["model_manifest"]
+    ):
         raise ValueError("Separator model changed since scheduling; submit a new request")
     directory = settings.storage_root / job.project_id / "separation" / job.id
     directory.mkdir(parents=True, exist_ok=True)

@@ -23,16 +23,18 @@ class Settings(BaseSettings):
     max_upload_bytes: int = 1_073_741_824
     max_duration_seconds: int = 120
 
-    transcriber: str = "fake"
-    diarizer: str = "fake"
-    translator: str = "fake"
-    dialogue_adapter: str = "local"
-    emotion_analyzer: str = "local"
-    voice_synthesizer: str = "fake"
-    performance_analyzer: str = "local"
-    stem_separator: str = "local"
-    timing_aligner: str = "local"
-    target_timing_aligner: str = "local"
+    transcriber: Literal["fake", "local", "sarvam"] = "fake"
+    diarizer: Literal["fake", "sarvam"] = "fake"
+    translator: Literal["fake", "sarvam"] = "fake"
+    dialogue_adapter: Literal["fake", "local"] = "local"
+    emotion_analyzer: Literal["fake", "local"] = "local"
+    voice_synthesizer: Literal["fake", "sarvam"] = "fake"
+    performance_analyzer: Literal["fake", "local"] = "local"
+    stem_separator: Literal["fake", "local"] = "local"
+    timing_aligner: Literal["fake", "local"] = "local"
+    target_timing_aligner: Literal["fake", "local"] = "local"
+    # Deterministic DEMO providers. Unset means allowed only outside production.
+    allow_demo_providers: bool | None = None
     transcription_model: Literal["saaras:v4", "saaras:v3"] = "saaras:v4"
     translation_model: Literal["mayura:v1", "sarvam-translate:v1"] = "mayura:v1"
     translation_style: Literal[
@@ -72,6 +74,11 @@ class Settings(BaseSettings):
         default="https://api.sarvam.ai",
         validation_alias=AliasChoices("SARVAM_BASE_URL", "CINEDUB_SARVAM_BASE_URL"),
     )
+
+    def demo_providers_allowed(self) -> bool:
+        if self.allow_demo_providers is not None:
+            return self.allow_demo_providers
+        return self.env != "production"
 
     def ensure_directories(self) -> None:
         self.storage_root.mkdir(parents=True, exist_ok=True)

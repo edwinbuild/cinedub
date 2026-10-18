@@ -220,6 +220,16 @@ The editor shows an INR estimate before paid operations and defaults to a ₹50 
 
 Rates are configurable snapshots stored with each job. Defaults checked on 2026-10-14: transcription with diarization ₹45/hour, translation ₹20/10,000 characters, and Bulbul v3 synthesis ₹30/10,000 characters. Estimates are not the provider invoice and exclude applicable taxes. [Sarvam pricing](https://docs.sarvam.ai/api/getting-started/pricing)
 
+Every stage has a deterministic DEMO provider, so the complete workflow (separation → transcription → translation → adaptation → voices → takes → alignment/take/emotion analysis → mix → accepted export) runs without models, keys or network:
+
+```bash
+CINEDUB_TRANSCRIBER=fake CINEDUB_TRANSLATOR=fake CINEDUB_VOICE_SYNTHESIZER=fake \
+CINEDUB_STEM_SEPARATOR=fake CINEDUB_TIMING_ALIGNER=fake CINEDUB_TARGET_TIMING_ALIGNER=fake \
+CINEDUB_PERFORMANCE_ANALYZER=fake CINEDUB_DIALOGUE_ADAPTER=fake CINEDUB_EMOTION_ANALYZER=fake npm run dev
+```
+
+DEMO stems copy the original mix as "dialogue" and use synthetic tones for music/effects. DEMO alignment spreads placeholder word slots evenly. DEMO adaptation trims words by rule. DEMO emotion reports every window as `not_analyzed` with no scores. Every DEMO job, artifact and provider run is labelled `fake`/`demo`, and the UI shows a **DEMO** badge. These outputs never count as quality evidence. DEMO providers are refused when `CINEDUB_ENV=production` unless `CINEDUB_ALLOW_DEMO_PROVIDERS=true`.
+
 Set `CINEDUB_TRANSCRIBER=fake`, `CINEDUB_TRANSLATOR=fake` and `CINEDUB_VOICE_SYNTHESIZER=fake` for entirely no-key demo development. Without any `.env`, these are also the code defaults. Sarvam diarization runs with its batch transcriber. The UI and exports label fixture-derived results as demo. Fake transcription never recognizes the supplied audio. **Build demo timeline** creates the original four-line fixture; fake synthesis produces test tones, not speech.
 
 The application owns timeline and job contracts. Frontend contracts are generated from the API's Pydantic schemas; run `npm run contracts:generate` after schema changes. `npm test` checks that generated contracts match. Provider-specific request/response details stay in adapters. A configured key means an adapter is available, not that its live output or quality has been verified.

@@ -2,6 +2,7 @@
 
 import type { AlignmentReport, JobRequest, ProjectDetail } from "@cinedub/contracts";
 import { useState } from "react";
+import { DemoBadge } from "@/components/demo-badge";
 import { API_URL, api } from "@/lib/api";
 
 type Props = {
@@ -71,6 +72,7 @@ export function AlignmentPanel({ project, disabled, unsaved, available, sourceId
       <a className="smallButton" href={`${API_URL}${item.download_url}`}>Download evidence JSON</a>
     </div>)}
     {report && report.revision_id === project.active_revision_id && <section aria-label="Alignment results">
+      {report.provider === "fake" && <p><DemoBadge /> Placeholder word slots spread evenly across each line. No forced alignment or acoustic measurement ran.</p>}
       <p>Saved analysis input: {report.stem_set_id ? "reviewed dialogue stem" : "original source audio"}.</p>
       {report.stale_reason && <p className="lineWarning">{report.stale_reason}</p>}
       <p className="lineWarning">Acoustic scores are not calibrated confidence. Listen before accepting any suggestion.</p>

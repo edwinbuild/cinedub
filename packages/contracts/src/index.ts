@@ -833,7 +833,7 @@ export interface SpeechEmotionLine {
   segment_id: string;
   start_ms: number;
   end_ms: number;
-  status: "needs_review" | "ambiguous" | "no_speech" | "too_short" | "too_long" | "overlap";
+  status: "needs_review" | "ambiguous" | "no_speech" | "too_short" | "too_long" | "overlap" | "not_analyzed";
   suggested_label: "neutral" | "happy" | "angry" | "sad" | null;
   scores: Array<SpeechEmotionScore>;
   score_margin: number | null;

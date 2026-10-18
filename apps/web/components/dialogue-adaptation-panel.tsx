@@ -2,6 +2,7 @@
 
 import type { DialogueAdaptationLine, DialogueAdaptationReport, JobRequest, ProjectDetail, Segment } from "@cinedub/contracts";
 import { useState } from "react";
+import { DemoBadge } from "@/components/demo-badge";
 import { API_URL, api } from "@/lib/api";
 
 type Props = {
@@ -110,7 +111,7 @@ export function DialogueAdaptationPanel({ project, available, disabled, unsaved,
       <button className="smallButton" disabled={busy} onClick={() => inspect(artifact.id)}>Inspect alternatives {reports.length - index}</button>
       <a className="smallButton" href={`${API_URL}${artifact.download_url}`}>Download dialogue alternatives JSON</a></div>)}
     {error && <p className="inlineError" role="alert">{error}</p>}
-    {report && <section aria-label="Model dialogue results"><p>{report.model} · {report.prompt_version} · brief version {report.brief.version}</p>
+    {report && <section aria-label="Model dialogue results"><p>{report.provider === "fake" && <DemoBadge title="Rule-based word trim; no language model ran" />}{report.model} · {report.prompt_version} · brief version {report.brief.version}</p>
       <p>Native peak memory: {String(report.runtime.peak_rss_mib)} MiB · {String(report.runtime.threads)} CPU threads · no API charge</p>
       {stale && <p className="lineWarning">{stale}</p>}
       {report.lines.map((line) => {

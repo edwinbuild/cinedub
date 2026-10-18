@@ -58,27 +58,9 @@ def process_transcribe(session: Session, job: Job) -> dict:
         ):
             raise ValueError("Selected dialogue stems changed; submit a new transcription request")
     if job.provider == "fake":
-        model = "deterministic-fixture-v2"
-        end = source.duration_ms / 1000
-        payload = {
-            "transcript": "Demonstration transcript.",
-            "diarized_transcript": {
-                "entries": [
-                    {
-                        "transcript": "Welcome to CineDub.",
-                        "start_time_seconds": 0,
-                        "end_time_seconds": end / 2,
-                        "speaker_id": "0",
-                    },
-                    {
-                        "transcript": "We can review every line before export.",
-                        "start_time_seconds": end / 2,
-                        "end_time_seconds": end,
-                        "speaker_id": "1",
-                    },
-                ]
-            },
-        }
+        fixture = ProviderRegistry(settings).transcriber("fake")
+        model = fixture.model
+        payload = fixture.fixture(source.duration_ms)
     elif raw_path.is_file():
         payload = json.loads(raw_path.read_text(encoding="utf-8"))
     else:

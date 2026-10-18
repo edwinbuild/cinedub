@@ -26,6 +26,7 @@ def process_analyze_takes(session, job):
     validate_take_analysis(session, inputs, verify_files=True)
     if (
         inputs["include_target_alignment"]
+        and job.provider != "fake"
         and read_manifest(Path(inputs["target_model_dir"]), verify=True)
         != inputs["target_model_manifest"]
     ):

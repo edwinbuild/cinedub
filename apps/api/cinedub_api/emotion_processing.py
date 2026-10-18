@@ -24,7 +24,9 @@ def process_analyze_emotion(session, job):
         return {"emotion_artifact_id": existing.id}
     inputs = job.input_json
     validate_emotion_inputs(session, inputs, files=True)
-    if read_manifest(Path(inputs["model_dir"])) != inputs["model_manifest"]:
+    if job.provider != "fake" and (
+        read_manifest(Path(inputs["model_dir"])) != inputs["model_manifest"]
+    ):
         raise ValueError("Speech-emotion model installation changed; schedule a new analysis")
     directory = get_settings().storage_root / job.project_id / "speech-emotion" / job.id
     checkpoint(session, job, "analyzing_source_speech")
@@ -153,7 +155,7 @@ def process_analyze_emotion(session, job):
             inputs["model_manifest"]["vad_id"] + "@" + inputs["model_manifest"]["vad_revision"],
         ),
     ]:
-        if count:
+        if count or job.provider == "fake":
             session.add(
                 ProviderRun(
                     project_id=job.project_id,
