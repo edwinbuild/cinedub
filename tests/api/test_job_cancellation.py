@@ -25,7 +25,7 @@ def test_cancelled_claim_never_invokes_processor(session, monkeypatch):
     assert job.status == "cancelled"
     assert job.finished_at is not None
     assert not job.retryable
-    assert project.status == "review"
+    assert project.status == "draft"  # Derived: no transcript yet
 
 
 @pytest.mark.parametrize(
@@ -50,7 +50,7 @@ def test_recovery_finishes_cancelled_work_without_requeue(session, provider, rem
     assert job.finished_at is not None and not job.retryable
     assert job.charged_estimate_inr == 2.5
     assert job.remote_job_id == remote and job.checkpoint_json == {"saved": "checkpoint"}
-    assert project.status == "review"
+    assert project.status == "draft"  # Derived: no transcript yet
     assert not worker.process_once(session)
 
 
@@ -106,4 +106,4 @@ async def test_http_cancellation_survives_worker_restart_without_publishing_dial
     session.expire_all()
     stored = session.get(Job, claimed.id)
     assert stored.finished_at is not None and stored.attempts == 1
-    assert detail["status"] == "review"
+    assert detail["status"] == "draft"  # Derived: no transcript yet

@@ -5,6 +5,7 @@ from pathlib import Path
 from sqlalchemy import select
 
 from .config import get_settings
+from .job_errors import StaleInput
 from .media import file_digest, probe_media, run_ffmpeg
 from .models import Artifact, ProviderRun
 from .processing import check_cancel, checkpoint
@@ -30,7 +31,7 @@ def process_analyze_takes(session, job):
         and read_manifest(Path(inputs["target_model_dir"]), verify=True)
         != inputs["target_model_manifest"]
     ):
-        raise ValueError("Target alignment model changed; schedule a new analysis")
+        raise StaleInput("Target alignment model changed; schedule a new analysis")
     directory = settings.storage_root / job.project_id / "take-analysis" / job.id
     directory.mkdir(parents=True, exist_ok=True)
     source_audio = session.get(Artifact, inputs["recognition_artifact_id"])

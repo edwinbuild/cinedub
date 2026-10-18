@@ -27,7 +27,7 @@ from .analysis import alignment_inputs, emotion_inputs, take_inputs
 from .dialogue import adaptation_inputs, review_inputs
 from .preparation import Preparation, common_inputs, fingerprint, resolve_provider
 from .source import separation_inputs, source_inputs
-from .spec import RetryPolicy, StageSpec
+from .spec import LOCAL_RESUME, RetryPolicy, StageSpec
 from .timeline import mix_disk_space, revision_inputs
 from .voice import voice_profile_inputs
 
@@ -41,7 +41,15 @@ def fake(_settings) -> str:
 
 
 SPECS = [
-    StageSpec("ingest", c.IngestInput, c.IngestOutput, process_ingest, local, (source_inputs,)),
+    StageSpec(
+        "ingest",
+        c.IngestInput,
+        c.IngestOutput,
+        process_ingest,
+        local,
+        (source_inputs,),
+        retry=LOCAL_RESUME,
+    ),
     StageSpec(
         "demo_pipeline", c.DemoPipelineInput, c.DemoPipelineOutput, process_demo_pipeline, fake
     ),
@@ -56,6 +64,7 @@ SPECS = [
         retry=RetryPolicy(
             retryable_errors=frozenset({"provider_timeout", "provider_transport"}),
             remote_resume_phases=frozenset({"starting", "polling", "downloading"}),
+            submission_phase="creating",
         ),
     ),
     StageSpec(
@@ -76,7 +85,15 @@ SPECS = [
         (revision_inputs,),
         capability="voice_synthesizer",
     ),
-    StageSpec("export", c.ExportInput, c.ExportOutput, process_export, local, (revision_inputs,)),
+    StageSpec(
+        "export",
+        c.ExportInput,
+        c.ExportOutput,
+        process_export,
+        local,
+        (revision_inputs,),
+        retry=LOCAL_RESUME,
+    ),
     StageSpec(
         "render_preview",
         c.RenderPreviewInput,
@@ -84,6 +101,7 @@ SPECS = [
         process_render_preview,
         local,
         (revision_inputs,),
+        retry=LOCAL_RESUME,
     ),
     StageSpec(
         "render_mix",
@@ -92,6 +110,7 @@ SPECS = [
         process_render_mix,
         local,
         (mix_disk_space, revision_inputs),
+        retry=LOCAL_RESUME,
     ),
     StageSpec(
         "package_mix",
@@ -135,6 +154,7 @@ SPECS = [
         lambda settings: settings.stem_separator,
         (separation_inputs, source_inputs),
         capability="stem_separator",
+        retry=LOCAL_RESUME,
     ),
     StageSpec(
         "align",
@@ -144,6 +164,7 @@ SPECS = [
         lambda settings: settings.timing_aligner,
         (alignment_inputs,),
         capability="timing_aligner",
+        retry=LOCAL_RESUME,
     ),
     StageSpec(
         "analyze_takes",
@@ -153,6 +174,7 @@ SPECS = [
         lambda settings: settings.performance_analyzer,
         (take_inputs,),
         capability="performance_analyzer",
+        retry=LOCAL_RESUME,
     ),
     StageSpec(
         "review_translation",
@@ -161,6 +183,7 @@ SPECS = [
         process_review_translation,
         local,
         (review_inputs,),
+        retry=LOCAL_RESUME,
     ),
     StageSpec(
         "adapt_dialogue",
@@ -170,7 +193,7 @@ SPECS = [
         lambda settings: settings.dialogue_adapter,
         (review_inputs, adaptation_inputs),
         capability="dialogue_adapter",
-        retry=RetryPolicy(retryable_errors=frozenset({"deadline_exceeded", "internal"})),
+        retry=LOCAL_RESUME,
     ),
     StageSpec(
         "analyze_emotion",
@@ -180,6 +203,7 @@ SPECS = [
         lambda settings: settings.emotion_analyzer,
         (emotion_inputs,),
         capability="emotion_analyzer",
+        retry=LOCAL_RESUME,
     ),
 ]
 STAGES: dict[str, StageSpec] = {spec.stage: spec for spec in SPECS}

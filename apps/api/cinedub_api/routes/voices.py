@@ -24,6 +24,7 @@ from ..models import (
     TimelineRevision,
     VoiceProfile,
 )
+from ..project_status import sync_project_status
 from ..schemas import (
     CandidateSelection,
     ConsentRecordRead,
@@ -347,10 +348,6 @@ async def revoke_voice_consent(profile_id: str, payload: ConsentRevocation, sess
             if job.status == "queued":
                 job.status = "cancelled"
                 job.phase = "cancelled"
-    session.flush()
-    if not session.scalar(
-        select(Job.id).where(Job.project_id == profile.project_id, Job.status.in_(ACTIVE))
-    ):
-        require_project(session, profile.project_id).status = "review"
+    sync_project_status(session, profile.project_id)
     session.commit()
     return profile

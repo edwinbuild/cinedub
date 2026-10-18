@@ -6,6 +6,7 @@ from sqlalchemy import select
 
 from .config import get_settings
 from .dialogue_review import METHOD, build_review, read_dialogue_review, stale_reason
+from .job_errors import StaleInput
 from .media import file_digest
 from .models import Artifact, ProviderRun
 from .processing import checkpoint
@@ -21,13 +22,13 @@ def process_review_translation(session, job):
     checkpoint(session, job, "checking_saved_dialogue")
     reason = stale_reason(session, job.project_id, job.input_json)
     if reason:
-        raise ValueError(reason)
+        raise StaleInput(reason)
     started = time.monotonic()
     report = build_review(job.input_json, job.project_id)
     checkpoint(session, job, "saving_editorial_review")
     reason = stale_reason(session, job.project_id, job.input_json)
     if reason:
-        raise ValueError(reason)
+        raise StaleInput(reason)
     directory = get_settings().storage_root / job.project_id / "dialogue-review" / job.id
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / "dialogue-review.json"

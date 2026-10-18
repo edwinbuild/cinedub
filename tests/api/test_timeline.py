@@ -207,7 +207,8 @@ async def test_budgets_and_conflicting_jobs(client, session, monkeypatch):
     await client.post(f"/jobs/{job['id']}/cancel")
     detail = (await client.get(f"/projects/{project['id']}")).json()
     assert detail["reserved_inr"] == 0
-    assert detail["status"] == "review"
+    # Derived status: a cancelled request on a scene without a transcript is still a draft.
+    assert detail["status"] == "draft"
 
 
 class RecordedBatch:

@@ -40,6 +40,7 @@ from .models import (
     VoiceProfile,
     new_id,
 )
+from .project_status import sync_project_status
 from .providers import ProviderRegistry
 from .routes.adaptation import router as adaptation_router
 from .routes.alignment import router as alignment_router
@@ -76,7 +77,7 @@ from .schemas import (
     StemSetRead,
     VoiceProfileRead,
 )
-from .stages import prepare_stage
+from .stages import STAGES, prepare_stage
 from .storage_capacity import STORAGE_MESSAGE, is_storage_capacity_error
 from .streaming import media_response
 from .timeline import revision_segments
@@ -361,7 +362,7 @@ async def upload_asset(
             input_json={"source_asset_id": asset.id},
         )
     )
-    project.status = "processing"
+    sync_project_status(session, project)
     session.commit()
     session.refresh(asset)
     return asset
@@ -436,7 +437,7 @@ async def activate_revision(
     if session.scalar(select(Job.id).where(Job.project_id == project_id, Job.status.in_(ACTIVE))):
         raise HTTPException(409, "Wait for active processing before switching timelines")
     project.active_revision_id = revision.id
-    project.status = "review"
+    sync_project_status(session, project)
     session.commit()
     return project_detail(session, project)
 
@@ -474,8 +475,8 @@ async def create_job(
         input_json=prep.inputs,
         estimated_cost_inr=prep.cost,
     )
-    project.status = "processing"
     session.add(job)
+    sync_project_status(session, project)
     session.commit()
     session.refresh(job)
     return job
@@ -487,22 +488,19 @@ async def resume_job(job_id: str, session: SessionDep):
     job = session.get(Job, job_id)
     if not job:
         raise HTTPException(404, "Job not found")
-    local_dialogue = job.stage == "adapt_dialogue" and job.provider == "local"
-    restored_local = job.error_code == "restored_job_hold" and job.provider in {"local", "fake"}
-    if (
-        job.status != "failed"
-        or not job.retryable
-        or (not job.remote_job_id and not local_dialogue and not restored_local)
-    ):
+    spec = STAGES.get(job.stage)
+    if not spec or not spec.retry.can_resume(job):
         raise HTTPException(422, "This job cannot safely resume; create a new request explicitly")
+    local_resume = not job.remote_job_id
     if session.scalar(
         select(Job.id).where(Job.project_id == job.project_id, Job.status.in_(ACTIVE))
     ):
         raise HTTPException(409, "Another job is active")
-    if local_dialogue:
+    if job.stage == "adapt_dialogue":
         reason = dialogue_context_stale_reason(session, job.project_id, job.input_json)
         if reason:
             raise HTTPException(409, reason)
+    if local_resume:
         job.retryable = False
     job.status = "queued"
     job.cancel_requested = False
@@ -511,7 +509,7 @@ async def resume_job(job_id: str, session: SessionDep):
     job.finished_at = None
     if job.remote_job_id:
         job.checkpoint_json = {**job.checkpoint_json, "poll_started_at": None}
-    session.get(Project, job.project_id).status = "processing"
+    sync_project_status(session, job.project_id)
     session.commit()
     return job
 
@@ -527,7 +525,7 @@ async def cancel_job(job_id: str, session: SessionDep) -> Job:
     if job.status == "queued":
         job.status = "cancelled"
         job.phase = "cancelled"
-        session.get(Project, job.project_id).status = "review"
+        sync_project_status(session, job.project_id)
     session.commit()
     session.refresh(job)
     return job

@@ -6,7 +6,8 @@ from sqlalchemy import select, update
 from ..dependencies import SessionDep
 from ..jobs import ACTIVE, write_lock
 from ..mixes import mix_read, validate_mix_snapshot
-from ..models import Job, MixRender, MixReviewRecord, Project
+from ..models import Job, MixRender, MixReviewRecord
+from ..project_status import sync_project_status
 from ..schemas import MixRenderRead, MixReview
 
 router = APIRouter(tags=["mixes"])
@@ -67,9 +68,7 @@ async def review_mix(mix_id: str, payload: MixReview, session: SessionDep):
                 },
             )
         )
-        session.get(Project, mix.project_id).status = "processing"
-    else:
-        session.get(Project, mix.project_id).status = "review"
+    sync_project_status(session, mix.project_id)
     session.commit()
     session.refresh(mix)
     return mix_read(session, mix)

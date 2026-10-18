@@ -12,9 +12,10 @@ from sqlalchemy import select
 
 from .config import get_settings
 from .consent import approved_consent
+from .job_errors import StaleInput
 from .media import run_ffmpeg
 from .models import Artifact, MediaAsset, ProviderRun, VoiceProfile
-from .processing import charge, check_cancel, checkpoint
+from .processing import add_warnings, charge, check_cancel, checkpoint
 from .providers import ProviderRegistry
 from .providers.retry import retry_safe
 
@@ -54,11 +55,11 @@ def current_profile(session, job, *, consent=True):
     session.expire_all()
     profile = session.get(VoiceProfile, job.input_json["voice_profile_id"])
     if not profile or profile.version != job.input_json["profile_version"]:
-        raise ValueError("Voice profile changed since scheduling; no provider call was made")
+        raise StaleInput("Voice profile changed since scheduling; no provider call was made")
     if consent:
         record = approved_consent(session, profile)
         if record.id != job.input_json["consent_record_id"]:
-            raise ValueError("Voice consent changed since scheduling")
+            raise StaleInput("Voice consent changed since scheduling")
     check_cancel(session, job)
     return profile
 
@@ -128,7 +129,7 @@ def process_prepare_reference(session, job):
     profile.reference_artifact_id = artifact.id
     profile.registration_status = "prepared"
     profile.version += 1
-    job.warnings_json = metrics["warnings"]
+    add_warnings(job, metrics["warnings"])
     session.commit()
     return {"artifact_ids": [artifact.id], "voice_profile_id": profile.id}
 

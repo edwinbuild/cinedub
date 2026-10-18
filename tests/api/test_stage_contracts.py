@@ -112,7 +112,7 @@ async def test_invalid_stored_inputs_never_enter_a_processor(client, session, mo
     assert process_once(session)
     session.expire_all()
     stored = session.get(Job, job.id)
-    assert stored.status == "failed" and stored.error_code == "InvalidJobInput"
+    assert stored.status == "failed" and stored.error_code == "input_invalid"
     assert not invoked and not stored.output_json
     # Older rows with extra, later-removed keys still validate leniently; new writes do not.
     legacy = {"revision_id": "r", "segments": [], "removed_option": True}
@@ -149,5 +149,5 @@ async def test_contract_breaking_output_is_not_recorded(client, session, monkeyp
     assert process_once(session)
     session.expire_all()
     job = session.get(Job, response.json()["id"])
-    assert job.status == "failed" and job.error_code == "InvalidJobOutput"
+    assert job.status == "failed" and job.error_code == "output_invalid"
     assert job.output_json == {}

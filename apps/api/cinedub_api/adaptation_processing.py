@@ -7,6 +7,7 @@ from .config import get_settings
 from .dialogue_adaptation import make_report, read_adaptation_report, validate_results
 from .dialogue_prompt import GENERATION, PROMPT_VERSION, adaptation_requests
 from .dialogue_review import stale_reason
+from .job_errors import StaleInput
 from .media import file_digest
 from .models import Artifact, ProviderRun
 from .processing import check_cancel, checkpoint
@@ -27,11 +28,11 @@ def process_adapt_dialogue(session, job):
         inputs.get("prompt_version") != PROMPT_VERSION
         or inputs.get("generation_parameters") != GENERATION
     ):
-        raise ValueError("Dialogue prompt profile changed; schedule a new adaptation")
+        raise StaleInput("Dialogue prompt profile changed; schedule a new adaptation")
     checkpoint(session, job, "preparing_dialogue_adaptation")
     reason = stale_reason(session, job.project_id, inputs)
     if reason:
-        raise ValueError(reason)
+        raise StaleInput(reason)
     validate_timing_feedback(session, job.project_id, inputs)
     directory = get_settings().storage_root / job.project_id / "dialogue-adaptation" / job.id
     completed = validate_results(
@@ -46,7 +47,7 @@ def process_adapt_dialogue(session, job):
             raise ValueError("Adapter changed previously committed dialogue results")
         reason = stale_reason(session, job.project_id, inputs)
         if reason:
-            raise ValueError(reason)
+            raise StaleInput(reason)
         validate_timing_feedback(session, job.project_id, inputs)
         check_cancel(session, job)
         job.progress = len(values) / len(inputs["review_ids"]) * 0.95
@@ -92,7 +93,7 @@ def process_adapt_dialogue(session, job):
     report = make_report(inputs, job.project_id, values, runtime)
     reason = stale_reason(session, job.project_id, inputs)
     if reason:
-        raise ValueError(reason)
+        raise StaleInput(reason)
     validate_timing_feedback(session, job.project_id, inputs)
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / "dialogue-alternatives.json"

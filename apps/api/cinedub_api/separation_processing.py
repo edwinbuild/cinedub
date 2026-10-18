@@ -7,10 +7,11 @@ from pathlib import Path
 from sqlalchemy import select
 
 from .config import get_settings
+from .job_errors import StaleInput
 from .media import canonical_audio_filter, file_digest, probe_media, run_ffmpeg
 from .media_quality import measure_loudness
 from .models import Artifact, MediaAsset, ProviderRun, StemSet
-from .processing import check_cancel, checkpoint
+from .processing import add_warnings, check_cancel, checkpoint
 from .providers import ProviderRegistry
 from .providers.local_separation import read_manifest
 
@@ -26,11 +27,11 @@ def process_separate(session, job):
     source_hash = file_digest(source.path)
     expected_hash = job.input_json.get("source_sha256") or job.checkpoint_json.get("source_sha256")
     if expected_hash and source_hash != expected_hash:
-        raise ValueError("Source media changed since scheduling")
+        raise StaleInput("Source media changed since scheduling")
     if job.provider != "fake" and (
         read_manifest(Path(job.input_json["model_dir"])) != job.input_json["model_manifest"]
     ):
-        raise ValueError("Separator model changed since scheduling; submit a new request")
+        raise StaleInput("Separator model changed since scheduling; submit a new request")
     directory = settings.storage_root / job.project_id / "separation" / job.id
     directory.mkdir(parents=True, exist_ok=True)
     raw_path = directory / "input.f32"
@@ -234,6 +235,6 @@ def process_separate(session, job):
             },
         )
     )
-    job.warnings_json = [metadata["warning"]]
+    add_warnings(job, [metadata["warning"]])
     session.commit()
     return {"stem_set_id": stem_set.id, "review_required": True}

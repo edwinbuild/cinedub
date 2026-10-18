@@ -6,6 +6,7 @@ from sqlalchemy import select
 
 from .alignment import validate_alignment_lines, validate_alignment_source
 from .config import get_settings
+from .job_errors import StaleInput
 from .media import file_digest
 from .models import Artifact, ProviderRun, Segment
 from .processing import check_cancel, checkpoint
@@ -27,7 +28,7 @@ def process_align(session, job):
         job.provider != "fake"
         and read_manifest(Path(inputs["model_dir"])) != inputs["model_manifest"]
     ):
-        raise ValueError("Alignment model changed since scheduling; submit a new request")
+        raise StaleInput("Alignment model changed since scheduling; submit a new request")
     directory = settings.storage_root / job.project_id / "alignment" / job.id
     directory.mkdir(parents=True, exist_ok=True)
     audio = session.get(Artifact, inputs["recognition_artifact_id"])

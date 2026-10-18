@@ -10,7 +10,7 @@ from .config import get_settings
 from .consent import artifact_block_reason, profile_is_selected, validate_voice_use
 from .media import file_digest, probe_media
 from .models import Artifact, MediaAsset, ProviderRun, Segment, VoiceProfile
-from .processing import charge, check_cancel, checkpoint, split_translation
+from .processing import add_warnings, charge, check_cancel, checkpoint, split_translation
 from .providers import ProviderRegistry
 from .providers.retry import retry_safe
 from .voices import candidate_signature, stock_variation
@@ -167,9 +167,9 @@ def process_synthesize(session, job):
         created.append(artifact.id)
         session.commit()
     if skipped:
-        job.warnings_json = [
-            "Newer dialogue or voice edits were preserved; regenerate skipped lines"
-        ]
+        add_warnings(
+            job, ["Newer dialogue or voice edits were preserved; regenerate skipped lines"]
+        )
     session.commit()
     return {"artifact_ids": created, "skipped_changed_lines": skipped}
 

@@ -9,6 +9,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from .config import get_settings
+from .job_errors import BudgetExhausted, StaleInput
 from .local_asr_profile import validate_result
 from .models import Artifact, Job, MediaAsset, Project, ProviderRun, Segment, StemSet
 from .providers import ProviderRegistry
@@ -30,10 +31,15 @@ def checkpoint(session: Session, job: Job, phase: str, **values) -> None:
     session.commit()
 
 
+def add_warnings(job: Job, warnings: list[str]) -> None:
+    """Append job warnings in order without duplicates; earlier warnings are never dropped."""
+    job.warnings_json = [*job.warnings_json, *(w for w in warnings if w not in job.warnings_json)]
+
+
 def charge(session: Session, job: Job, amount: float) -> None:
     check_cancel(session, job)
     if job.charged_estimate_inr + amount > job.estimated_cost_inr + 0.000001:
-        raise ValueError("This operation has exhausted its reserved estimate")
+        raise BudgetExhausted("This operation has exhausted its reserved estimate")
     job.charged_estimate_inr = round(job.charged_estimate_inr + amount, 6)
     session.commit()
 
@@ -56,7 +62,7 @@ def process_transcribe(session: Session, job: Job) -> dict:
             or stems.version != job.input_json["stem_set_version"]
             or source.active_stem_set_id != stems.id
         ):
-            raise ValueError("Selected dialogue stems changed; submit a new transcription request")
+            raise StaleInput("Selected dialogue stems changed; submit a new transcription request")
     if job.provider == "fake":
         fixture = ProviderRegistry(settings).transcriber("fake")
         model = fixture.model
@@ -94,7 +100,7 @@ def process_transcribe(session: Session, job: Job) -> dict:
                 )
             directory = Path(job.input_json["local_model_dir"])
             if read_manifest(directory) != job.input_json["local_model_manifest"]:
-                raise ValueError("Local model changed since scheduling; submit a new job")
+                raise StaleInput("Local model changed since scheduling; submit a new job")
             checkpoint(session, job, "local_inference")
             provider = ProviderRegistry(settings).transcriber(job.provider, job.input_json)
             payload = provider.transcribe(Path(audio.path), output_dir, cancel)
@@ -234,7 +240,7 @@ def _import_result(session, job, project, source, model, raw_path, payload):
                 estimated_cost_inr=job.charged_estimate_inr,
             )
         )
-    job.warnings_json = warnings
+    add_warnings(job, warnings)
     session.commit()
     return {"revision_id": revision.id, "segments": len(entries), "warnings": warnings}
 
@@ -370,9 +376,9 @@ def process_translate(session: Session, job: Job) -> dict:
         job.progress = (index + 1) / max(1, len(snapshots))
         session.commit()
     if preserved:
-        job.warnings_json = [
-            "Newer human edits were preserved; unused translations remain in job results"
-        ]
+        add_warnings(
+            job, ["Newer human edits were preserved; unused translations remain in job results"]
+        )
     output_dir = settings.storage_root / job.project_id / "translation" / job.id
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / "translation-candidates.json"

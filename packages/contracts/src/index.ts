@@ -10,6 +10,8 @@ export type SegmentStatus = "draft" | "translated" | "voiced" | "approved" | "ne
 
 export type RequestableStage = "ingest" | "demo_pipeline" | "transcribe" | "translate" | "synthesize" | "export" | "render_preview" | "prepare_reference" | "register_voice" | "delete_voice" | "separate" | "render_mix" | "align" | "analyze_takes" | "review_translation" | "adapt_dialogue" | "analyze_emotion";
 
+export type JobErrorCode = "input_invalid" | "output_invalid" | "stale_input" | "invalid_request" | "budget_exceeded" | "provider_timeout" | "provider_transport" | "provider_rejected" | "deadline_exceeded" | "media_invalid" | "io_error" | "process_failed" | "storage_full" | "cancelled" | "uncertain_submission" | "uncertain_registration" | "restored_job_hold" | "internal";
+
 export type JobRequest = IngestJobRequest | DemoPipelineJobRequest | TranscribeJobRequest | SeparateJobRequest | TranslateJobRequest | SynthesizeJobRequest | ExportJobRequest | RenderPreviewJobRequest | RenderMixJobRequest | ReviewTranslationJobRequest | AdaptDialogueJobRequest | PrepareReferenceJobRequest | RegisterVoiceJobRequest | DeleteVoiceJobRequest | AlignJobRequest | AnalyzeTakesJobRequest | AnalyzeEmotionJobRequest;
 
 export interface ProjectSummary {

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import get_args
 
 from cinedub_api import schemas
+from cinedub_api.job_errors import JobErrorCode
 from pydantic import TypeAdapter
 
 NAMES = {
@@ -146,6 +147,8 @@ def generate():
     for name in ("LanguageCode", "ProjectStatus", "JobStatus", "SegmentStatus", "RequestableStage"):
         union = " | ".join(json.dumps(value) for value in get_args(getattr(schemas, name)))
         lines.extend([f"export type {name} = {union};", ""])
+    codes = " | ".join(json.dumps(code.value) for code in JobErrorCode)
+    lines.extend([f"export type JobErrorCode = {codes};", ""])
     for name, union in unions.items():
         lines.extend([f"export type {name} = {union};", ""])
     for name, value in definitions.items():

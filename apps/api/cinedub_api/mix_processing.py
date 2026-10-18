@@ -14,7 +14,7 @@ from .media import file_digest, probe_media, run_ffmpeg, write_srt
 from .mix_media import mux_source_video, normalize_mix, render_mix_sum, verify_audio
 from .mixes import validate_mix_snapshot
 from .models import Artifact, MediaAsset, MixRender, ProviderRun
-from .processing import check_cancel, checkpoint
+from .processing import add_warnings, check_cancel, checkpoint
 
 
 def checked_file(path, expected=None):
@@ -258,7 +258,7 @@ def process_render_mix(session, job):
     session.expire_all()
     cancel()
     validate_mix_snapshot(session, inputs)
-    job.warnings_json = warnings
+    add_warnings(job, warnings)
     session.add(
         ProviderRun(
             project_id=job.project_id,

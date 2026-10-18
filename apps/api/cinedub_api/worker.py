@@ -12,9 +12,10 @@ from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .database import SessionLocal, create_database
+from .job_errors import InvalidJobInput, InvalidJobOutput, JobErrorCode, classify
 from .models import Artifact, Job, Project
 from .processing import check_cancel
-from .providers.retry import safe_error
+from .project_status import sync_project_status
 from .stages import STAGES, validated_inputs, validated_output
 from .storage_capacity import STORAGE_MESSAGE, StorageCapacityError, is_storage_capacity_error
 from .workspace_lock import inherit_lease, workspace_lease
@@ -27,22 +28,14 @@ settings = get_settings()
 PROCESSORS = {stage: spec.process for stage, spec in STAGES.items()}
 
 
-class InvalidJobInput(ValueError):
-    """Stored inputs no longer match the stage contract; resubmit explicitly."""
-
-
-class InvalidJobOutput(ValueError):
-    """A processor result failed its stage contract and was not recorded."""
-
-
 def _finish_cancelled(session: Session, job: Job, message: str) -> None:
     job.status = "cancelled"
     job.phase = "cancelled"
-    job.error_code = "cancelled"
+    job.error_code = JobErrorCode.CANCELLED
     job.error_message = message
     job.retryable = False
     job.finished_at = datetime.now(UTC)
-    session.get(Project, job.project_id).status = "review"
+    sync_project_status(session, job.project_id)
 
 
 def label_demo_artifacts(session: Session, job: Job) -> None:
@@ -118,12 +111,7 @@ def _process_once(session: Session) -> bool:
         job.progress = 1.0
         job.status = "completed"
         job.phase = "completed"
-        if job.stage == "ingest":
-            project.status = "draft"
-        elif job.stage in {"export", "render_preview", "package_mix"}:
-            project.status = "ready"
-        else:
-            project.status = "review"
+        sync_project_status(session, project)
     except InterruptedError as exc:
         session.rollback()
         job = session.get(Job, job.id)
@@ -134,37 +122,14 @@ def _process_once(session: Session) -> bool:
         logger.error("job_id=%s stage=%s error_type=%s", job.id, job.stage, type(exc).__name__)
         session.rollback()
         job = session.get(Job, job.id)
-        project = session.get(Project, job.project_id)
         job.status = "failed"
-        job.retryable = (
-            job.stage == "transcribe"
-            and bool(job.remote_job_id)
-            and isinstance(exc, (TimeoutError, ConnectionError))
-        )
-        if job.stage == "adapt_dialogue" and isinstance(exc, (TimeoutError, OSError, RuntimeError)):
-            # Local, read-only generation can resume only database-committed lines.
-            # Invalid context/output (ValueError) requires an explicit new request.
-            job.retryable = True
-        # Status/download errors can safely resume a known remote job without resubmission.
-        if (
-            job.stage == "transcribe"
-            and job.remote_job_id
-            and job.phase in {"starting", "polling", "downloading"}
-        ):
-            job.retryable = True
-        job.error_code = type(exc).__name__
-        job.error_message = (
-            "Local processing deadline exceeded; the process stopped. Retry explicitly."
-            if isinstance(exc, TimeoutError) and job.provider == "local"
-            else safe_error(exc)
-        )
-        if job.stage == "register_voice" and job.checkpoint_json.get("pending_registration"):
-            job.error_code = "uncertain_registration"
-            job.error_message = (
-                "Voice upload outcome is unknown. Inspect provider voices/usage "
-                "before an explicit retry."
-            )
-        project.status = "failed"
+        code, message = classify(exc, job)
+        job.error_code, job.error_message = code, message
+        job.retryable = STAGES[job.stage].retry.retryable_after(job, code)
+        job.finished_at = datetime.now(UTC)
+        sync_project_status(session, job.project_id)
+        session.commit()
+        return True
     job.finished_at = datetime.now(UTC)
     session.commit()
     return True
@@ -172,20 +137,21 @@ def _process_once(session: Session) -> bool:
 
 def recover_jobs(session: Session) -> None:
     for job in session.scalars(select(Job).where(Job.status == "running")).all():
+        submission = STAGES[job.stage].retry.submission_phase
         uncertain = job.provider != "fake" and (
-            (job.stage == "transcribe" and not job.remote_job_id and job.phase == "creating")
+            (submission and not job.remote_job_id and job.phase == submission)
             or bool(job.checkpoint_json.get("pending_chunk"))
             or bool(job.checkpoint_json.get("pending_voice"))
             or bool(job.checkpoint_json.get("pending_registration"))
         )
         if uncertain:
             job.status = "failed"
-            job.error_code = "uncertain_submission"
+            job.error_code = JobErrorCode.UNCERTAIN_SUBMISSION
             job.error_message = (
                 "Interrupted provider submission; inspect usage before explicitly retrying"
             )
             job.finished_at = datetime.now(UTC)
-            session.get(Project, job.project_id).status = "failed"
+            sync_project_status(session, job.project_id)
         elif job.cancel_requested:
             _finish_cancelled(
                 session,
@@ -195,7 +161,7 @@ def recover_jobs(session: Session) -> None:
             )
         else:
             job.status = "queued"
-            if job.stage == "transcribe" and job.remote_job_id and job.phase == "creating":
+            if submission and job.remote_job_id and job.phase == submission:
                 job.phase = "created"
     session.commit()
 

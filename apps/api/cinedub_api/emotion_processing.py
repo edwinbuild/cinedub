@@ -6,6 +6,7 @@ from pathlib import Path
 from sqlalchemy import select
 
 from .config import get_settings
+from .job_errors import StaleInput
 from .media import file_digest
 from .models import Artifact, ProviderRun
 from .processing import check_cancel, checkpoint
@@ -27,7 +28,7 @@ def process_analyze_emotion(session, job):
     if job.provider != "fake" and (
         read_manifest(Path(inputs["model_dir"])) != inputs["model_manifest"]
     ):
-        raise ValueError("Speech-emotion model installation changed; schedule a new analysis")
+        raise StaleInput("Speech-emotion model installation changed; schedule a new analysis")
     directory = get_settings().storage_root / job.project_id / "speech-emotion" / job.id
     checkpoint(session, job, "analyzing_source_speech")
     audio = session.get(Artifact, inputs["recognition_artifact_id"])
