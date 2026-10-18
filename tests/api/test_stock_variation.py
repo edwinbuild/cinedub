@@ -116,7 +116,7 @@ async def test_synthesis_freezes_and_executes_variation_or_holds_unfrozen_legacy
     line.status = "approved"
     session.commit()
     settings = get_settings().model_copy(update={"sarvam_api_key": "synthetic-test-only"})
-    monkeypatch.setattr("cinedub_api.jobs.get_settings", lambda: settings)
+    monkeypatch.setattr("cinedub_api.stages.get_settings", lambda: settings)
     calls = []
 
     class Recorded:

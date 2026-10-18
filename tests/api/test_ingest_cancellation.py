@@ -3,7 +3,7 @@ import sys
 import wave
 
 import pytest
-from cinedub_api import media, worker
+from cinedub_api import core_processing, media, worker
 from cinedub_api.database import SessionLocal
 from cinedub_api.models import Job
 
@@ -100,13 +100,13 @@ async def test_ingest_cancellation_reaches_every_boundary_without_publishing(
 
     monkeypatch.setattr(media, "probe_media", probe)
     monkeypatch.setattr(media, "run_ffmpeg", ffmpeg)
-    monkeypatch.setattr(worker, "run_ffmpeg", ffmpeg)
+    monkeypatch.setattr(core_processing, "run_ffmpeg", ffmpeg)
     monkeypatch.setattr(
-        worker, "write_waveform", lambda *args, cancel: boundary("waveform", cancel)
+        core_processing, "write_waveform", lambda *args, cancel: boundary("waveform", cancel)
     )
-    monkeypatch.setattr(worker, "file_digest", lambda path: "synthetic-hash")
+    monkeypatch.setattr(core_processing, "file_digest", lambda path: "synthetic-hash")
     monkeypatch.setattr(
-        worker, "create_preview_proxy", lambda *args, cancel: boundary("proxy", cancel)
+        core_processing, "create_preview_proxy", lambda *args, cancel: boundary("proxy", cancel)
     )
     assert worker.process_once(session)
     assert visited[-1] == stage

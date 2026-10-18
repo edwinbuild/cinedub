@@ -17,8 +17,10 @@ from test_timeline import prepare_scene, transcribe
 @pytest.fixture
 def aligner(monkeypatch):
     manifest = {"revision": "recorded-test-model-not-real-inference"}
-    monkeypatch.setattr("cinedub_api.jobs.alignment_availability", lambda _: (True, "test"))
-    monkeypatch.setattr("cinedub_api.jobs.alignment_manifest", lambda _: manifest)
+    monkeypatch.setattr(
+        "cinedub_api.stages.analysis.alignment_availability", lambda _: (True, "test")
+    )
+    monkeypatch.setattr("cinedub_api.stages.analysis.alignment_manifest", lambda _: manifest)
     monkeypatch.setattr("cinedub_api.alignment_processing.read_manifest", lambda _: manifest)
     calls = []
 

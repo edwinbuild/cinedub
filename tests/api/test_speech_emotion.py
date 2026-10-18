@@ -16,8 +16,8 @@ from test_timeline import prepare_scene, transcribe
 @pytest.fixture
 def analyzer(monkeypatch):
     manifest = {"vad_id": "recorded-vad", "vad_revision": "fixture"}
-    monkeypatch.setattr("cinedub_api.jobs.emotion_availability", lambda _: (True, None))
-    monkeypatch.setattr("cinedub_api.jobs.emotion_manifest", lambda _: manifest)
+    monkeypatch.setattr("cinedub_api.stages.analysis.emotion_availability", lambda _: (True, None))
+    monkeypatch.setattr("cinedub_api.stages.analysis.emotion_manifest", lambda _: manifest)
     monkeypatch.setattr("cinedub_api.emotion_processing.read_manifest", lambda _: manifest)
     control = {"calls": [], "mode": "normal"}
 

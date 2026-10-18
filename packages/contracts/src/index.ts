@@ -8,6 +8,10 @@ export type JobStatus = "queued" | "running" | "completed" | "failed" | "cancell
 
 export type SegmentStatus = "draft" | "translated" | "voiced" | "approved" | "needs_review";
 
+export type RequestableStage = "ingest" | "demo_pipeline" | "transcribe" | "translate" | "synthesize" | "export" | "render_preview" | "prepare_reference" | "register_voice" | "delete_voice" | "separate" | "render_mix" | "align" | "analyze_takes" | "review_translation" | "adapt_dialogue" | "analyze_emotion";
+
+export type JobRequest = IngestJobRequest | DemoPipelineJobRequest | TranscribeJobRequest | SeparateJobRequest | TranslateJobRequest | SynthesizeJobRequest | ExportJobRequest | RenderPreviewJobRequest | RenderMixJobRequest | ReviewTranslationJobRequest | AdaptDialogueJobRequest | PrepareReferenceJobRequest | RegisterVoiceJobRequest | DeleteVoiceJobRequest | AlignJobRequest | AnalyzeTakesJobRequest | AnalyzeEmotionJobRequest;
+
 export interface ProjectSummary {
   id: string;
   name: string;
@@ -222,37 +226,6 @@ export interface ProjectDetail {
   voice_profiles: Array<VoiceProfile>;
   stem_sets: Array<StemSet>;
   mixes: Array<MixRender>;
-}
-
-export interface MixSettings {
-  profile?: "stereo-review-v1";
-  dialogue_gain_db?: number;
-  music_gain_db?: number;
-  effects_gain_db?: number;
-  music_muted?: boolean;
-  effects_muted?: boolean;
-  target_lufs?: number;
-  true_peak_dbfs?: number;
-  allow_dynamic_normalization?: boolean;
-}
-
-export interface JobRequest {
-  stage: "ingest" | "demo_pipeline" | "transcribe" | "translate" | "synthesize" | "export" | "render_preview" | "prepare_reference" | "register_voice" | "delete_voice" | "separate" | "render_mix" | "align" | "analyze_takes" | "review_translation" | "adapt_dialogue" | "analyze_emotion";
-  provider?: "fake" | "sarvam" | "local" | null;
-  source_asset_id?: string | null;
-  revision_id?: string | null;
-  num_speakers?: number | null;
-  segment_ids?: Array<string> | null;
-  regenerate?: boolean;
-  allow_incomplete?: boolean;
-  force_new?: boolean;
-  voice_profile_id?: string | null;
-  registration_allowance_inr?: number | null;
-  reference_reviewed?: boolean;
-  transcription_input?: "original" | "dialogue_stem";
-  mix_settings?: MixSettings;
-  candidate_ids?: Array<string> | null;
-  include_target_alignment?: boolean;
 }
 
 export interface JobEstimate {
@@ -547,6 +520,18 @@ export interface StemReview {
   expected_active_stem_set_id: string | null;
   reviewed_by: string;
   note?: string;
+}
+
+export interface MixSettings {
+  profile?: "stereo-review-v1";
+  dialogue_gain_db?: number;
+  music_gain_db?: number;
+  effects_gain_db?: number;
+  music_muted?: boolean;
+  effects_muted?: boolean;
+  target_lufs?: number;
+  true_peak_dbfs?: number;
+  allow_dynamic_normalization?: boolean;
 }
 
 export interface MixReview {
@@ -893,4 +878,156 @@ export interface SpeechEmotionReview {
   reviewed_by: string;
   note?: string;
   listening_confirmed?: boolean;
+}
+
+export interface AdaptDialogueJobRequest {
+  provider?: "fake" | "sarvam" | "local" | null;
+  force_new?: boolean;
+  revision_id?: string | null;
+  segment_ids?: Array<string> | null;
+  regenerate?: boolean;
+  stage: "adapt_dialogue";
+  candidate_ids?: Array<string> | null;
+}
+
+export interface AlignJobRequest {
+  provider?: "fake" | "sarvam" | "local" | null;
+  force_new?: boolean;
+  revision_id?: string | null;
+  source_asset_id?: string | null;
+  segment_ids?: Array<string> | null;
+  transcription_input?: "original" | "dialogue_stem";
+  stage: "align";
+}
+
+export interface AnalyzeEmotionJobRequest {
+  provider?: "fake" | "sarvam" | "local" | null;
+  force_new?: boolean;
+  revision_id?: string | null;
+  source_asset_id?: string | null;
+  segment_ids?: Array<string> | null;
+  transcription_input?: "original" | "dialogue_stem";
+  stage: "analyze_emotion";
+  regenerate?: boolean;
+}
+
+export interface AnalyzeTakesJobRequest {
+  provider?: "fake" | "sarvam" | "local" | null;
+  force_new?: boolean;
+  revision_id?: string | null;
+  source_asset_id?: string | null;
+  segment_ids?: Array<string> | null;
+  transcription_input?: "original" | "dialogue_stem";
+  stage: "analyze_takes";
+  candidate_ids?: Array<string> | null;
+  include_target_alignment?: boolean;
+}
+
+export interface DeleteVoiceJobRequest {
+  provider?: "fake" | "sarvam" | "local" | null;
+  force_new?: boolean;
+  stage: "delete_voice";
+  voice_profile_id?: string | null;
+}
+
+export interface DemoPipelineJobRequest {
+  provider?: "fake" | "sarvam" | "local" | null;
+  force_new?: boolean;
+  stage: "demo_pipeline";
+}
+
+export interface ExportJobRequest {
+  provider?: "fake" | "sarvam" | "local" | null;
+  force_new?: boolean;
+  revision_id?: string | null;
+  segment_ids?: Array<string> | null;
+  regenerate?: boolean;
+  stage: "export";
+  allow_incomplete?: boolean;
+}
+
+export interface IngestJobRequest {
+  provider?: "fake" | "sarvam" | "local" | null;
+  force_new?: boolean;
+  stage: "ingest";
+  source_asset_id?: string | null;
+}
+
+export interface PrepareReferenceJobRequest {
+  provider?: "fake" | "sarvam" | "local" | null;
+  force_new?: boolean;
+  stage: "prepare_reference";
+  voice_profile_id?: string | null;
+}
+
+export interface RegisterVoiceJobRequest {
+  provider?: "fake" | "sarvam" | "local" | null;
+  force_new?: boolean;
+  stage: "register_voice";
+  voice_profile_id?: string | null;
+  reference_reviewed?: boolean;
+  registration_allowance_inr?: number | null;
+}
+
+export interface RenderMixJobRequest {
+  provider?: "fake" | "sarvam" | "local" | null;
+  force_new?: boolean;
+  revision_id?: string | null;
+  segment_ids?: Array<string> | null;
+  regenerate?: boolean;
+  stage: "render_mix";
+  allow_incomplete?: boolean;
+  mix_settings?: MixSettings;
+}
+
+export interface RenderPreviewJobRequest {
+  provider?: "fake" | "sarvam" | "local" | null;
+  force_new?: boolean;
+  revision_id?: string | null;
+  segment_ids?: Array<string> | null;
+  regenerate?: boolean;
+  stage: "render_preview";
+}
+
+export interface ReviewTranslationJobRequest {
+  provider?: "fake" | "sarvam" | "local" | null;
+  force_new?: boolean;
+  revision_id?: string | null;
+  segment_ids?: Array<string> | null;
+  regenerate?: boolean;
+  stage: "review_translation";
+}
+
+export interface SeparateJobRequest {
+  provider?: "fake" | "sarvam" | "local" | null;
+  force_new?: boolean;
+  stage: "separate";
+  source_asset_id?: string | null;
+}
+
+export interface SynthesizeJobRequest {
+  provider?: "fake" | "sarvam" | "local" | null;
+  force_new?: boolean;
+  revision_id?: string | null;
+  segment_ids?: Array<string> | null;
+  regenerate?: boolean;
+  stage: "synthesize";
+}
+
+export interface TranscribeJobRequest {
+  provider?: "fake" | "sarvam" | "local" | null;
+  force_new?: boolean;
+  stage: "transcribe";
+  source_asset_id?: string | null;
+  num_speakers?: number | null;
+  transcription_input?: "original" | "dialogue_stem";
+}
+
+export interface TranslateJobRequest {
+  provider?: "fake" | "sarvam" | "local" | null;
+  force_new?: boolean;
+  revision_id?: string | null;
+  segment_ids?: Array<string> | null;
+  regenerate?: boolean;
+  stage: "translate";
 }

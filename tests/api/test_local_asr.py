@@ -32,7 +32,9 @@ def model_directory(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(get_settings(), "local_asr_model_dir", directory)
     # Runtime is optional: no real inference/download belongs in the unit suite.
-    monkeypatch.setattr("cinedub_api.jobs.availability", lambda _: (True, "test adapter"))
+    monkeypatch.setattr(
+        "cinedub_api.stages.preparation.asr_availability", lambda _: (True, "test adapter")
+    )
     monkeypatch.setattr("cinedub_api.providers.registry.availability", lambda _: (True, "test"))
     monkeypatch.setattr(
         "cinedub_api.local_asr_profile.runtime_versions",
@@ -290,12 +292,12 @@ async def test_profile_changes_cache_identity_and_old_jobs_are_not_reused(
 ):
     from cinedub_api.jobs import prepare_job
     from cinedub_api.models import Project
-    from cinedub_api.schemas import JobCreate
+    from cinedub_api.schemas import JobFields
 
     project, asset = await prepare_scene(client, session)
     request = {"stage": "transcribe", "provider": "local", "source_asset_id": asset["id"]}
     provider, inputs, _ = prepare_job(
-        session, session.get(Project, project["id"]), JobCreate(**request)
+        session, session.get(Project, project["id"]), JobFields(**request)
     )
     current_fingerprint = inputs["fingerprint"]
     legacy_input = {

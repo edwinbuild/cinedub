@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -746,27 +746,34 @@ class TakePerformanceReport(BaseModel):
     stale_reason: str | None = None
 
 
-class JobCreate(BaseModel):
-    stage: Literal[
-        "ingest",
-        "demo_pipeline",
-        "transcribe",
-        "translate",
-        "synthesize",
-        "export",
-        "render_preview",
-        "prepare_reference",
-        "register_voice",
-        "delete_voice",
-        "separate",
-        "render_mix",
-        "align",
-        "analyze_takes",
-        "review_translation",
-        "adapt_dialogue",
-        "analyze_emotion",
-    ]
-    provider: Literal["fake", "sarvam", "local"] | None = None
+RequestableStage = Literal[
+    "ingest",
+    "demo_pipeline",
+    "transcribe",
+    "translate",
+    "synthesize",
+    "export",
+    "render_preview",
+    "prepare_reference",
+    "register_voice",
+    "delete_voice",
+    "separate",
+    "render_mix",
+    "align",
+    "analyze_takes",
+    "review_translation",
+    "adapt_dialogue",
+    "analyze_emotion",
+]
+ProviderName = Literal["fake", "sarvam", "local"]
+TranscriptionInput = Literal["original", "dialogue_stem"]
+
+
+class JobFields(BaseModel):
+    """Flat request fields frozen into every job. Their shape is part of job fingerprints."""
+
+    stage: RequestableStage
+    provider: ProviderName | None = None
     source_asset_id: str | None = None
     revision_id: str | None = None
     num_speakers: int | None = Field(default=None, ge=1, le=20)
@@ -779,10 +786,138 @@ class JobCreate(BaseModel):
         default=None, gt=0, le=1000, allow_inf_nan=False
     )
     reference_reviewed: bool = False
-    transcription_input: Literal["original", "dialogue_stem"] = "original"
+    transcription_input: TranscriptionInput = "original"
     mix_settings: MixSettings = Field(default_factory=MixSettings)
     candidate_ids: list[str] | None = Field(default=None, min_length=1, max_length=100)
     include_target_alignment: bool = False
+
+
+class StageRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    provider: ProviderName | None = None
+    force_new: bool = False
+
+
+class LineSelection(StageRequest):
+    revision_id: str | None = None
+    segment_ids: list[str] | None = None
+    regenerate: bool = False
+
+
+class AudioSelection(StageRequest):
+    revision_id: str | None = None
+    source_asset_id: str | None = None
+    segment_ids: list[str] | None = None
+    transcription_input: TranscriptionInput = "original"
+
+
+class IngestJobRequest(StageRequest):
+    stage: Literal["ingest"]
+    source_asset_id: str | None = None
+
+
+class DemoPipelineJobRequest(StageRequest):
+    stage: Literal["demo_pipeline"]
+
+
+class TranscribeJobRequest(StageRequest):
+    stage: Literal["transcribe"]
+    source_asset_id: str | None = None
+    num_speakers: int | None = Field(default=None, ge=1, le=20)
+    transcription_input: TranscriptionInput = "original"
+
+
+class SeparateJobRequest(StageRequest):
+    stage: Literal["separate"]
+    source_asset_id: str | None = None
+
+
+class TranslateJobRequest(LineSelection):
+    stage: Literal["translate"]
+
+
+class SynthesizeJobRequest(LineSelection):
+    stage: Literal["synthesize"]
+
+
+class ExportJobRequest(LineSelection):
+    stage: Literal["export"]
+    allow_incomplete: bool = False
+
+
+class RenderPreviewJobRequest(LineSelection):
+    stage: Literal["render_preview"]
+
+
+class RenderMixJobRequest(LineSelection):
+    stage: Literal["render_mix"]
+    allow_incomplete: bool = False
+    mix_settings: MixSettings = Field(default_factory=MixSettings)
+
+
+class ReviewTranslationJobRequest(LineSelection):
+    stage: Literal["review_translation"]
+
+
+class AdaptDialogueJobRequest(LineSelection):
+    stage: Literal["adapt_dialogue"]
+    candidate_ids: list[str] | None = Field(default=None, min_length=1, max_length=100)
+
+
+class PrepareReferenceJobRequest(StageRequest):
+    stage: Literal["prepare_reference"]
+    voice_profile_id: str | None = None
+
+
+class RegisterVoiceJobRequest(StageRequest):
+    stage: Literal["register_voice"]
+    voice_profile_id: str | None = None
+    reference_reviewed: bool = False
+    registration_allowance_inr: float | None = Field(
+        default=None, gt=0, le=1000, allow_inf_nan=False
+    )
+
+
+class DeleteVoiceJobRequest(StageRequest):
+    stage: Literal["delete_voice"]
+    voice_profile_id: str | None = None
+
+
+class AlignJobRequest(AudioSelection):
+    stage: Literal["align"]
+
+
+class AnalyzeTakesJobRequest(AudioSelection):
+    stage: Literal["analyze_takes"]
+    candidate_ids: list[str] | None = Field(default=None, min_length=1, max_length=100)
+    include_target_alignment: bool = False
+
+
+class AnalyzeEmotionJobRequest(AudioSelection):
+    stage: Literal["analyze_emotion"]
+    regenerate: bool = False
+
+
+JOB_REQUESTS = (
+    IngestJobRequest,
+    DemoPipelineJobRequest,
+    TranscribeJobRequest,
+    SeparateJobRequest,
+    TranslateJobRequest,
+    SynthesizeJobRequest,
+    ExportJobRequest,
+    RenderPreviewJobRequest,
+    RenderMixJobRequest,
+    ReviewTranslationJobRequest,
+    AdaptDialogueJobRequest,
+    PrepareReferenceJobRequest,
+    RegisterVoiceJobRequest,
+    DeleteVoiceJobRequest,
+    AlignJobRequest,
+    AnalyzeTakesJobRequest,
+    AnalyzeEmotionJobRequest,
+)
+JobCreate = Annotated[Union[JOB_REQUESTS], Field(discriminator="stage")]  # noqa: UP007
 
 
 class JobEstimate(BaseModel):

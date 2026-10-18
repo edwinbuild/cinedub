@@ -22,7 +22,7 @@ from .dependencies import SessionDep, require_project
 from .diagnostics import hardware_diagnostics
 from .dialogue_review import latest_brief
 from .dialogue_review import stale_reason as dialogue_context_stale_reason
-from .jobs import ACTIVE, budget_totals, estimate_job, prepare_job, write_lock
+from .jobs import ACTIVE, budget_totals, estimate_job, estimate_prepared, request_fields, write_lock
 from .line_editing import apply_line_edit
 from .media import MediaError, probe_media, safe_filename
 from .mixes import mix_read
@@ -76,6 +76,7 @@ from .schemas import (
     StemSetRead,
     VoiceProfileRead,
 )
+from .stages import prepare_stage
 from .storage_capacity import STORAGE_MESSAGE, is_storage_capacity_error
 from .streaming import media_response
 from .timeline import revision_segments
@@ -455,22 +456,23 @@ async def create_job(
 ) -> Job:
     write_lock(session)
     project = require_project(session, project_id)
-    provider, inputs, cost = prepare_job(session, project, payload)
-    estimate = estimate_job(session, project, payload)
+    fields = request_fields(payload)
+    prep = prepare_stage(session, project, fields)
+    estimate = estimate_prepared(session, project, prep, fields.force_new)
     if estimate.cached_job_id:
         return session.get(Job, estimate.cached_job_id)
     if session.scalar(select(Job.id).where(Job.project_id == project_id, Job.status.in_(ACTIVE))):
         raise HTTPException(409, "Another job is active; wait or cancel it first")
-    if cost > estimate.remaining_inr:
+    if prep.cost > estimate.remaining_inr:
         raise HTTPException(
             402, "Estimated project budget exceeded; adjust local budget configuration"
         )
     job = Job(
         project_id=project_id,
-        stage=payload.stage,
-        provider=provider,
-        input_json=inputs,
-        estimated_cost_inr=cost,
+        stage=fields.stage,
+        provider=prep.provider,
+        input_json=prep.inputs,
+        estimated_cost_inr=prep.cost,
     )
     project.status = "processing"
     session.add(job)

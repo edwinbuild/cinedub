@@ -17,7 +17,7 @@ from test_voice_workflow import prepare_reviewed_scene
 
 @pytest.fixture
 def analyzer(monkeypatch):
-    monkeypatch.setattr("cinedub_api.jobs.take_analyzer_available", lambda: True)
+    monkeypatch.setattr("cinedub_api.stages.analysis.take_analyzer_available", lambda: True)
     calls = []
 
     def compare(self, request, output_dir, *, cancel, progress):
@@ -218,7 +218,7 @@ async def test_malayalam_alignment_is_opt_in_and_demo_tones_never_get_words(
 ):
     scene = await prepare_reviewed_scene(client, session)
     monkeypatch.setattr(
-        "cinedub_api.jobs.target_aligner_available", lambda _: (False, "Not installed")
+        "cinedub_api.stages.analysis.target_aligner_available", lambda _: (False, "Not installed")
     )
     assert (
         await client.post(
@@ -231,8 +231,10 @@ async def test_malayalam_alignment_is_opt_in_and_demo_tones_never_get_words(
     ).status_code == 422
     await analyze(client, session, scene)  # Signal measurements do not need a word model.
     manifest = {"fixture": "not real model files"}
-    monkeypatch.setattr("cinedub_api.jobs.target_aligner_available", lambda _: (True, "test"))
-    monkeypatch.setattr("cinedub_api.jobs.target_aligner_manifest", lambda _: manifest)
+    monkeypatch.setattr(
+        "cinedub_api.stages.analysis.target_aligner_available", lambda _: (True, "test")
+    )
+    monkeypatch.setattr("cinedub_api.stages.analysis.target_aligner_manifest", lambda _: manifest)
     monkeypatch.setattr(
         "cinedub_api.take_analysis_processing.read_manifest", lambda *a, **k: manifest
     )

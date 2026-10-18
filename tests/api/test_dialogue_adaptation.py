@@ -32,9 +32,9 @@ from test_voice_workflow import prepare_reviewed_scene
 
 @pytest.fixture
 def adapter(monkeypatch):
-    monkeypatch.setattr("cinedub_api.jobs.dialogue_availability", lambda _: (True, None))
+    monkeypatch.setattr("cinedub_api.stages.dialogue.dialogue_availability", lambda _: (True, None))
     monkeypatch.setattr(
-        "cinedub_api.jobs.dialogue_manifest",
+        "cinedub_api.stages.dialogue.dialogue_manifest",
         lambda _: {"engine_tag": ENGINE_TAG, "engine_commit": ENGINE_COMMIT},
     )
     control = {"calls": [], "mode": "normal"}
@@ -540,7 +540,8 @@ async def test_missing_model_and_foreign_subset_reject_before_work(
         )
         assert response.status_code == 422
     monkeypatch.setattr(
-        "cinedub_api.jobs.dialogue_availability", lambda _: (False, "Install optional model")
+        "cinedub_api.stages.dialogue.dialogue_availability",
+        lambda _: (False, "Install optional model"),
     )
     response = await client.post(f"/projects/{project.id}/jobs", json={"stage": "adapt_dialogue"})
     assert response.status_code == 422 and "Install optional model" in response.text

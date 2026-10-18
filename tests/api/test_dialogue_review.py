@@ -15,7 +15,7 @@ from cinedub_api.models import (
     Speaker,
     TimelineRevision,
 )
-from cinedub_api.schemas import DialogueBriefContent, JobCreate
+from cinedub_api.schemas import DialogueBriefContent, JobFields
 from cinedub_api.worker import process_once, recover_jobs
 from pydantic import ValidationError
 
@@ -240,13 +240,13 @@ async def test_brief_edit_flags_old_report_and_does_not_change_translation_finge
     client, session
 ):
     project, revision, speaker = scene(session)
-    _, initial, _ = prepare_job(session, project, JobCreate(stage="translate"))
+    _, initial, _ = prepare_job(session, project, JobFields(stage="translate"))
     _, artifact, _ = await review(client, session, project)
     saved = await client.post(
         brief_url(project, revision), json={"expected_version": 0, "content": content(speaker)}
     )
     assert saved.status_code == 200
-    _, after, _ = prepare_job(session, project, JobCreate(stage="translate"))
+    _, after, _ = prepare_job(session, project, JobFields(stage="translate"))
     assert initial["fingerprint"] == after["fingerprint"]
     response = await client.get(f"/dialogue-review-reports/{artifact.id}")
     assert "brief changed" in response.json()["stale_reason"]

@@ -15,8 +15,10 @@ from test_timeline import prepare_scene, transcribe
 @pytest.fixture
 def separator(monkeypatch):
     manifest = {"revision": "recorded-test-model"}
-    monkeypatch.setattr("cinedub_api.jobs.separator_availability", lambda _: (True, "test"))
-    monkeypatch.setattr("cinedub_api.jobs.separator_manifest", lambda _: manifest)
+    monkeypatch.setattr(
+        "cinedub_api.stages.source.separator_availability", lambda _: (True, "test")
+    )
+    monkeypatch.setattr("cinedub_api.stages.source.separator_manifest", lambda _: manifest)
     monkeypatch.setattr("cinedub_api.separation_processing.read_manifest", lambda _: manifest)
     calls = []
 

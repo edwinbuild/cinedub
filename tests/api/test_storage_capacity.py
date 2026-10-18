@@ -3,7 +3,7 @@ import sqlite3
 from pathlib import Path
 
 import pytest
-from cinedub_api import worker
+from cinedub_api import core_processing, worker
 from cinedub_api.database import Base, get_session
 from cinedub_api.main import app, storage_capacity_failure
 from cinedub_api.models import Artifact, Job, Segment, SegmentEdit
@@ -190,6 +190,18 @@ def test_actual_full_at_worker_final_commit_preserves_checkpoints_and_recovers_s
                     "translated_text": line.translated_text,
                 }
             ],
+            # Contract-valid frozen inputs: the worker validates them before processing.
+            **(
+                {
+                    "model": "bulbul:v3",
+                    "models": ["bulbul:v3"],
+                    "voices": {},
+                    "unit_rate_inr": 30,
+                    "max_timing_speedup": 1.15,
+                }
+                if paid
+                else {}
+            ),
         },
     )
     session.add(job)
@@ -205,7 +217,9 @@ def test_actual_full_at_worker_final_commit_preserves_checkpoints_and_recovers_s
     )
     calls, limits = [], []
     monkeypatch.setattr(
-        worker, "settings", worker.settings.model_copy(update={"storage_root": tmp_path / "media"})
+        core_processing,
+        "settings",
+        core_processing.settings.model_copy(update={"storage_root": tmp_path / "media"}),
     )
 
     def processor(current, active):
@@ -215,12 +229,14 @@ def test_actual_full_at_worker_final_commit_preserves_checkpoints_and_recovers_s
             active.checkpoint_json = {"pending_voice": "fixture:0"}
             active.charged_estimate_inr = 0.5
             current.commit()
-            output = {}
+            output = {"artifact_ids": [], "skipped_changed_lines": []}
         else:
-            output = worker.process_export(current, active)
+            output = core_processing.process_export(current, active)
         if len(calls) == 1:
             limits.append(cap_database(connection))
-            return {**output, "oversized": "PRIVATE_OUTPUT_SENTINEL" * 20000}
+            # Oversized but contract-valid, so the failure is the database commit itself.
+            oversized = "PRIVATE_OUTPUT_SENTINEL" * 20000
+            return {**output, "artifact_ids": [*output["artifact_ids"], oversized]}
         return output
 
     monkeypatch.setitem(worker.PROCESSORS, job.stage, processor)
@@ -285,8 +301,13 @@ def test_worker_stops_on_media_capacity_without_recording_false_success(
     constrained_database, monkeypatch, number
 ):
     _, session, _ = constrained_database
-    project, _, _ = scene(session)
-    job = Job(project_id=project.id, stage="export", provider="local")
+    project, revision, _ = scene(session)
+    job = Job(
+        project_id=project.id,
+        stage="export",
+        provider="local",
+        input_json={"revision_id": revision.id, "segments": []},
+    )
     session.add(job)
     session.commit()
 

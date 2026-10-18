@@ -21,7 +21,7 @@ from cinedub_api.models import (
     TimelineRevision,
     VoiceProfile,
 )
-from cinedub_api.schemas import JobCreate
+from cinedub_api.schemas import JobFields
 from cinedub_api.workspace_backup import create_snapshot, restore_snapshot, verify_restored
 from cinedub_api.workspace_lock import workspace_lease
 from sqlalchemy import create_engine
@@ -134,7 +134,7 @@ def workspace(tmp_path):
             profiles.append(profile.id)
             candidates.append(candidate.id)
             lines.append(line.id)
-        _, export_inputs, _ = prepare_job(session, project, JobCreate(stage="export"))
+        _, export_inputs, _ = prepare_job(session, project, JobFields(stage="export"))
         local = Job(
             project_id=project.id,
             provider="fake",
