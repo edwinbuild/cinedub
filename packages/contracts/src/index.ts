@@ -155,6 +155,48 @@ export interface ArtifactLineage {
   sources: Array<LineageSource>;
 }
 
+export interface PipelineCreate {
+  source_asset_id: string;
+  separate_dialogue?: boolean;
+  adapt_dialogue?: boolean;
+  analyze_performance?: boolean;
+  num_speakers?: number | null;
+  confirmed_budget_inr?: number;
+}
+
+export interface PipelineContinue {
+  confirmed_budget_inr?: number | null;
+}
+
+export interface PipelineStep {
+  key: string;
+  kind: "job" | "gate";
+  stage: string | null;
+  status: "pending" | "running" | "awaiting" | "completed" | "failed" | "cancelled";
+  job_id: string | null;
+}
+
+export interface PipelinePlan {
+  steps: Array<PipelineStep>;
+  gates: Record<string, string>;
+}
+
+export interface Pipeline {
+  id: string;
+  project_id: string;
+  source_asset_id: string;
+  status: "running" | "awaiting_review" | "completed" | "failed" | "cancelled";
+  current_step: number;
+  steps_json: Array<PipelineStep>;
+  options_json: Record<string, unknown>;
+  gate_reason: string | null;
+  budget_confirmed_inr: number;
+  correlation_id: string | null;
+  created_at: string;
+  updated_at: string;
+  finished_at: string | null;
+}
+
 export interface CharacterDirection {
   speaker_id: string;
   intent: string;

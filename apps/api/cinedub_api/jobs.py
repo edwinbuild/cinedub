@@ -1,9 +1,11 @@
 """Job requests, reuse and estimated-budget reservations. Stage logic lives in `stages`."""
 
+from fastapi import HTTPException
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from .models import Job, Project
+from .project_status import sync_project_status
 from .schemas import JobEstimate, JobFields
 from .stages import prepare_stage
 from .stages.preparation import Preparation
@@ -83,3 +85,38 @@ def estimate_job(session: Session, project: Project, payload) -> JobEstimate:
     return estimate_prepared(
         session, project, prepare_stage(session, project, fields), fields.force_new
     )
+
+
+class CostLimitExceeded(Exception):
+    """A caller-imposed spending cap (for example a pipeline budget) would be exceeded."""
+
+    def __init__(self, cost: float, required: float):
+        super().__init__("Estimated cost exceeds the confirmed limit")
+        self.cost, self.required = cost, required
+
+
+def submit_job(session: Session, project: Project, payload, *, cost_limit: float | None = None):
+    """Freeze, reuse or queue one job. Shared by the jobs API and the pipeline orchestrator."""
+    fields = request_fields(payload)
+    prep = prepare_stage(session, project, fields)
+    estimate = estimate_prepared(session, project, prep, fields.force_new)
+    if estimate.cached_job_id:
+        return session.get(Job, estimate.cached_job_id)
+    if session.scalar(select(Job.id).where(Job.project_id == project.id, Job.status.in_(ACTIVE))):
+        raise HTTPException(409, "Another job is active; wait or cancel it first")
+    if prep.cost > estimate.remaining_inr:
+        raise HTTPException(
+            402, "Estimated project budget exceeded; adjust local budget configuration"
+        )
+    if cost_limit is not None and prep.cost > cost_limit:
+        raise CostLimitExceeded(prep.cost, prep.cost - cost_limit)
+    job = Job(
+        project_id=project.id,
+        stage=fields.stage,
+        provider=prep.provider,
+        input_json=prep.inputs,
+        estimated_cost_inr=prep.cost,
+    )
+    session.add(job)
+    sync_project_status(session, project)
+    return job

@@ -17,6 +17,10 @@ NAMES = {
     "JobRead": "Job",
     "ArtifactRead": "Artifact",
     "ArtifactLineage": "ArtifactLineage",
+    "PipelineCreate": "PipelineCreate",
+    "PipelineContinue": "PipelineContinue",
+    "PipelinePlan": "PipelinePlan",
+    "PipelineRead": "Pipeline",
     "ProjectDetail": "ProjectDetail",
     "RevisionRead": "TimelineRevision",
     "JobEstimate": "JobEstimate",
@@ -73,6 +77,8 @@ NAMES = {
 # Discriminated unions are emitted as TypeScript union types of their member interfaces.
 UNIONS = {"JobRequest": schemas.JobCreate}
 REQUESTS = {
+    "PipelineCreate",
+    "PipelineContinue",
     *(model.__name__ for model in schemas.JOB_REQUESTS),
     "SpeakerReuseApply",
     "SegmentUpdate",

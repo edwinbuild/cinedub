@@ -17,6 +17,7 @@ from .job_errors import InvalidJobInput, InvalidJobOutput, JobErrorCode, classif
 from .lineage import record_job_lineage
 from .models import Artifact, Job, Project
 from .observability import bound, configure_logging, log_event
+from .pipeline import after_job, recover_pipelines
 from .processing import check_cancel
 from .project_status import sync_project_status
 from .stages import STAGES, validated_inputs, validated_output
@@ -89,7 +90,17 @@ def _process_once(session: Session) -> bool:
         return False
     # The request that created the job keeps tracing through its provider runs and artifacts.
     with bound(job.correlation_id or job.id):
-        return _process_claimed(session, job)
+        _process_claimed(session, job)
+        # The job's own outcome is committed first; a pipeline step never rewrites it.
+        advance_pipeline_after(session, job.id)
+    return True
+
+
+def advance_pipeline_after(session: Session, job_id: str) -> None:
+    job = session.get(Job, job_id)
+    after_job(session, job)
+    sync_project_status(session, job.project_id)
+    session.commit()
 
 
 def _process_claimed(session: Session, job: Job) -> bool:
@@ -193,6 +204,9 @@ def recover_jobs(session: Session) -> None:
             job.status = "queued"
             if submission and job.remote_job_id and job.phase == submission:
                 job.phase = "created"
+    session.commit()
+    # A restart may have stopped a pipeline's current job; record the pipeline outcome too.
+    recover_pipelines(session)
     session.commit()
 
 

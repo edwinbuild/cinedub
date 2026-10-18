@@ -376,5 +376,25 @@ class ProviderRun(Base, TimestampMixin):
     correlation_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 
 
-# Jobs, provider runs and artifacts inherit the active request/job correlation ID on insert.
-install_model_hooks(Job, ProviderRun, Artifact)
+class Pipeline(Base, TimestampMixin):
+    """An ordered run of stages with human review gates (see pipeline.py)."""
+
+    __tablename__ = "pipelines"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    source_asset_id: Mapped[str] = mapped_column(ForeignKey("media_assets.id"))
+    status: Mapped[str] = mapped_column(String(32), default="running", index=True)
+    current_step: Mapped[int] = mapped_column(Integer, default=0)
+    steps_json: Mapped[list] = mapped_column(JSON, default=list)
+    options_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    gate_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    budget_confirmed_inr: Mapped[float] = mapped_column(Float, default=0.0)
+    correlation_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+# Jobs, provider runs, artifacts and pipelines inherit the active correlation ID on insert.
+install_model_hooks(Job, ProviderRun, Artifact, Pipeline)

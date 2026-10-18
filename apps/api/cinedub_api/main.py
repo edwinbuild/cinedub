@@ -23,7 +23,7 @@ from .dependencies import SessionDep, require_project
 from .diagnostics import hardware_diagnostics
 from .dialogue_review import latest_brief
 from .dialogue_review import stale_reason as dialogue_context_stale_reason
-from .jobs import ACTIVE, budget_totals, estimate_job, estimate_prepared, request_fields, write_lock
+from .jobs import ACTIVE, budget_totals, estimate_job, submit_job, write_lock
 from .line_editing import apply_line_edit
 from .lineage import ancestry
 from .media import MediaError, probe_media, safe_filename
@@ -43,6 +43,7 @@ from .models import (
     new_id,
 )
 from .observability import HEADER, CorrelationMiddleware, configure_logging, log_event
+from .pipeline import after_job
 from .project_status import sync_project_status
 from .providers import ProviderRegistry
 from .routes.adaptation import router as adaptation_router
@@ -53,6 +54,7 @@ from .routes.emotion import router as emotion_router
 from .routes.group_history import router as group_history_router
 from .routes.history import router as history_router
 from .routes.mixes import router as mixes_router
+from .routes.pipelines import router as pipelines_router
 from .routes.speaker_reuse import router as speaker_reuse_router
 from .routes.stems import router as stems_router
 from .routes.structure import router as structure_router
@@ -81,7 +83,7 @@ from .schemas import (
     StemSetRead,
     VoiceProfileRead,
 )
-from .stages import STAGES, prepare_stage
+from .stages import STAGES
 from .storage import storage
 from .storage_capacity import STORAGE_MESSAGE, is_storage_capacity_error
 from .streaming import media_response
@@ -133,6 +135,7 @@ app.add_middleware(CorrelationMiddleware)
 
 
 app.include_router(voices_router)
+app.include_router(pipelines_router)
 app.include_router(stems_router)
 app.include_router(mixes_router)
 app.include_router(alignment_router)
@@ -475,27 +478,7 @@ async def create_job(
     session: SessionDep,
 ) -> Job:
     write_lock(session)
-    project = require_project(session, project_id)
-    fields = request_fields(payload)
-    prep = prepare_stage(session, project, fields)
-    estimate = estimate_prepared(session, project, prep, fields.force_new)
-    if estimate.cached_job_id:
-        return session.get(Job, estimate.cached_job_id)
-    if session.scalar(select(Job.id).where(Job.project_id == project_id, Job.status.in_(ACTIVE))):
-        raise HTTPException(409, "Another job is active; wait or cancel it first")
-    if prep.cost > estimate.remaining_inr:
-        raise HTTPException(
-            402, "Estimated project budget exceeded; adjust local budget configuration"
-        )
-    job = Job(
-        project_id=project_id,
-        stage=fields.stage,
-        provider=prep.provider,
-        input_json=prep.inputs,
-        estimated_cost_inr=prep.cost,
-    )
-    session.add(job)
-    sync_project_status(session, project)
+    job = submit_job(session, require_project(session, project_id), payload)
     session.commit()
     session.refresh(job)
     return job
@@ -528,6 +511,7 @@ async def resume_job(job_id: str, session: SessionDep):
     job.finished_at = None
     if job.remote_job_id:
         job.checkpoint_json = {**job.checkpoint_json, "poll_started_at": None}
+    after_job(session, job)  # A failed pipeline resumes with its job.
     sync_project_status(session, job.project_id)
     session.commit()
     return job
@@ -544,6 +528,7 @@ async def cancel_job(job_id: str, session: SessionDep) -> Job:
     if job.status == "queued":
         job.status = "cancelled"
         job.phase = "cancelled"
+        after_job(session, job)
         sync_project_status(session, job.project_id)
     session.commit()
     session.refresh(job)

@@ -83,11 +83,11 @@ async def test_options_for_another_stage_are_rejected_not_ignored(client, raw):
 async def test_create_freezes_inputs_once_and_stored_jobs_validate(client, session, monkeypatch):
     detail = await prepare_reviewed_scene(client, session)
     calls = []
-    from cinedub_api import main
+    from cinedub_api import jobs
 
-    original = main.prepare_stage
+    original = jobs.prepare_stage
     monkeypatch.setattr(
-        main, "prepare_stage", lambda *args: calls.append(args[2].stage) or original(*args)
+        jobs, "prepare_stage", lambda *args: calls.append(args[2].stage) or original(*args)
     )
     response = await client.post(f"/projects/{detail['id']}/jobs", json={"stage": "render_preview"})
     assert response.status_code == 202, response.text

@@ -920,6 +920,54 @@ JOB_REQUESTS = (
 JobCreate = Annotated[Union[JOB_REQUESTS], Field(discriminator="stage")]  # noqa: UP007
 
 
+class PipelineCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source_asset_id: str
+    separate_dialogue: bool = False
+    adapt_dialogue: bool = False
+    analyze_performance: bool = False
+    num_speakers: int | None = Field(default=None, ge=1, le=20)
+    # Upper bound on estimated paid-provider spend; the pipeline pauses before exceeding it.
+    confirmed_budget_inr: float = Field(default=0, ge=0, le=100000, allow_inf_nan=False)
+
+
+class PipelineContinue(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    confirmed_budget_inr: float | None = Field(default=None, ge=0, le=100000, allow_inf_nan=False)
+
+
+class PipelineStep(BaseModel):
+    key: str
+    kind: Literal["job", "gate"]
+    stage: str | None = None
+    status: Literal["pending", "running", "awaiting", "completed", "failed", "cancelled"]
+    job_id: str | None = None
+
+
+PipelineStatus = Literal["running", "awaiting_review", "completed", "failed", "cancelled"]
+
+
+class PipelinePlan(BaseModel):
+    steps: list[PipelineStep]
+    gates: dict[str, str]
+
+
+class PipelineRead(ORMModel):
+    id: str
+    project_id: str
+    source_asset_id: str
+    status: PipelineStatus
+    current_step: int
+    steps_json: list[PipelineStep]
+    options_json: dict
+    gate_reason: str | None
+    budget_confirmed_inr: float
+    correlation_id: str | None
+    created_at: datetime
+    updated_at: datetime
+    finished_at: datetime | None
+
+
 class JobEstimate(BaseModel):
     estimated_cost_inr: float
     spent_estimate_inr: float
