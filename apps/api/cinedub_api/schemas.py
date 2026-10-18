@@ -962,6 +962,56 @@ class ArtifactRead(ORMModel):
     content_url: str
     metadata_json: dict
     access_blocked_reason: str | None = None
+    sha256: str | None = None
+    size_bytes: int | None = None
+
+
+class LineageJob(BaseModel):
+    id: str
+    stage: str
+    provider: str
+
+
+class LineageProviderRun(BaseModel):
+    capability: str
+    provider: str
+    model: str
+    status: str
+    latency_ms: int | None
+    estimated_cost_inr: float | None
+
+
+class LineageArtifact(BaseModel):
+    id: str
+    kind: str
+    filename: str
+    sha256: str | None
+    size_bytes: int | None
+    storage_key: str | None
+    demo: bool
+    job: LineageJob | None
+    provider_runs: list[LineageProviderRun]
+
+
+class LineageEdge(BaseModel):
+    artifact_id: str
+    role: str
+    input_artifact_id: str | None
+    input_asset_id: str | None
+
+
+class LineageSource(BaseModel):
+    id: str
+    filename: str
+    sha256: str | None
+    duration_ms: int | None
+
+
+class ArtifactLineage(BaseModel):
+    artifact_id: str
+    artifacts: list[LineageArtifact]
+    edges: list[LineageEdge]
+    sources: list[LineageSource]
 
 
 class ProjectDetail(ProjectRead):

@@ -102,6 +102,56 @@ export interface Artifact {
   content_url: string;
   metadata_json: Record<string, unknown>;
   access_blocked_reason: string | null;
+  sha256: string | null;
+  size_bytes: number | null;
+}
+
+export interface LineageArtifact {
+  id: string;
+  kind: string;
+  filename: string;
+  sha256: string | null;
+  size_bytes: number | null;
+  storage_key: string | null;
+  demo: boolean;
+  job: LineageJob | null;
+  provider_runs: Array<LineageProviderRun>;
+}
+
+export interface LineageEdge {
+  artifact_id: string;
+  role: string;
+  input_artifact_id: string | null;
+  input_asset_id: string | null;
+}
+
+export interface LineageJob {
+  id: string;
+  stage: string;
+  provider: string;
+}
+
+export interface LineageProviderRun {
+  capability: string;
+  provider: string;
+  model: string;
+  status: string;
+  latency_ms: number | null;
+  estimated_cost_inr: number | null;
+}
+
+export interface LineageSource {
+  id: string;
+  filename: string;
+  sha256: string | null;
+  duration_ms: number | null;
+}
+
+export interface ArtifactLineage {
+  artifact_id: string;
+  artifacts: Array<LineageArtifact>;
+  edges: Array<LineageEdge>;
+  sources: Array<LineageSource>;
 }
 
 export interface CharacterDirection {

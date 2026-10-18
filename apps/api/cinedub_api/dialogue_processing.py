@@ -4,12 +4,12 @@ import time
 
 from sqlalchemy import select
 
-from .config import get_settings
 from .dialogue_review import METHOD, build_review, read_dialogue_review, stale_reason
 from .job_errors import StaleInput
 from .media import file_digest
 from .models import Artifact, ProviderRun
 from .processing import checkpoint
+from .storage import storage
 
 
 def process_review_translation(session, job):
@@ -29,7 +29,7 @@ def process_review_translation(session, job):
     reason = stale_reason(session, job.project_id, job.input_json)
     if reason:
         raise StaleInput(reason)
-    directory = get_settings().storage_root / job.project_id / "dialogue-review" / job.id
+    directory = storage().job_dir(job.project_id, "dialogue-review", job.id)
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / "dialogue-review.json"
     path.write_text(report.model_dump_json(indent=2), encoding="utf-8")

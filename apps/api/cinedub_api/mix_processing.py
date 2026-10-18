@@ -9,12 +9,12 @@ from types import SimpleNamespace
 from sqlalchemy import select
 
 from . import __version__
-from .config import get_settings
 from .media import file_digest, probe_media, run_ffmpeg, write_srt
 from .mix_media import mux_source_video, normalize_mix, render_mix_sum, verify_audio
 from .mixes import validate_mix_snapshot
 from .models import Artifact, MediaAsset, MixRender, ProviderRun
 from .processing import add_warnings, check_cancel, checkpoint
+from .storage import storage
 
 
 def checked_file(path, expected=None):
@@ -51,7 +51,7 @@ def process_render_mix(session, job):
     inputs = job.input_json
     validate_mix_snapshot(session, inputs)
     source = session.get(MediaAsset, inputs["source_asset_id"])
-    directory = get_settings().storage_root / job.project_id / "mixes" / job.id
+    directory = storage().job_dir(job.project_id, "mixes", job.id)
     directory.mkdir(parents=True, exist_ok=True)
     settings = inputs["mix_settings"]
 

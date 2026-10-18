@@ -5,10 +5,12 @@ import io
 import json
 import socket
 import zipfile
+from pathlib import Path
 
 import pytest
 from cinedub_api.config import get_settings
-from cinedub_api.models import Artifact, Job, ProviderRun
+from cinedub_api.media import file_digest
+from cinedub_api.models import Artifact, Job, MediaAsset, ProviderRun
 from cinedub_api.providers.fake_analysis import (
     FakeAligner,
     FakeDialogueAdapter,
@@ -194,6 +196,35 @@ async def test_complete_workflow_runs_on_labelled_demo_providers(client, session
         assert certificate["demo"]
         for item in certificate["files"]:
             assert hashlib.sha256(archive.read(item["filename"])).hexdigest() == item["sha256"]
+        exported = json.loads(archive.read("lineage.json"))
+    assert "lineage.json" in {item["filename"] for item in certificate["files"]}
+    assert [source["id"] for source in exported["sources"]] == [asset["id"]]
+    # Every exported file traces back to the uploaded source through recorded edges.
+    parents = {}
+    for edge in exported["edges"]:
+        parents.setdefault(edge["artifact_id"], []).append(edge)
+
+    def reaches_source(identifier, seen=()):
+        return any(
+            edge["input_asset_id"] == asset["id"]
+            or (
+                edge["input_artifact_id"]
+                and edge["input_artifact_id"] not in seen
+                and reaches_source(edge["input_artifact_id"], (*seen, identifier))
+            )
+            for edge in parents.get(identifier, [])
+        )
+
+    assert all(reaches_source(identifier) for identifier in exported["exported_artifact_ids"])
+    roles = {edge["role"] for edge in exported["edges"]}
+    assert {"source", "take", "background:music", "background:effects"} <= roles
+    bundle_lineage = (await client.get(f"/artifacts/{bundle_id}/lineage")).json()
+    assert {edge["role"] for edge in bundle_lineage["edges"]} >= {"accepted:master", "source"}
+    assert bundle_lineage["sources"][0]["sha256"] == asset_sha256(session, asset["id"])
+    nodes = {node["id"]: node for node in bundle_lineage["artifacts"]}
+    stem_master = next(node for node in nodes.values() if node["kind"] == "stem_master")
+    assert stem_master["job"]["stage"] == "separate" and stem_master["demo"]
+    assert stem_master["provider_runs"][0]["provider"] == "fake"
 
     session.expire_all()
     fake_jobs = session.query(Job).filter_by(project_id=pid, provider="fake").all()
@@ -214,6 +245,16 @@ async def test_complete_workflow_runs_on_labelled_demo_providers(client, session
             assert provider_run.provider == "fake"
     mix_artifacts = session.query(Artifact).filter_by(job_id=render.id).all()
     assert mix_artifacts and all(item.metadata_json.get("demo") for item in mix_artifacts)
+    for artifact in session.query(Artifact).filter_by(project_id=pid):
+        # Integrity facts are recorded for every produced file, with a root-relative key.
+        assert artifact.lineage_version == 1 and artifact.storage_key, artifact.kind
+        assert not artifact.storage_key.startswith("/") and ".." not in artifact.storage_key
+        assert artifact.sha256 == file_digest(artifact.path), artifact.kind
+        assert artifact.size_bytes == Path(artifact.path).stat().st_size
+
+
+def asset_sha256(session, asset_id):
+    return session.get(MediaAsset, asset_id).metadata_json["sha256"]
 
 
 @pytest.mark.anyio

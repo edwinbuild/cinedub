@@ -4,11 +4,12 @@ import json
 import zipfile
 from pathlib import Path
 
-from .config import get_settings
+from .lineage import ancestry
 from .mix_processing import checked_file, render_artifacts
 from .mixes import validate_mix_snapshot
 from .models import Artifact, Job, MixRender, MixReviewRecord
 from .processing import check_cancel, checkpoint
+from .storage import storage
 
 
 def process_package_mix(session, job):
@@ -35,15 +36,12 @@ def process_package_mix(session, job):
     checkpoint(session, job, "verifying_export_files")
     artifacts = render_artifacts(session, mix)
     manifest = next(item for item in artifacts if item.kind == "mix_manifest")
-    directory = (
-        get_settings().storage_root
-        / job.project_id
-        / "mixes"
-        / mix.job_id
-        / "acceptance"
-        / review.id
+    directory = storage().job_dir(job.project_id, "mixes", mix.job_id, "acceptance", review.id)
+    lineage = directory / "lineage.json"
+    lineage.write_text(
+        json.dumps(export_lineage(session, artifacts), ensure_ascii=False, indent=2),
+        encoding="utf-8",
     )
-    directory.mkdir(parents=True, exist_ok=True)
     certificate = directory / "listening-acceptance.json"
     certificate.write_text(
         json.dumps(
@@ -67,7 +65,8 @@ def process_package_mix(session, job):
                         "bytes": Path(item.path).stat().st_size,
                     }
                     for item in artifacts
-                ],
+                ]
+                + [{"filename": lineage.name, **checked_file(lineage)}],
             },
             ensure_ascii=False,
             indent=2,
@@ -85,7 +84,8 @@ def process_package_mix(session, job):
     staging = bundle.with_suffix(".part")
     with zipfile.ZipFile(staging, "w", compression=zipfile.ZIP_STORED) as archive:
         for path, name in [(Path(item.path), item.filename) for item in artifacts] + [
-            (certificate, certificate.name)
+            (lineage, lineage.name),
+            (certificate, certificate.name),
         ]:
             cancel()
             with path.open("rb") as source, archive.open(name, "w") as destination:
@@ -125,3 +125,20 @@ def process_package_mix(session, job):
     cancel()
     session.commit()
     return {"mix_id": mix.id, "artifact_ids": [certificate_artifact.id, bundle_artifact.id]}
+
+
+def export_lineage(session, artifacts) -> dict:
+    """Union of every exported file's ancestry, down to the original source media."""
+    nodes, edges, sources = {}, [], {}
+    for artifact in artifacts:
+        graph = ancestry(session, artifact)
+        nodes.update({node["id"]: node for node in graph["artifacts"]})
+        edges.extend(edge for edge in graph["edges"] if edge not in edges)
+        sources.update({source["id"]: source for source in graph["sources"]})
+    return {
+        "schema_version": "cinedub-lineage-v1",
+        "exported_artifact_ids": [artifact.id for artifact in artifacts],
+        "artifacts": list(nodes.values()),
+        "edges": edges,
+        "sources": list(sources.values()),
+    }

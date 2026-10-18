@@ -12,6 +12,7 @@ from .processing import check_cancel, checkpoint
 from .providers import ProviderRegistry
 from .providers.local_target_alignment import read_manifest
 from .schemas import TakePerformanceReport
+from .storage import storage
 from .take_analysis import validate_take_analysis
 
 
@@ -32,7 +33,7 @@ def process_analyze_takes(session, job):
         != inputs["target_model_manifest"]
     ):
         raise StaleInput("Target alignment model changed; schedule a new analysis")
-    directory = settings.storage_root / job.project_id / "take-analysis" / job.id
+    directory = storage().job_dir(job.project_id, "take-analysis", job.id)
     directory.mkdir(parents=True, exist_ok=True)
     source_audio = session.get(Artifact, inputs["recognition_artifact_id"])
     prepared = []

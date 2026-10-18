@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+HEAD = "0011_artifact_lineage"
 
 
 def migrate(path, revision):
@@ -102,10 +103,7 @@ def test_speaker_reuse_upgrade_backs_up_structure_schema_without_rewriting_rows(
             == "0009_timeline_structure"
         )
     with sqlite3.connect(database) as connection:
-        assert (
-            connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
-            == "0010_speaker_reuse"
-        )
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone()[0] == HEAD
         assert connection.execute("SELECT COUNT(*) FROM speaker_reuses").fetchone()[0] == 0
         assert {
             table: connection.execute(f"SELECT * FROM {table}").fetchall() for table in tables
@@ -116,10 +114,7 @@ def test_fresh_and_upgrade_paths_preserve_legacy_edits(tmp_path):
     fresh = tmp_path / "fresh.db"
     migrate(fresh, "head")
     with sqlite3.connect(fresh) as connection:
-        assert (
-            connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
-            == "0010_speaker_reuse"
-        )
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone()[0] == HEAD
         fresh_columns = {row[1] for row in connection.execute("PRAGMA table_info(segments)")}
     legacy = tmp_path / "legacy.db"
     environment = migrate(legacy, "0001_initial_schema")

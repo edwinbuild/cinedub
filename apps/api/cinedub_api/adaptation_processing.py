@@ -12,6 +12,7 @@ from .media import file_digest
 from .models import Artifact, ProviderRun
 from .processing import check_cancel, checkpoint
 from .providers import ProviderRegistry
+from .storage import storage
 
 
 def process_adapt_dialogue(session, job):
@@ -34,7 +35,7 @@ def process_adapt_dialogue(session, job):
     if reason:
         raise StaleInput(reason)
     validate_timing_feedback(session, job.project_id, inputs)
-    directory = get_settings().storage_root / job.project_id / "dialogue-adaptation" / job.id
+    directory = storage().job_dir(job.project_id, "dialogue-adaptation", job.id)
     completed = validate_results(
         inputs, job.project_id, job.checkpoint_json.get("adaptation_completed_lines", [])
     )

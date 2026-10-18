@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from .config import get_settings
 from .database import SessionLocal, create_database
 from .job_errors import InvalidJobInput, InvalidJobOutput, JobErrorCode, classify
+from .lineage import record_job_lineage
 from .models import Artifact, Job, Project
 from .processing import check_cancel
 from .project_status import sync_project_status
@@ -107,6 +108,7 @@ def _process_once(session: Session) -> bool:
             raise InvalidJobOutput("Stage result failed its contract and was not recorded") from exc
         if job.provider == "fake":
             label_demo_artifacts(session, job)
+        record_job_lineage(session, job)
         job.output_json = output
         job.progress = 1.0
         job.status = "completed"

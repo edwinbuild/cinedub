@@ -13,6 +13,7 @@ from .processing import check_cancel, checkpoint
 from .providers import ProviderRegistry
 from .providers.local_alignment import read_manifest
 from .schemas import AlignmentReport
+from .storage import storage
 
 
 def process_align(session, job):
@@ -29,7 +30,7 @@ def process_align(session, job):
         and read_manifest(Path(inputs["model_dir"])) != inputs["model_manifest"]
     ):
         raise StaleInput("Alignment model changed since scheduling; submit a new request")
-    directory = settings.storage_root / job.project_id / "alignment" / job.id
+    directory = storage().job_dir(job.project_id, "alignment", job.id)
     directory.mkdir(parents=True, exist_ok=True)
     audio = session.get(Artifact, inputs["recognition_artifact_id"])
     checkpoint(session, job, "aligning_words")

@@ -14,6 +14,7 @@ from .models import Artifact, MediaAsset, ProviderRun, StemSet
 from .processing import add_warnings, check_cancel, checkpoint
 from .providers import ProviderRegistry
 from .providers.local_separation import read_manifest
+from .storage import storage
 
 
 def process_separate(session, job):
@@ -32,7 +33,7 @@ def process_separate(session, job):
         read_manifest(Path(job.input_json["model_dir"])) != job.input_json["model_manifest"]
     ):
         raise StaleInput("Separator model changed since scheduling; submit a new request")
-    directory = settings.storage_root / job.project_id / "separation" / job.id
+    directory = storage().job_dir(job.project_id, "separation", job.id)
     directory.mkdir(parents=True, exist_ok=True)
     raw_path = directory / "input.f32"
     checkpoint(session, job, "preparing_separation_audio", source_sha256=source_hash)

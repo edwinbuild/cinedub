@@ -16,6 +16,7 @@ NAMES = {
     "SegmentRead": "Segment",
     "JobRead": "Job",
     "ArtifactRead": "Artifact",
+    "ArtifactLineage": "ArtifactLineage",
     "ProjectDetail": "ProjectDetail",
     "RevisionRead": "TimelineRevision",
     "JobEstimate": "JobEstimate",

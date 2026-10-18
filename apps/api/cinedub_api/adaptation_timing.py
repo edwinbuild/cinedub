@@ -3,11 +3,11 @@
 import wave
 from pathlib import Path
 
-from .config import get_settings
 from .consent import artifact_block_reason, profile_is_selected, validate_voice_use
 from .media import file_digest
 from .models import Artifact, Job, Segment, VoiceProfile
 from .schemas import DialogueTimingFeedback
+from .storage import storage
 from .voices import candidate_signature
 
 
@@ -60,10 +60,12 @@ def measure_feedback(session, project_id, revision_id, context, candidate_id):
     validate_voice_use(session, profile)
     if artifact_block_reason(session, candidate):
         raise ValueError("Timing take consent is unavailable or revoked")
-    root = get_settings().storage_root.resolve()
-    directory = (root / project_id / "voice" / job.id / line.id).resolve()
+    try:
+        directory = storage().job_path(project_id, "voice", job.id, line.id)
+    except ValueError as exc:
+        raise ValueError("Timing take audio provenance is unavailable") from exc
     path = Path(candidate.path).resolve()
-    if not directory.is_relative_to(root) or path.parent != directory:
+    if path.parent != directory:
         raise ValueError("Timing take audio provenance is unavailable")
     raw = directory / "raw.wav"
     if raw.resolve() != raw or not raw.is_file():

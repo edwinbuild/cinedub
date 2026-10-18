@@ -18,6 +18,7 @@ from .models import Artifact, MediaAsset, ProviderRun, VoiceProfile
 from .processing import add_warnings, charge, check_cancel, checkpoint
 from .providers import ProviderRegistry
 from .providers.retry import retry_safe
+from .storage import storage
 
 
 def file_hash(path):
@@ -75,7 +76,7 @@ def process_prepare_reference(session, job):
     if profile.reference_artifact_id:
         return {"artifact_ids": [profile.reference_artifact_id]}
     source = session.get(MediaAsset, job.input_json["source_asset_id"])
-    path = get_settings().storage_root / job.project_id / "references" / job.id / "reference.wav"
+    path = storage().job_dir(job.project_id, "references", job.id) / "reference.wav"
     path.parent.mkdir(parents=True, exist_ok=True)
     duration_ms = job.input_json["end_ms"] - job.input_json["start_ms"]
     checkpoint(session, job, "preparing_reference")

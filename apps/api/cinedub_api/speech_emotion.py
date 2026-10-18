@@ -5,10 +5,10 @@ from pathlib import Path
 from sqlalchemy import select
 
 from .alignment import freeze_alignment_audio, validate_alignment_source
-from .config import get_settings
 from .media import file_digest
 from .models import Job, Segment, SpeechEmotionReviewRecord
 from .schemas import SpeechEmotionInference, SpeechEmotionReport, SpeechEmotionReviewRead
+from .storage import storage
 from .timeline import revision_segments
 
 
@@ -148,7 +148,7 @@ def validated_inferences(inputs, values):
 def read_emotion_report(session, artifact):
     path = Path(artifact.path).resolve()
     if (
-        not path.is_relative_to(get_settings().storage_root.resolve())
+        not storage().contains(path)
         or not path.is_file()
         or file_digest(path) != artifact.metadata_json.get("sha256")
     ):

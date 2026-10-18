@@ -13,6 +13,7 @@ from .models import Artifact, MediaAsset, ProviderRun, Segment, VoiceProfile
 from .processing import add_warnings, charge, check_cancel, checkpoint, split_translation
 from .providers import ProviderRegistry
 from .providers.retry import retry_safe
+from .storage import storage
 from .voices import candidate_signature, stock_variation
 
 
@@ -59,7 +60,7 @@ def process_synthesize(session, job):
             skipped.append(snapshot["id"])
             continue
         validate_voice_use(session, profile)
-        output_dir = settings.storage_root / job.project_id / "voice" / job.id / line.id
+        output_dir = storage().job_dir(job.project_id, "voice", job.id, line.id)
         output_dir.mkdir(parents=True, exist_ok=True)
         parts = split_translation(
             snapshot["translated_text"], 1000 if voice["voice_kind"] == "clone" else 2500
@@ -175,12 +176,12 @@ def process_synthesize(session, job):
 
 
 def process_render_preview(session, job):
-    settings = get_settings()
+    get_settings()
     existing = session.scalars(select(Artifact).where(Artifact.job_id == job.id)).all()
     if existing:
         return {"artifact_ids": [item.id for item in existing], "dialogue_only": True}
     source = session.get(MediaAsset, job.input_json["source_asset_id"])
-    output_dir = settings.storage_root / job.project_id / "preview" / job.id
+    output_dir = storage().job_dir(job.project_id, "preview", job.id)
     mix = output_dir / "dialogue-only.wav"
     lines = []
     demo = False

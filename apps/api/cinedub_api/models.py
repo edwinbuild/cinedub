@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     DateTime,
     Float,
@@ -311,6 +312,32 @@ class Artifact(Base, TimestampMixin):
     filename: Mapped[str] = mapped_column(String(255))
     media_type: Mapped[str] = mapped_column(String(120))
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    # Lineage/integrity facts recorded once when the producing job completes (see lineage.py).
+    sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    storage_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provider_run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("provider_runs.id"), nullable=True
+    )
+    lineage_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class ArtifactInput(Base):
+    """One input edge: this artifact was produced from another artifact or source asset."""
+
+    __tablename__ = "artifact_inputs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    artifact_id: Mapped[str] = mapped_column(
+        ForeignKey("artifacts.id", ondelete="CASCADE"), index=True
+    )
+    role: Mapped[str] = mapped_column(String(64))
+    input_artifact_id: Mapped[str | None] = mapped_column(
+        ForeignKey("artifacts.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    input_asset_id: Mapped[str | None] = mapped_column(
+        ForeignKey("media_assets.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
 
 class SpeakerReuse(Base):

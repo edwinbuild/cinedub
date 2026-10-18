@@ -4,13 +4,13 @@ import unicodedata
 from pathlib import Path
 
 from .adaptation_timing import validate_timing_feedback
-from .config import get_settings
 from .consent import artifact_block_reason
 from .dialogue_prompt import GENERATION, PROMPT_VERSION, adaptation_requests, request_digest
 from .dialogue_review import build_review, context_lines, latest_brief, review_findings
 from .media import file_digest
 from .models import Job, Segment, TimelineRevision
 from .schemas import DialogueAdaptationReport, DialogueNativeLine
+from .storage import storage
 
 WARNINGS = [
     "Experimental model drafts: a Malayalam-speaking editor must verify meaning and naturalness",
@@ -165,7 +165,7 @@ def read_adaptation_report(session, artifact):
         raise PermissionError("Dialogue alternatives contain revoked timing-take provenance")
     path = Path(artifact.path).resolve()
     if (
-        not path.is_relative_to(get_settings().storage_root.resolve())
+        not storage().contains(path)
         or not path.is_file()
         or file_digest(path) != artifact.metadata_json.get("sha256")
     ):

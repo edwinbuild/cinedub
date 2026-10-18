@@ -24,6 +24,7 @@ from .dialogue_review import latest_brief
 from .dialogue_review import stale_reason as dialogue_context_stale_reason
 from .jobs import ACTIVE, budget_totals, estimate_job, estimate_prepared, request_fields, write_lock
 from .line_editing import apply_line_edit
+from .lineage import ancestry
 from .media import MediaError, probe_media, safe_filename
 from .mixes import mix_read
 from .models import (
@@ -56,6 +57,7 @@ from .routes.structure import router as structure_router
 from .routes.take_analysis import router as take_analysis_router
 from .routes.voices import router as voices_router
 from .schemas import (
+    ArtifactLineage,
     ArtifactRead,
     BudgetUpdate,
     CapabilityRead,
@@ -78,6 +80,7 @@ from .schemas import (
     VoiceProfileRead,
 )
 from .stages import STAGES, prepare_stage
+from .storage import storage
 from .storage_capacity import STORAGE_MESSAGE, is_storage_capacity_error
 from .streaming import media_response
 from .timeline import revision_segments
@@ -144,6 +147,8 @@ def artifact_read(artifact: Artifact, session: Session | None = None) -> Artifac
         content_url=f"/artifacts/{artifact.id}/content",
         metadata_json=artifact.metadata_json,
         access_blocked_reason=artifact_block_reason(session, artifact) if session else None,
+        sha256=artifact.sha256,
+        size_bytes=artifact.size_bytes,
     )
 
 
@@ -312,7 +317,7 @@ async def upload_asset(
         filename=original_name,
         media_type=file.content_type or "application/octet-stream",
     )
-    target_dir = settings.storage_root / project.id / "source"
+    target_dir = storage().upload_dir(project.id)
     target_dir.mkdir(parents=True, exist_ok=True)
     asset.id = new_id()
     target = target_dir / f"{asset.id}{extension}"
@@ -557,6 +562,14 @@ async def project_events(project_id: str, request: Request) -> StreamingResponse
     return StreamingResponse(stream(), media_type="text/event-stream")
 
 
+@app.get("/artifacts/{artifact_id}/lineage", response_model=ArtifactLineage)
+async def artifact_lineage(artifact_id: str, session: SessionDep):
+    artifact = session.get(Artifact, artifact_id)
+    if not artifact:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+    return ancestry(session, artifact)
+
+
 @app.api_route("/artifacts/{artifact_id}/content", methods=["GET", "HEAD"])
 @app.api_route("/artifacts/{artifact_id}/download", methods=["GET", "HEAD"])
 async def download_artifact(artifact_id: str, request: Request, session: SessionDep):
@@ -566,9 +579,8 @@ async def download_artifact(artifact_id: str, request: Request, session: Session
     blocked = artifact_block_reason(session, artifact)
     if blocked:
         raise HTTPException(403, blocked)
-    path = Path(artifact.path).resolve()
-    storage_root = settings.storage_root.resolve()
-    if not path.is_relative_to(storage_root) or not path.is_file():
+    path = storage().readable(artifact.path)
+    if not path:
         raise HTTPException(status_code=404, detail="Artifact file is unavailable")
 
     return media_response(

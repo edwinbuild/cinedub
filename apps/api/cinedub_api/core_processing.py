@@ -27,6 +27,7 @@ from .models import (
     TimelineRevision,
 )
 from .processing import check_cancel
+from .storage import storage
 
 settings = get_settings()
 
@@ -178,7 +179,7 @@ def process_ingest(session: Session, job: Job) -> dict:
     if not source:
         raise ValueError("No source media is available")
     source_path = Path(source.path)
-    output_dir = settings.storage_root / job.project_id / "ingest" / job.id
+    output_dir = storage(settings.storage_root).job_dir(job.project_id, "ingest", job.id)
     audio_path = output_dir / "source-48khz.wav"
     _update_progress(session, job, 0, "extracting_audio")
     extract_audio(source_path, audio_path, cancel=cancel)
@@ -267,7 +268,7 @@ def process_export(session: Session, job: Job) -> dict:
     segments = [SimpleNamespace(**snapshot) for snapshot in job.input_json.get("segments", [])]
     if not segments:
         raise ValueError("No segments are available to export")
-    export_dir = settings.storage_root / job.project_id / "exports" / job.id
+    export_dir = storage(settings.storage_root).job_dir(job.project_id, "exports", job.id)
     revision = session.get(TimelineRevision, job.input_json.get("revision_id"))
     filename = "demo-malayalam.srt" if revision.provider == "fake" else "malayalam.srt"
     srt_path = export_dir / filename

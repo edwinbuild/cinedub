@@ -14,6 +14,7 @@ from .providers import ProviderRegistry
 from .providers.local_emotion import QUALITY_WARNING, read_manifest
 from .schemas import SpeechEmotionReport
 from .speech_emotion import read_emotion_report, validate_emotion_inputs, validated_inferences
+from .storage import storage
 
 
 def process_analyze_emotion(session, job):
@@ -29,7 +30,7 @@ def process_analyze_emotion(session, job):
         read_manifest(Path(inputs["model_dir"])) != inputs["model_manifest"]
     ):
         raise StaleInput("Speech-emotion model installation changed; schedule a new analysis")
-    directory = get_settings().storage_root / job.project_id / "speech-emotion" / job.id
+    directory = storage().job_dir(job.project_id, "speech-emotion", job.id)
     checkpoint(session, job, "analyzing_source_speech")
     audio = session.get(Artifact, inputs["recognition_artifact_id"])
 

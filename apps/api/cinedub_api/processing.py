@@ -15,6 +15,7 @@ from .models import Artifact, Job, MediaAsset, Project, ProviderRun, Segment, St
 from .providers import ProviderRegistry
 from .providers.local_asr import read_manifest
 from .providers.retry import retry_safe
+from .storage import storage
 from .timeline import import_transcript, normalize_transcript
 
 
@@ -50,7 +51,7 @@ def process_transcribe(session: Session, job: Job) -> dict:
     project = session.get(Project, job.project_id)
     if not source or source.project_id != job.project_id:
         raise ValueError("Selected source is unavailable")
-    output_dir = settings.storage_root / job.project_id / "transcript" / job.id
+    output_dir = storage().job_dir(job.project_id, "transcript", job.id)
     output_dir.mkdir(parents=True, exist_ok=True)
     raw_path = output_dir / "raw-transcript.json"
     model = job.input_json.get("model", settings.transcription_model)
@@ -379,7 +380,7 @@ def process_translate(session: Session, job: Job) -> dict:
         add_warnings(
             job, ["Newer human edits were preserved; unused translations remain in job results"]
         )
-    output_dir = settings.storage_root / job.project_id / "translation" / job.id
+    output_dir = storage().job_dir(job.project_id, "translation", job.id)
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / "translation-candidates.json"
     path.write_text(json.dumps(results, ensure_ascii=False), encoding="utf-8")

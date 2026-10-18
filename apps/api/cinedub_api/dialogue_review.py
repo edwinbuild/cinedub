@@ -6,7 +6,6 @@ from pathlib import Path
 
 from sqlalchemy import select
 
-from .config import get_settings
 from .media import file_digest
 from .models import DialogueBrief, Job, Speaker, TimelineRevision
 from .schemas import (
@@ -15,6 +14,7 @@ from .schemas import (
     DialogueReviewLine,
     DialogueReviewReport,
 )
+from .storage import storage
 from .timeline import revision_segments
 
 METHOD = "dialogue-review-v1"
@@ -208,7 +208,7 @@ def build_review(inputs, project_id):
 
 def read_dialogue_review(session, artifact):
     path = Path(artifact.path).resolve()
-    if not path.is_relative_to(get_settings().storage_root.resolve()) or not path.is_file():
+    if not storage().readable(path):
         raise ValueError("Editorial report is outside storage or unavailable")
     if file_digest(path) != artifact.metadata_json.get("sha256"):
         raise ValueError("Editorial report bytes changed")

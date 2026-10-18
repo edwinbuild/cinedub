@@ -25,6 +25,10 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 def create_database() -> None:
     with workspace_lease(settings.database_url, settings.storage_root):
         _upgrade_database()
+        from .lineage import backfill_lineage  # Models import this module; load lazily.
+
+        with SessionLocal() as session:
+            backfill_lineage(session)
 
 
 def _upgrade_database() -> None:
@@ -54,6 +58,7 @@ def _upgrade_database() -> None:
                     "0007_dialogue_briefs",
                     "0008_speech_emotion_reviews",
                     "0009_timeline_structure",
+                    "0010_speaker_reuse",
                 }:
                     label = {
                         "0001_initial_schema": "v01",
@@ -65,6 +70,7 @@ def _upgrade_database() -> None:
                         "0007_dialogue_briefs": "v02-briefs",
                         "0008_speech_emotion_reviews": "v02-emotion",
                         "0009_timeline_structure": "v02-structure",
+                        "0010_speaker_reuse": "v02-reuse",
                     }[current[0]]
                     backup = path.with_name(
                         f"{path.name}.{label}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S%f')}.bak"
