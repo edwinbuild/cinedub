@@ -52,6 +52,7 @@ jobs:
           npm run build:web
           npm run typecheck
           npm run lint:web
+          npm run test:web
       - name: Full backend suite
         run: .venv/bin/pytest -q -ra
       - name: Confirm immutable locks and no downloaded weights
@@ -104,6 +105,8 @@ jobs:
           tests/e2e/group-history.spec.ts
           tests/e2e/stock-variation.spec.ts
           tests/e2e/full-pipeline-fake.spec.ts
+          tests/e2e/timeline.spec.ts
+          tests/e2e/pipeline.spec.ts
       - name: Confirm immutable locks and no downloaded weights
         run: |
           git diff --exit-code -- uv.lock package-lock.json packages/contracts/src/index.ts

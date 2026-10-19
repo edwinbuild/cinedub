@@ -42,9 +42,26 @@ import type {
   SpeechEmotionReport,
   SpeechEmotionReview,
   SpeechEmotionReviewRead,
+  ArtifactLineage,
+  Pipeline,
+  PipelineContinue,
+  PipelineCreate,
+  PipelinePlan,
+  ProjectDeletion,
+  StorageUsage,
 } from "@cinedub/contracts";
 
 export const API_URL = process.env.NEXT_PUBLIC_CINEDUB_API_URL ?? "http://127.0.0.1:8000";
+
+/** An HTTP failure with its status, so callers can tell conflicts from validation errors. */
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) { super(message); this.name = "ApiError"; }
+}
+
+/** A key per user action: a retried POST replays the first response instead of repeating work. */
+function once(): HeadersInit {
+  return { "Idempotency-Key": crypto.randomUUID() };
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
@@ -57,11 +74,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     let message = `${response.status} ${response.statusText}`;
     try {
       const payload = await response.json();
-      message = payload.detail ?? message;
+      message = typeof payload.detail === "string" ? payload.detail : message;
     } catch {
       // Keep the HTTP status when the body is not JSON.
     }
-    throw new Error(message);
+    throw new ApiError(message, response.status);
   }
   return response.json() as Promise<T>;
 }
@@ -89,12 +106,13 @@ export const api = {
   upload: (projectId: string, file: File) => {
     const body = new FormData();
     body.append("file", file);
-    return request(`/projects/${projectId}/assets`, { method: "POST", body });
+    return request(`/projects/${projectId}/assets`, { method: "POST", body, headers: once() });
   },
   startJob: (projectId: string, payload: JobRequest) =>
     request<Job>(`/projects/${projectId}/jobs`, {
       method: "POST",
       body: JSON.stringify(payload),
+      headers: once(),
     }),
   estimateJob: (projectId: string, payload: JobRequest) =>
     request<JobEstimate>(`/projects/${projectId}/jobs/estimate`, {
@@ -173,6 +191,17 @@ export const api = {
     method: "POST", body: JSON.stringify(payload),
   }),
   reviewMix: (id: string, payload: MixReview) => request<MixRender>(`/mixes/${id}/review`, {
-    method: "POST", body: JSON.stringify(payload),
+    method: "POST", body: JSON.stringify(payload), headers: once(),
   }),
+  pipelinePlan: (projectId: string, payload: PipelineCreate) =>
+    request<PipelinePlan>(`/projects/${projectId}/pipelines/plan`, { method: "POST", body: JSON.stringify(payload) }),
+  startPipeline: (projectId: string, payload: PipelineCreate) =>
+    request<Pipeline>(`/projects/${projectId}/pipelines`, { method: "POST", body: JSON.stringify(payload), headers: once() }),
+  continuePipeline: (id: string, payload: PipelineContinue) =>
+    request<Pipeline>(`/pipelines/${id}/continue`, { method: "POST", body: JSON.stringify(payload) }),
+  cancelPipeline: (id: string) => request<Pipeline>(`/pipelines/${id}/cancel`, { method: "POST" }),
+  lineage: (artifactId: string) => request<ArtifactLineage>(`/artifacts/${artifactId}/lineage`),
+  deleteProject: (id: string, confirm: string) =>
+    request<ProjectDeletion>(`/projects/${id}?confirm=${encodeURIComponent(confirm)}`, { method: "DELETE" }),
+  storageUsage: () => request<StorageUsage>("/diagnostics/storage"),
 };

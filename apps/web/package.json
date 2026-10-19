@@ -8,7 +8,7 @@
     "start": "next start --hostname 127.0.0.1",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "node --test"
+    "test": "node --test lib/*.test.ts"
   },
   "dependencies": {
     "@cinedub/contracts": "*",

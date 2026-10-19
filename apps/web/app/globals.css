@@ -319,3 +319,55 @@ a { color: inherit; text-decoration: none; }
 .adaptationOptions { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin: 14px 0; }
 .adaptationOption { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
 .adaptationOption h4 { margin: 0 0 8px; font-size: 13px; }
+
+/* v0.3 workspace: time-based timeline, workflow panel, attention queue */
+.visuallyHidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.timelineView { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); margin: 10px 0; overflow: hidden; }
+.timelineToolbar { display: flex; align-items: center; gap: 6px; padding: 7px 9px; border-bottom: 1px solid var(--line-soft); flex-wrap: wrap; }
+.timelineToolbar strong { font-size: 11px; margin-right: 4px; }
+.timelineToolbar small { color: var(--muted); font-size: 10px; }
+.timelineScroller { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; }
+.timelineContent { position: relative; min-width: 100%; padding-top: 18px; cursor: crosshair; }
+.timelineRuler { position: absolute; inset: 0 0 auto 0; height: 18px; border-bottom: 1px solid var(--line-soft); pointer-events: none; }
+.timelineRuler span { position: absolute; top: 2px; transform: translateX(-50%); font-size: 9px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.timelineTrack { position: relative; height: 34px; border-bottom: 1px solid var(--line-soft); }
+.waveTrack { height: 42px; }
+.waveTrack svg { display: block; fill: #3d4a63; }
+.timelineBlock { position: absolute; top: 4px; bottom: 4px; border: 1px solid #44506a; background: rgba(105,219,255,.12); border-radius: 6px; min-width: 4px; }
+.timelineBlock.approved { border-color: var(--accent-dark); background: rgba(217,255,86,.12); }
+.timelineBlock.drafted { border-style: dashed; border-color: var(--cyan); box-shadow: 0 0 0 1px rgba(105,219,255,.25); }
+.timelineLabel { all: unset; box-sizing: border-box; display: block; width: 100%; height: 100%; padding: 0 10px; color: var(--text); cursor: pointer; overflow: hidden; }
+.timelineText { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 10px; line-height: 24px; }
+.timelineLabel:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.timelineEdge { position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize; z-index: 2; touch-action: none; }
+.timelineEdge.start { left: -4px; }
+.timelineEdge.end { right: -4px; }
+.timelineEdge::after { content: ""; position: absolute; left: 3px; top: 4px; bottom: 4px; width: 2px; border-radius: 1px; background: var(--cyan); opacity: .55; }
+.timelineEdge:hover::after, .timelineEdge:focus-visible::after { opacity: 1; }
+.timelineEdge:focus-visible { outline: 2px solid var(--accent); }
+.timelineTake { position: absolute; top: 6px; bottom: 6px; border-radius: 5px; font-size: 9px; padding: 0 6px; line-height: 20px; overflow: hidden; white-space: nowrap; color: #090b0f; }
+.timelineTake.ready { background: var(--accent-dark); }
+.timelineTake.overrun { background: var(--danger); }
+.timelineTake.missing { background: transparent; border: 1px dashed #4b5568; color: var(--muted); }
+.timelineTake.unknown { background: #8f98a8; }
+.stemTrack span { position: sticky; left: 6px; font-size: 10px; color: var(--muted); line-height: 34px; text-transform: capitalize; }
+.timelinePlayhead { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; background: var(--accent); pointer-events: none; will-change: transform; }
+.pipelinePanel { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 12px; background: var(--panel-soft); }
+.pipelinePanel h2 { font-size: 12px; margin: 0 0 6px; }
+.pipelinePanel p { font-size: 11px; color: var(--muted); }
+.pipelineOptions { border: 0; padding: 0; margin: 6px 0; display: grid; gap: 5px; font-size: 11px; }
+.pipelineOptions label { display: flex; align-items: center; gap: 6px; }
+.pipelineSteps { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 3px; }
+.pipelineStep { display: grid; grid-template-columns: 16px 1fr auto; align-items: center; gap: 6px; font-size: 11px; padding: 3px 5px; border-radius: 6px; color: var(--muted); }
+.pipelineStep.completed { color: var(--text); }
+.pipelineStep.current { background: rgba(217,255,86,.08); color: var(--accent); }
+.pipelineStep.failed, .pipelineStep.cancelled { color: var(--danger); }
+.pipelineStep small { font-size: 9px; }
+.pipelineStep progress { grid-column: 2 / 4; width: 100%; height: 6px; }
+.pipelineActions { display: flex; gap: 6px; align-items: end; flex-wrap: wrap; margin: 6px 0; }
+.jobMeter { width: 100%; height: 6px; }
+.attentionList { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 4px; }
+.attention { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 11px; padding: 5px 7px; border-radius: 6px; background: var(--panel); border-left: 3px solid var(--cyan); }
+.attention.untranslated, .attention.no_speaker, .attention.stale_take, .attention.take_overrun { border-left-color: var(--danger); }
+.attention.demo { border-left-color: var(--accent); }
+@media (max-width: 800px) { .timelineToolbar small { display: none; } }

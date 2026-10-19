@@ -6,3 +6,4 @@ UV_CACHE_DIR=${UV_CACHE_DIR:-/tmp/cinedub-uv-cache} uv run pytest -q
 npm run contracts:check
 npm run typecheck
 npm run lint:web
+npm run test:web

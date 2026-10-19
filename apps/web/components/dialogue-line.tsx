@@ -15,7 +15,7 @@ export type GroupedDraft = {
   item: SegmentBatchItem; blocked: boolean; accept: (saved: Segment) => void;
 };
 
-export function DialogueLine({ segment, speakers, artifacts, disabled, structureLocked, active, canPlay, hidden, onPlay, onSaved, onDirty, onRegenerate, onGenerate, onGroupedDraft }: {
+export function DialogueLine({ segment, speakers, artifacts, disabled, structureLocked, active, canPlay, hidden, onPlay, onSaved, onDirty, onRegenerate, onGenerate, onGroupedDraft, onTimingEditor, onTimingDraft }: {
   segment: Segment; speakers: Speaker[]; active: boolean; canPlay: boolean; hidden: boolean;
   onPlay: (segment: Segment) => void; onSaved: () => void; onDirty: (id: string, dirty: boolean) => void;
   onRegenerate: (id: string) => void;
@@ -23,6 +23,9 @@ export function DialogueLine({ segment, speakers, artifacts, disabled, structure
   structureLocked: boolean;
   onGenerate: (id: string) => void;
   onGroupedDraft: (id: string, value: GroupedDraft | null) => void;
+  /** Lets the timeline edit this line's unsaved timing draft (never saves directly). */
+  onTimingEditor?: (id: string, apply: ((range: { start_ms: number; end_ms: number }) => void) | null) => void;
+  onTimingDraft?: (id: string, range: { start_ms: number; end_ms: number } | null) => void;
 }) {
   const [base, setBase] = useState(segment);
   const [values, setValues] = useState(() => draft(segment));
@@ -64,6 +67,19 @@ export function DialogueLine({ segment, speakers, artifacts, disabled, structure
     return () => window.clearTimeout(timer);
   }, [segment, dirty, stale]);
 
+  const editable = !disabled && !segment.retired && !saving && !restoring && !stale;
+  useEffect(() => {
+    if (!onTimingEditor) return;
+    // Re-registered each render so the timeline always edits the latest draft.
+    onTimingEditor(segment.id, editable ? (range) => change({ start_ms: range.start_ms, end_ms: range.end_ms }) : null);
+    return () => onTimingEditor(segment.id, null);
+  });
+  useEffect(() => {
+    const moved = values.start_ms !== base.start_ms || values.end_ms !== base.end_ms;
+    onTimingDraft?.(segment.id, moved ? { start_ms: values.start_ms, end_ms: values.end_ms } : null);
+  }, [values.start_ms, values.end_ms, base.start_ms, base.end_ms, segment.id, onTimingDraft]);
+  useEffect(() => () => onTimingDraft?.(segment.id, null), [segment.id, onTimingDraft]);
+
   function change(next: Partial<typeof values>) {
     const updated = { ...values, ...next }; setValues(updated); setNotice("");
     onDirty(segment.id, JSON.stringify(updated) !== JSON.stringify(draft(base)));
@@ -91,7 +107,7 @@ export function DialogueLine({ segment, speakers, artifacts, disabled, structure
     link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  return <article ref={root} hidden={hidden} tabIndex={-1} data-dialogue-line className={`dialogueLine ${active ? "playing" : ""}`} aria-label={segment.retired ? `Preserved draft for removed line ${segment.index + 1}` : `Dialogue line ${segment.index + 1}`}
+  return <article ref={root} id={`line-${segment.id}`} hidden={hidden} tabIndex={-1} data-dialogue-line className={`dialogueLine ${active ? "playing" : ""}`} aria-label={segment.retired ? `Preserved draft for removed line ${segment.index + 1}` : `Dialogue line ${segment.index + 1}`}
     onKeyDown={(event) => {
       if (!event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229 && !event.repeat && (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key === "Enter") {
         event.preventDefault();

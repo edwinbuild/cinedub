@@ -21,7 +21,13 @@ import { EmotionPanel } from "@/components/emotion-panel";
 import { DialogueBriefPanel } from "@/components/dialogue-brief-panel";
 import { DialogueAdaptationPanel } from "@/components/dialogue-adaptation-panel";
 import { DemoBadge } from "@/components/demo-badge";
+import { PipelinePanel } from "@/components/workspace/pipeline-panel";
+import { ProjectRail } from "@/components/workspace/project-rail";
+import { ReviewQueue } from "@/components/workspace/review-queue";
+import { TimelineView, type TimingEditor } from "@/components/workspace/timeline-view";
 import { API_URL, api } from "@/lib/api";
+import { useProjectEvents } from "@/lib/project-events";
+import type { Range } from "@/lib/timeline";
 
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>();
@@ -66,6 +72,19 @@ export default function ProjectPage() {
     if (value) groupedDrafts.current.set(lineId, value); else groupedDrafts.current.delete(lineId);
   }, []);
   const lineCache = useRef<Map<string, Segment>>(new Map());
+  const timingEditors = useRef(new Map<string, TimingEditor>());
+  const [timingDrafts, setTimingDrafts] = useState<Record<string, Range>>({});
+  const onTimingEditor = useCallback((lineId: string, apply: TimingEditor | null) => {
+    if (apply) timingEditors.current.set(lineId, apply); else timingEditors.current.delete(lineId);
+  }, []);
+  const onTimingDraft = useCallback((lineId: string, range: Range | null) => {
+    setTimingDrafts((current) => {
+      const existing = current[lineId];
+      if (!range) { if (!existing) return current; const next = { ...current }; delete next[lineId]; return next; }
+      if (existing && existing.start_ms === range.start_ms && existing.end_ms === range.end_ms) return current;
+      return { ...current, [lineId]: range };
+    });
+  }, []);
   const mediaRef = useRef<HTMLMediaElement | null>(null);
   const loadSequence = useRef(0);
   const load = useCallback(async (discardPanelDrafts = false) => {
@@ -102,11 +121,24 @@ export default function ProjectPage() {
     const timer = window.setTimeout(() => { void load(); void loadDiagnostics(); }, 0);
     return () => window.clearTimeout(timer);
   }, [load, loadDiagnostics]);
-  const hasJobs = project?.jobs.some((job) => ["queued", "running"].includes(job.status));
-  useEffect(() => {
-    if (!hasJobs) return;
-    const timer = window.setInterval(load, 1500); return () => window.clearInterval(timer);
-  }, [hasJobs, load]);
+  // Live server events replace polling: job/pipeline updates patch state in place, while
+  // timeline or artifact changes refetch through load(), which protects unsaved drafts.
+  useProjectEvents(id, {
+    onJob: (job) => {
+      setProject((current) => current && ({
+        ...current, jobs: [job, ...current.jobs.filter((item) => item.id !== job.id)]
+          .sort((left, right) => right.created_at.localeCompare(left.created_at)),
+      }));
+      // A finished job may have changed anything (voices, stems, mixes, reviews): refetch.
+      if (!["queued", "running"].includes(job.status)) void load();
+    },
+    onPipeline: (pipeline) => setProject((current) => current && (
+      !current.latest_pipeline || current.latest_pipeline.id === pipeline.id
+        || pipeline.created_at >= current.latest_pipeline.created_at
+        ? { ...current, latest_pipeline: pipeline } : current)),
+    onStatus: (status) => setProject((current) => current && ({ ...current, status })),
+    onStale: () => void load(),
+  });
   useEffect(() => {
     if (!dirtyIds.size && !structureDirty && !referenceDirty && !panelDraftIds.size) return;
     function warn(event: BeforeUnloadEvent) { event.preventDefault(); event.returnValue = ""; }
@@ -198,6 +230,15 @@ export default function ProjectPage() {
       setError(`${cause instanceof Error ? cause.message : "Grouped save failed"}. Drafts are preserved. Refresh to inspect saved versions before retrying if the connection failed.`);
     } finally { setBusy(null); }
   }
+  function goToLine(lineId: string, startMs: number) {
+    setFilter("all");
+    const target = document.getElementById(`line-${lineId}`);
+    target?.scrollIntoView({ block: "center" }); target?.focus();
+    const player = mediaRef.current; if (player) player.currentTime = startMs / 1000;
+  }
+  function seek(ms: number) {
+    const player = mediaRef.current; if (player) player.currentTime = ms / 1000;
+  }
   async function playLine(line: Segment) {
     await playRange(line.start_ms, line.end_ms);
   }
@@ -255,6 +296,9 @@ export default function ProjectPage() {
       <aside className="leftRail">
         <div className="panelTitle"><span>Scene media</span><label className="uploadButton"><Upload size={14} />
           {busy === "upload" ? "Uploading…" : "Import"}<input aria-label="Import scene" type="file" accept=".mp4,.mov,.mkv,.webm,.wav,.mp3,.flac,.m4a" onChange={upload} disabled={locked} /></label></div>
+        <PipelinePanel project={project} sourceId={sourceId} capabilities={capabilities}
+          locked={!!busy || remoteTimelineChanged || (!!activeJob && !["running", "awaiting_review"].includes(project.latest_pipeline?.status ?? ""))}
+          onChanged={load} />
         <label className="fieldLabel">Source<select aria-label="Scene source" value={sourceId ?? ""} disabled={locked}
           onChange={(event) => { mediaRef.current?.pause(); setStopAt(null); setSelectedSource(event.target.value); }}>
           <option value="" disabled>Select a scene</option>{project.assets.map((asset) => <option key={asset.id} value={asset.id}>{asset.filename}</option>)}</select></label>
@@ -299,6 +343,8 @@ export default function ProjectPage() {
       </aside>
       <section className="timelinePanel">
         <ScenePlayer artifacts={project.artifacts} sourceId={sourceId} mediaRef={mediaRef} onTime={onTime} stopAt={stopAt} onStop={onStop} />
+        {project.segments.length > 0 && timelineMatches && <TimelineView project={project} sourceId={sourceId} mediaRef={mediaRef}
+          drafts={timingDrafts} editors={timingEditors} disabled={locked} onSeek={seek} />}
         <StemPanel project={project} sourceId={sourceId} disabled={locked} onSaved={load} />
         {project.active_revision_id && <SpeakerReusePanel key={`reuse:${project.active_revision_id}`} project={project}
           disabled={locked} unsaved={dirtyIds.size > 0 || structureDirty || referenceDirty || panelDraftIds.size > 0} onSaved={load} />}
@@ -327,13 +373,14 @@ export default function ProjectPage() {
         {!timelineMatches && <p className="lineWarning">The displayed timeline belongs to another source. Select its source or activate a matching revision to play individual lines.</p>}
         <div className="timelineHeader"><div><p className="eyebrow">Dialogue timeline</p><h1 ref={timelineHeading} tabIndex={-1}>{project.segments.length} reviewable lines</h1></div>
           <span className="provenanceTag">{activeRevision ? activeRevision.provider === "fake" ? "DEMO FIXTURE" : `${activeRevision.provider} · ${activeRevision.model}` : "No transcript yet"}</span></div>
-        {activeJob && <div className="jobProgress"><LoaderCircle className="spin" /><strong>{activeJob.stage} · {activeJob.phase}</strong>
+        {activeJob && <div className="jobProgress"><LoaderCircle className="spin" /><strong>{activeJob.stage} · {activeJob.phase} · {Math.round(activeJob.progress * 100)}%</strong>
           <button className="smallButton" onClick={() => jobAction(() => api.cancelJob(activeJob.id))}>Cancel</button></div>}
         {activeRevision?.warnings_json.filter((warning) => warning !== "Some lines have no speaker assignment"
           || project.segments.some((line) => !line.speaker_id)).map((warning) => <p className="lineWarning" key={warning}>{warning}</p>)}
         {cloneCapability && ["fake", "sarvam"].includes(cloneCapability.selected_provider) && <ClonePanel project={project}
           provider={cloneCapability.selected_provider as "fake" | "sarvam"} available={cloneCapability.available}
           disabled={locked} onSaved={load} onRun={run} onDirty={setReferenceDirty} />}
+        <ReviewQueue project={project} onGoTo={goToLine} />
         <div className="reviewFilters" role="group" aria-label="Filter dialogue">{["all", "untranslated", "edited", "approved", "warnings"].map((value) =>
           <button key={value} className={`smallButton ${filter === value ? "selected" : ""}`} aria-pressed={filter === value} onClick={() => setFilter(value)}>{value}</button>)}</div>
         {dirtyIds.size > 1 && <div className="lineWarning" aria-label="Grouped dialogue save">
@@ -345,7 +392,8 @@ export default function ProjectPage() {
           structureLocked={busy === "structure" || busy === "group-save" || remoteTimelineChanged}
           disabled={locked} onGenerate={(lineId) => run({ stage: "synthesize", revision_id: revisionId, segment_ids: [lineId], force_new: true })}
           active={!line.retired && timelineMatches && time >= line.start_ms && time < line.end_ms} hidden={!line.retired && hidden(line)} canPlay={!line.retired && !!sourceReady && timelineMatches}
-          onPlay={playLine} onSaved={load} onDirty={onDirty} onGroupedDraft={onGroupedDraft} onRegenerate={(lineId) => {
+          onPlay={playLine} onSaved={load} onDirty={onDirty} onGroupedDraft={onGroupedDraft}
+          onTimingEditor={onTimingEditor} onTimingDraft={onTimingDraft} onRegenerate={(lineId) => {
             if (window.confirm("Generate a new translation for this saved line? It will need review again."))
               void run({ stage: "translate", revision_id: revisionId, segment_ids: [lineId], regenerate: true });
           }} />)}
@@ -358,31 +406,9 @@ export default function ProjectPage() {
           disabled={locked} unsaved={dirtyIds.size > 0} onApply={structureAction} onDirty={setStructureDirty}
           onPlayRange={playRange} canPlay={!!sourceReady && timelineMatches} />}
       </section>
-      <aside className="rightRail"><div className="metricCard"><div><span>Review</span><strong>{project.segments.filter((line) => line.status === "approved").length}/{project.segments.length} approved</strong></div></div>
-        <div className="metricCard"><div><span>Estimated processing budget</span><strong>₹{project.spent_estimate_inr.toFixed(2)} / ₹{project.budget_inr.toFixed(2)}</strong>
-          <small>₹{project.reserved_inr.toFixed(2)} reserved · provider bill may differ</small>
-          <button className="smallButton" onClick={() => { const value = window.prompt("Project processing budget in INR (estimate, not provider billing)", String(project.budget_inr));
-            if (value !== null && Number.isFinite(Number(value)) && Number(value) > 0) void jobAction(() => api.changeBudget(id, Number(value)));
-          }}>Change budget</button></div></div>
-        <div className="metricCard hardwareCard"><div><span>Local hardware</span><strong>{hardware?.cuda_ready ? "Driver detected" : "GPU inference unavailable"}</strong>
-          <small>v0.2 works without local AI models</small></div></div>
-        <div className="inspectorSection"><p className="eyebrow">Timeline revisions</p>{project.revisions.map((revision, index) => <div className="revisionItem" key={revision.id}>
-          <strong>{revision.provider === "fake" ? "Demo" : "Transcript"} · {project.revisions.length-index}</strong>
-          <small>{new Date(revision.created_at).toLocaleString()}</small>
-          <button className="smallButton" disabled={locked || revision.id === project.active_revision_id} onClick={() => activate(revision.id)}>
-            {revision.id === project.active_revision_id ? "Active timeline" : "Use this timeline"}</button></div>)}</div>
-        <div className="inspectorSection"><p className="eyebrow">Speakers</p>{activeRevision && <button className="smallButton" disabled={locked} onClick={addSpeaker}>Add speaker</button>}{project.speakers.map((speaker) => <button className="speakerRename" key={speaker.id}
-          onClick={() => rename(speaker.id, speaker.display_name)} title="Rename speaker">{speaker.display_name}<small>Rename</small></button>)}</div>
-        <div className="inspectorSection"><p className="eyebrow">Jobs</p>{project.jobs.slice(0, 8).map((job) => <div className="revisionItem" key={job.id}>
-          <strong>{job.stage} · {job.status}</strong><small>{job.provider} · {job.phase}</small>
-          {job.error_message && <p className="inlineError">{job.error_message}</p>}
-          {job.warnings_json.map((warning) => <small key={warning}>{warning}</small>)}
-          {job.status === "failed" && job.retryable && <button className="smallButton" disabled={locked}
-            onClick={() => jobAction(() => api.resumeJob(job.id))}>{job.provider === "sarvam" ? "Resume existing remote job" : "Resume saved local job"}</button>}</div>)}</div>
-        <div className="inspectorSection"><p className="eyebrow">Downloads</p>{project.artifacts.filter((item) => ["subtitle", "raw_transcript", "translation_candidates", "dub_preview", "dialogue_mix"].includes(item.kind)).map((item) =>
-          item.access_blocked_reason ? <div className="artifact" key={item.id}><strong>{item.filename}</strong><small>{item.access_blocked_reason}</small></div>
-            : <a className="artifact" href={`${API_URL}${item.download_url}`} key={item.id}><span><strong>{item.filename}</strong><small>{item.kind.replaceAll("_", " ")} · {item.metadata_json.revision_id === project.active_revision_id ? "active timeline" : "other timeline"}</small></span></a>)}</div>
-      </aside>
+      <ProjectRail project={project} hardware={hardware} locked={locked} hasRevision={!!activeRevision}
+        onChangeBudget={(value) => void jobAction(() => api.changeBudget(id, value))} onActivate={activate}
+        onAddSpeaker={addSpeaker} onRename={rename} onResume={(jobId) => void jobAction(() => api.resumeJob(jobId))} />
     </section>
   </main>;
 }
