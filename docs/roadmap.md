@@ -1,10 +1,27 @@
 # CineDub completion ledger
 
-Current branch: v0.2 development, not a released or complete cinema-dubbing product. This ledger preserves the agreed scope; green fixture tests do not close live or human-quality gates.
+Current branch: v0.3 development (`feature/v0.3-architecture`, built on v0.2), not a released or complete cinema-dubbing product. This ledger preserves the agreed scope; green fixture tests do not close live or human-quality gates.
 
 ## Target and boundaries
 
 Local single-user browser workspace, initially English → Malayalam scenes up to two minutes, designed for a 24 GB RAM laptop. Provider-neutral per-stage routing; Sarvam plus resource-bounded local models, with future providers replaceable through adapters. Stock voices first, then consented cloning. Timing-fit review is in scope; full facial lip-sync generation is not the initial release target. `OLD/` remains ignored and read-only. The user authorized milestone commits, a small number of branches and corresponding PRs on 2026-10-14. This does not authorize merging shared branches or deploying.
+
+## v0.3 workflow and architecture milestone (2026-10-19)
+
+Branch `feature/v0.3-architecture` (from `95be332`, one verified commit per phase, not pushed) closes the engineering scope agreed for v0.3. It uses deterministic DEMO providers only. Evidence: [v0.3 architecture record](evaluations/v0.3-architecture.md); decisions [0017](decisions/0017-stage-registry-typed-jobs.md)–[0020](decisions/0020-pipeline-orchestrator.md).
+
+| Area | Now connected | Still open |
+| --- | --- | --- |
+| End-to-end workflow | Every stage has a labelled DEMO provider. Upload → stems → transcript → translation → adaptation → voices → takes → alignment/take/emotion analysis → mix → accepted ZIP runs with no models, keys or network, as API, worker and browser tests | Real model and provider quality: unchanged from the gates below |
+| Job contracts | Stage registry; per-stage typed requests that reject foreign options; v0.2-compatible fingerprints; inputs validated before processing and outputs before recording | Processors still read the validated dict internally |
+| Runtime policy | Stable error codes; declared per-stage resume (paid stages never blindly); project status derived in one place; warnings appended | Automatic retries remain intentionally absent |
+| Lineage and storage | Persisted artifact edges, hashes, sizes and root-relative keys; backfill for older data; lineage endpoint; lineage in accepted bundles; single storage boundary | Object-store backend; `path` column retirement |
+| Observability | Request IDs through jobs, provider runs and artifacts; JSON logs; startup configuration validation | Log shipping/retention |
+| Orchestration | Pipelines with six human review gates, a budget pause, failure/resume, cancel and restart recovery | Batch/multi-scene pipelines; concurrent stages |
+| API | Routes split by domain; idempotent POSTs; typed incremental events; guarded project deletion; dry-run storage cleanup | Authentication (local single-user remains the scope) |
+| Editor | Time-based timeline (zoom, seek, drag/keyboard edits into line drafts, take fit, stems); workflow panel; needs-attention queue; live events; job progress and next-step guidance; first frontend unit tests | Further page decomposition; physical IME/screen-reader/device and long-session testing |
+
+None of this is natural-language, voice, emotion or listening quality evidence. Every quality and live-provider gate listed below remains open and was not exercised by v0.3.
 
 ## Work and required evidence
 

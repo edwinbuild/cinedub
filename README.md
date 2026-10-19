@@ -34,6 +34,53 @@ Recognized SQLite/storage-quota errors now give an actionable 507 response or st
 
 For an isolated base-install smoke check, run `npm run verify:clean-install` from a trusted checkout. It installs locked dependencies into a private temporary snapshot, without your `.env`, data or optional models, then checks build/startup and a browser upload-to-subtitle workflow. It requires installed Chrome and may use network/package caches and about 1 GiB temporary space; it keeps private results/logs for inspection and requires at least 2 GiB free space. [Scope, results and remaining machine checks](docs/evaluations/clean-install.md).
 
+## Workflow pipeline, review gates and operations (v0.3 development)
+
+**Dubbing workflow.** In the editor, **Run dubbing workflow** creates a pipeline. It runs every stage in order and stops at each human review step:
+
+1. ingest
+2. separation (optional) → approve stems
+3. transcription → speakers
+4. translation → editorial checks and alternatives (optional) → approve every line
+5. assign voices → voice takes → select takes
+6. timing and performance analysis (optional)
+7. mix → accept the mix and export bundle
+
+**Continue after review** opens a step only when the saved review satisfies it. Nothing is approved automatically. Paid steps stop before exceeding the workflow budget you confirm.
+
+With every provider set to `fake` the whole run uses DEMO fixtures (see [Costs and routing](#costs-and-routing)). The equivalent API calls are:
+
+- `POST /projects/{id}/pipelines/plan` previews the steps.
+- `POST /projects/{id}/pipelines` starts a run.
+- `POST /pipelines/{id}/continue` opens the next gate and can raise `confirmed_budget_inr`.
+- `POST /pipelines/{id}/cancel` stops the run.
+
+**Timeline.** The editor shows a time-based timeline: the source waveform, dialogue lines, selected takes (green when they fit, red when they overrun) and approved stems.
+
+- Zoom with the toolbar or Ctrl+wheel.
+- Click to seek.
+- Drag a line edge, or focus it and use the arrow keys (Shift for 100 ms).
+
+Timeline edits only change the line's unsaved draft. Save, conflict detection, grouped save and undo stay in the line editor. **Needs attention** lists unapproved, untranslated, speakerless, mistimed, warned and DEMO items, with a jump to each line.
+
+**Live updates.** The editor subscribes to `GET /projects/{id}/events`, server-sent typed `ProjectEvent`s for `job`, `pipeline`, `project`, `timeline` and `artifact`. It falls back to 5-second polling while the stream is unavailable.
+
+**Traceability.**
+
+- Every response carries an `X-Request-ID`. Pass your own to follow a request into its job, provider runs and artifacts. Logs are one JSON object per line.
+- `GET /artifacts/{id}/lineage` shows which files, source media, jobs and provider runs produced an artifact. Accepted export bundles include `lineage.json`.
+- Job failures carry stable `error_code`s (for example `stale_input`, `budget_exceeded`, `deadline_exceeded`, `uncertain_submission`). The editor shows the next action for each.
+
+**Safe retries.** Job submission, uploads, pipeline creation and mix review accept an `Idempotency-Key` header. A retry with the same key and body returns the first response instead of repeating work; the same key with a different body is refused.
+
+**Deleting and cleaning up.**
+
+- `DELETE /projects/{id}?confirm=<exact project name>` removes a project's rows and files. It is refused while work is active, or while a cloned voice may still exist at a provider: revoke consent and run provider deletion first.
+- `GET /diagnostics/storage` reports usage.
+- `PYTHONPATH=apps/api .venv/bin/python scripts/storage-cleanup.py` lists leftovers: unreferenced old uploads, orphaned project directories, and expired cancelled or non-resumable failed job directories. Add `--apply` to remove them, with the API and worker stopped. Completed and resumable work, backups and lock files are never touched.
+
+**Startup checks.** The API and worker validate configuration at startup. Invalid settings, disallowed DEMO providers, or a missing Sarvam key in `CINEDUB_ENV=production` stop the service. Development warnings appear in the log and in `/health`.
+
 ## Portable source snapshot (not a published release)
 
 From a trusted Git checkout, package a reviewed commit into a **new** directory:
@@ -242,9 +289,9 @@ npm run build:web
 npm run test:e2e
 ```
 
-`npm test` runs Python lint/tests, shared/web TypeScript checks and ESLint. Browser tests use an isolated temporary database, synthetic media and fake providers on ports 3011/8011. They never call paid APIs or modify your projects. Install Google Chrome for the default browser, or install Playwright Chromium with `npx playwright install chromium` and run `CINEDUB_E2E_BROWSER=chromium npm run test:e2e`.
+`npm test` runs Python lint/tests, shared/web TypeScript checks, ESLint and the web unit tests (`npm run test:web`: timeline geometry and the review/error mapping). Browser tests use an isolated temporary database, synthetic media and fake providers on ports 3011/8011. They never call paid APIs or modify your projects. Install Google Chrome for the default browser, or install Playwright Chromium with `npx playwright install chromium` and run `CINEDUB_E2E_BROWSER=chromium npm run test:e2e`.
 
-GitHub Actions runs **Backend and production build** and **Base-install editor workflows** on pull requests and pushes to `main`/the foundation release branch. The first job installs locked development/alignment packages (for NumPy unit coverage, not model weights), checks formatting/contracts/types/lint, builds production web output and runs the full backend suite. The second installs only base/development dependencies, verifies optional AI packages are absent, then runs 15 Chromium media/editor/voice/consent/brief/history/structure/draft workflows through the supervised launcher. Each job has its own fresh Ubuntu runner, pinned Python/Node/uv versions and action commit SHAs, read-only repository permissions and no retained checkout credentials. Older checks for the same PR are cancelled. Locks/generated contracts must stay unchanged, and no `models/` directory may be created.
+GitHub Actions runs **Backend and production build** and **Base-install editor workflows** on pull requests and pushes to `main`/the foundation release branch. The first job installs locked development/alignment packages (for NumPy unit coverage, not model weights), checks formatting/contracts/types/lint, builds production web output and runs the full backend suite. The second installs only base/development dependencies, verifies optional AI packages are absent, then runs the selected Chromium media/editor/voice/consent/brief/history/structure/draft workflows plus the DEMO end-to-end, timeline and pipeline workflows through the supervised launcher. Each job has its own fresh Ubuntu runner, pinned Python/Node/uv versions and action commit SHAs, read-only repository permissions and no retained checkout credentials. Older checks for the same PR are cancelled. Locks/generated contracts must stay unchanged, and no `models/` directory may be created.
 
 See the PR's actual check results for hosted evidence; a configured workflow is not a passing run. These jobs use fake paid providers, synthetic fixtures and no repository secrets, and never install model weights or deploy. They do not establish real-model quality, live Sarvam behavior, device accessibility or a complete laptop installer. Private-repository runs may consume GitHub Actions allowances/billed minutes; no billing or branch-protection settings are changed. Manual dispatch becomes available after the workflow exists on the default branch. Workflow inputs follow [GitHub's permission guidance](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#permissions) and [Playwright's Chromium setup](https://playwright.dev/docs/browsers#chromium-new-headless-mode).
 
