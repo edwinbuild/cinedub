@@ -53,10 +53,11 @@ test("grouped content undo redo persists and refuses drafts or newer member edit
     expected_version: detail.segments[1].version, source_text: "Later independent second-line edit",
   } });
   expect(remote.ok()).toBe(true);
-  await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.accept()), undo.click()]);
-  await expect(panel.getByRole("alert")).toContainText("no partial restoration");
-  await expect(first).toHaveValue("Grouped first saved text");
+  // Live updates (or Refresh) reveal the newer member edit, so undo is refused before any
+  // request. The server's own refusal is covered by backend tests and the mocked step above.
   await page.getByRole("button", { name: "Refresh project", exact: true }).click();
+  await expect(undo).toBeDisabled();
+  await expect(first).toHaveValue("Grouped first saved text");
   await panel.getByRole("button", { name: "Refresh grouped history", exact: true }).click();
   await expect(confirm).not.toBeChecked(); await expect(undo).toBeDisabled(); await expect(redo).toBeDisabled();
   await expect(panel.getByText(/newer or independently restored content/)).toBeVisible();
