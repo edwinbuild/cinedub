@@ -1,0 +1,47 @@
+import math
+import struct
+import wave
+from pathlib import Path
+
+from .base import SynthesisResult, TranslationResult
+
+
+class FakeProvider:
+    name = "fake"
+    model = "deterministic-fixture-v1"
+
+    _translations = {
+        "Welcome to CineDub.": "സിനിഡബിലേക്ക് സ്വാഗതം.",
+        "We can review every line before export.": "കയറ്റുമതിക്ക് മുമ്പ് ഓരോ വരിയും പരിശോധിക്കാം.",
+        "The timing and delivery stay editable.": "സമയക്രമവും അവതരണവും തിരുത്താനാകും.",
+        "This is a deterministic demonstration.": "ഇത് സ്ഥിരതയുള്ള ഒരു പ്രദർശനമാണ്.",
+    }
+
+    def translate(self, text: str, source_language: str, target_language: str) -> TranslationResult:
+        translated = self._translations.get(text, f"[പരിശോധിക്കുക] {text}")
+        return TranslationResult(text=translated, provider=self.name, model=self.model)
+
+    def synthesize(
+        self,
+        text: str,
+        language: str,
+        output_path: Path,
+        *,
+        voice_id: str | None,
+    ) -> SynthesisResult:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        sample_rate = 24_000
+        duration = max(0.7, min(4.0, len(text) / 15))
+        frames = int(sample_rate * duration)
+        frequency = 220 if voice_id != "speaker-b" else 174
+        with wave.open(str(output_path), "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(sample_rate)
+            for index in range(frames):
+                envelope = min(1.0, index / 600, (frames - index) / 600)
+                value = int(
+                    2_200 * envelope * math.sin(2 * math.pi * frequency * index / sample_rate)
+                )
+                wav.writeframesraw(struct.pack("<h", value))
+        return SynthesisResult(audio_path=output_path, provider=self.name, model=self.model)
