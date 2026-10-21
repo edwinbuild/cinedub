@@ -6,6 +6,8 @@ state_root = Path(tempfile.mkdtemp(prefix="cinedub-tests-"))
 os.environ["CINEDUB_DATABASE_URL"] = f"sqlite:///{state_root / 'test.db'}"
 os.environ["CINEDUB_STORAGE_ROOT"] = str(state_root / "storage")
 os.environ["CINEDUB_TRANSLATOR"] = "fake"
+os.environ["CINEDUB_TRANSCRIBER"] = "fake"
+os.environ["CINEDUB_DIARIZER"] = "fake"
 os.environ["CINEDUB_VOICE_SYNTHESIZER"] = "fake"
 
 import httpx  # noqa: E402

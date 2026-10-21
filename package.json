@@ -1,6 +1,6 @@
 {
   "name": "cinedub",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "workspaces": [
     "apps/web",
@@ -8,14 +8,23 @@
   ],
   "scripts": {
     "dev": "bash scripts/dev.sh",
+    "doctor": "PYTHONPATH=apps/api .venv/bin/python scripts/local-runtime.py check",
+    "verify:clean-install": "UV_CACHE_DIR=/tmp/cinedub-uv-cache uv run --no-project --python 3.12 python scripts/verify-clean-install.py",
     "dev:web": "npm run dev --workspace @cinedub/web",
     "build:web": "npm run build --workspace @cinedub/web",
     "lint:web": "npm run lint --workspace @cinedub/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test:web": "npm run test --workspace @cinedub/web",
-    "test": "bash scripts/check.sh"
+    "test:e2e": "playwright test",
+    "contracts:generate": "PYTHONPATH=apps/api .venv/bin/python scripts/generate-contracts.py --write",
+    "contracts:check": "PYTHONPATH=apps/api .venv/bin/python scripts/generate-contracts.py --check",
+    "test": "bash scripts/check.sh",
+    "test:recovery": ".venv/bin/pytest tests/api/test_workspace_backup.py tests/api/test_workspace_recovery_http.py -q"
   },
   "engines": {
     "node": ">=22"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.0"
   }
 }

@@ -1,0 +1,68 @@
+import { expect, test } from "@playwright/test";
+
+test("grouped content undo redo persists and refuses drafts or newer member edits", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/");
+  await page.getByLabel("Project name").fill("Grouped history review");
+  await page.getByRole("button", { name: "Create workspace" }).click();
+  await page.getByRole("button", { name: /^Build demo timeline/ }).click();
+  await expect(page.getByRole("heading", { name: "4 reviewable lines" })).toBeVisible();
+  const line = (index: number) => page.getByRole("article", { name: `Dialogue line ${index}`, exact: true });
+  const first = line(1).getByLabel("English", { exact: true });
+  const second = line(2).getByLabel("English", { exact: true });
+  const originals = [await first.inputValue(), await second.inputValue()];
+  await first.fill("Grouped first saved text"); await second.fill("Grouped second saved text");
+  await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.accept()), page.getByRole("button", { name: "Save all dialogue drafts together", exact: true }).click()]);
+  await expect(page.getByText("2 dialogue drafts saved together. Changed content requires review again.", { exact: true })).toBeVisible();
+  const panel = page.getByLabel("Grouped edit history", { exact: true });
+  await panel.locator("summary").first().click();
+  const undo = panel.getByRole("button", { name: "Undo grouped content", exact: true });
+  const redo = panel.getByRole("button", { name: "Redo grouped content", exact: true });
+  const confirm = panel.getByLabel("Grouped restoration clears selected takes and requires approval again", { exact: true });
+  await expect(panel.getByText("2 content-changing members. 0 approval/status-only members excluded.", { exact: true })).toBeVisible();
+  await expect(undo).toBeDisabled(); await confirm.check(); await expect(undo).toBeEnabled();
+  await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.dismiss()), undo.click()]);
+  await expect(first).toHaveValue("Grouped first saved text");
+  await page.route("**/edit-groups/*/restore", (route) => route.fulfill({ status: 507, json: { detail: "Storage is full" } }));
+  await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.accept()), undo.click()]);
+  await expect(panel.getByRole("alert")).toContainText("Storage is full");
+  await expect(first).toHaveValue("Grouped first saved text");
+  await expect(second).toHaveValue("Grouped second saved text");
+  await page.unroute("**/edit-groups/*/restore");
+  await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.accept()), undo.click()]);
+  await expect(first).toHaveValue(originals[0]); await expect(second).toHaveValue(originals[1]);
+  await expect(panel.getByRole("status")).toContainText("Grouped undo saved");
+  await expect(confirm).not.toBeChecked();
+  await expect(panel).toBeFocused();
+  await page.reload();
+  await panel.locator("summary").first().click(); await confirm.check();
+  await expect(redo).toBeEnabled();
+  await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.accept()), redo.click()]);
+  await expect(first).toHaveValue("Grouped first saved text");
+  await expect(second).toHaveValue("Grouped second saved text");
+  await first.fill("Preserve my unsaved correction");
+  await expect(undo).toBeDisabled();
+  await expect(panel.getByText("Save or discard dialogue and other review drafts before restoring grouped content.", { exact: true })).toBeVisible();
+  await expect(first).toHaveValue("Preserve my unsaved correction");
+  await first.fill("Grouped first saved text");
+  await confirm.check();
+  const projectId = page.url().split("/").at(-1)!;
+  const detail = await (await page.request.get(`http://127.0.0.1:8011/projects/${projectId}`)).json();
+  const remote = await page.request.patch(`http://127.0.0.1:8011/segments/${detail.segments[1].id}`, { data: {
+    expected_version: detail.segments[1].version, source_text: "Later independent second-line edit",
+  } });
+  expect(remote.ok()).toBe(true);
+  // Live updates (or Refresh) reveal the newer member edit, so undo is refused before any
+  // request. The server's own refusal is covered by backend tests and the mocked step above.
+  await page.getByRole("button", { name: "Refresh project", exact: true }).click();
+  await expect(undo).toBeDisabled();
+  await expect(first).toHaveValue("Grouped first saved text");
+  await panel.getByRole("button", { name: "Refresh grouped history", exact: true }).click();
+  await expect(confirm).not.toBeChecked(); await expect(undo).toBeDisabled(); await expect(redo).toBeDisabled();
+  await expect(panel.getByText(/newer or independently restored content/)).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await panel.screenshot({ path: "test-results/cinedub-group-history-mobile.png" });
+  expect(errors).toEqual([]);
+});

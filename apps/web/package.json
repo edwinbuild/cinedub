@@ -1,6 +1,6 @@
 {
   "name": "@cinedub/web",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1",
@@ -8,7 +8,7 @@
     "start": "next start --hostname 127.0.0.1",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "node --test"
+    "test": "node --test lib/*.test.ts"
   },
   "dependencies": {
     "@cinedub/contracts": "*",
