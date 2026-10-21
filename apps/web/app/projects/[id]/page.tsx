@@ -1,10 +1,10 @@
 "use client";
 
 import type { CapabilityStatus, HardwareStatus, JobRequest, ProjectDetail, Segment } from "@cinedub/contracts";
-import { ArrowLeft, ArrowRight, Download, Film, LoaderCircle, RefreshCw, Upload } from "lucide-react";
+import { ArrowLeft, ArrowRight, Download, Film, LoaderCircle, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, RefreshCw, X } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { DialogueLine, type GroupedDraft } from "@/components/dialogue-line";
 import { DialogueTimeline } from "@/components/dialogue-timeline";
 import { StructurePanel } from "@/components/structure-panel";
@@ -26,6 +26,7 @@ import { ArtifactDownloads, ProjectRail } from "@/components/workspace/project-r
 import { ReviewQueue } from "@/components/workspace/review-queue";
 import { TimelineView, type TimingEditor } from "@/components/workspace/timeline-view";
 import { ToolNavigation, WORKSPACE_TOOLS, type WorkspaceTool } from "@/components/workspace/tool-navigation";
+import { MediaImport } from "@/components/workspace/media-import";
 import { API_URL, api } from "@/lib/api";
 import { useProjectEvents } from "@/lib/project-events";
 import type { Range } from "@/lib/timeline";
@@ -43,9 +44,15 @@ export default function ProjectPage() {
   const [preferDialogue, setPreferDialogue] = useState(false);
   const [filter, setFilter] = useState("all");
   const [activeTool, setActiveTool] = useState<WorkspaceTool>("media");
+  const [toolsOpen, setToolsOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [timelineOpen, setTimelineOpen] = useState(true);
+  const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
+  const structureEditor = useRef<{ open: (lineId: string | null) => void }>(null);
   const toolPanel = useRef<HTMLElement>(null);
   function changeTool(tool: WorkspaceTool) {
     setActiveTool(tool);
+    setToolsOpen(true);
     toolPanel.current?.scrollTo({ top: 0 });
   }
   const [time, setTime] = useState(0);
@@ -189,12 +196,12 @@ export default function ProjectPage() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not start processing"); }
     finally { setBusy(null); }
   }
-  async function upload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]; if (!file) return;
-    try { setBusy("upload"); const result = await api.upload(id, file) as { id: string };
+  async function upload(file: File) {
+    if (busy || remoteTimelineChanged || project?.jobs.some((job) => ["queued", "running"].includes(job.status))) return;
+    try { setBusy("upload"); setError(null); const result = await api.upload(id, file) as { id: string };
       setSelectedSource(result.id); await load(); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Upload failed"); }
-    finally { setBusy(null); event.target.value = ""; }
+    finally { setBusy(null); }
   }
   async function activate(revisionId: string) {
     if (!project) return;
@@ -238,7 +245,7 @@ export default function ProjectPage() {
     } finally { setBusy(null); }
   }
   function goToLine(lineId: string, startMs: number) {
-    setFilter("all");
+    setFilter("all"); setInspectorOpen(true); setSelectedLineId(lineId);
     // Wait for the filter change to reveal the line before scrolling/focusing it.
     requestAnimationFrame(() => {
       const target = document.getElementById(`line-${lineId}`);
@@ -248,6 +255,10 @@ export default function ProjectPage() {
   }
   function seek(ms: number) {
     const player = mediaRef.current; if (player) player.currentTime = ms / 1000;
+  }
+  function openStructure() {
+    setInspectorOpen(true);
+    requestAnimationFrame(() => structureEditor.current?.open(selectedLineId));
   }
   async function playLine(line: Segment) {
     await playRange(line.start_ms, line.end_ms);
@@ -290,9 +301,13 @@ export default function ProjectPage() {
         if ((dirtyIds.size || structureDirty || referenceDirty || panelDraftIds.size) && !window.confirm("Leave this scene and discard unsaved drafts?")) event.preventDefault();
       }}><ArrowLeft size={17} /></Link><span className="brandMark"><Film size={17} /></span>
       <div><strong>{project.name}</strong><span>English → Malayalam</span></div></div>
-      <div className="workspaceContext"><span className="statusDot active" /> Local editing workspace</div>
+      <div className="workspaceContext"><span className="statusDot active" /> Editing workspace</div>
       <div className="studioStatus">{(dirtyIds.size > 0 || structureDirty || referenceDirty || panelDraftIds.size > 0) && <span>{dirtyIds.size + Number(structureDirty) + Number(referenceDirty) + panelDraftIds.size} unsaved</span>}
         {activeJob ? activeJob.phase.replaceAll("_", " ") : project.status}
+        <button className="iconButton" aria-label={toolsOpen ? "Hide tools panel" : "Show tools panel"} aria-expanded={toolsOpen} aria-controls="scene-tools" onClick={() => setToolsOpen(!toolsOpen)}>
+          {toolsOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}</button>
+        <button className="iconButton" aria-label={inspectorOpen ? "Hide dialogue inspector" : "Show dialogue inspector"} aria-expanded={inspectorOpen} aria-controls="dialogue-inspector" onClick={() => setInspectorOpen(!inspectorOpen)}>
+          {inspectorOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}</button>
         <button className="iconButton" aria-label="Refresh project" onClick={() => void load()}><RefreshCw size={15} /></button>
         <button className="primaryButton headerExport" onClick={() => changeTool("export")}><Download size={14} /> Export</button></div></header>
     {error && <div className="errorBanner studioError" role="alert">{error}</div>}
@@ -304,16 +319,14 @@ export default function ProjectPage() {
         if (window.confirm("Discard unsaved mix settings, emotion/mix review fields and other timeline-specific forms and load the current server timeline? Displaced dialogue drafts remain available to copy. Saved renders and review history will not change.")) void load(true);
       }}>Discard review drafts and load current timeline</button>
     </div>}
-    <section className="studioGrid">
+    <section className={`studioGrid ${toolsOpen ? "" : "toolsCollapsed"} ${inspectorOpen ? "" : "inspectorCollapsed"} ${timelineOpen ? "" : "timelineCollapsed"}`}>
       <ToolNavigation active={activeTool} onChange={changeTool} />
-      <aside className="toolPanel" aria-label="Scene tools" ref={toolPanel}>
-        <div className="toolPanelHeading"><h2>{WORKSPACE_TOOLS.find((tool) => tool.id === activeTool)?.label}</h2>
+      <aside id="scene-tools" className="toolPanel" aria-label="Scene tools" ref={toolPanel} hidden={!toolsOpen}>
+        <div className="toolPanelHeading"><h2>{WORKSPACE_TOOLS.find((tool) => tool.id === activeTool)?.label}</h2><button className="iconButton" aria-label="Close tools panel" onClick={() => setToolsOpen(false)}><X size={14} /></button>
           <p>{WORKSPACE_TOOLS.find((tool) => tool.id === activeTool)?.description}</p></div>
         {/* Hidden panels stay mounted: switching tools must never discard a draft. */}
         <section id="tool-media" className="toolBody" aria-label="Media tools" hidden={activeTool !== "media"}>
-          <label className="mediaImport"><Upload size={22} aria-hidden="true" /><strong>{busy === "upload" ? "Importing scene…" : "Import a scene"}</strong>
-            <span>Video or audio · up to 2 minutes</span>
-            <input aria-label="Import scene" type="file" accept=".mp4,.mov,.mkv,.webm,.wav,.mp3,.flac,.m4a" onChange={upload} disabled={locked} /></label>
+          <MediaImport disabled={locked} uploading={busy === "upload"} onFile={upload} />
         <label className="fieldLabel">Source<select aria-label="Scene source" value={sourceId ?? ""} disabled={locked}
           onChange={(event) => { mediaRef.current?.pause(); setStopAt(null); setSelectedSource(event.target.value); }}>
           <option value="" disabled>Select a scene</option>{project.assets.map((asset) => <option key={asset.id} value={asset.id}>{asset.filename}</option>)}</select></label>
@@ -415,7 +428,8 @@ export default function ProjectPage() {
         <ScenePlayer artifacts={project.artifacts} sourceId={sourceId} mediaRef={mediaRef} onTime={onTime} stopAt={stopAt} onStop={onStop} />
         <div className="viewerFootnote"><span>English <ArrowRight size={12} /> Malayalam</span><span>Review before you render</span></div>
       </section>
-      <section className="dialogueInspector" aria-label="Dialogue inspector">
+      <section id="dialogue-inspector" className="dialogueInspector" aria-label="Dialogue inspector" hidden={!inspectorOpen}>
+        <div className="inspectorHeading"><span>Dialogue inspector</span><button className="iconButton" aria-label="Close dialogue inspector" onClick={() => setInspectorOpen(false)}><X size={14} /></button></div>
         {!timelineMatches && <p className="lineWarning">The displayed timeline belongs to another source. Select its source or activate a matching revision to play individual lines.</p>}
         <div className="timelineHeader"><div><p className="eyebrow">Dialogue timeline</p><h1 ref={timelineHeading} tabIndex={-1}>{project.segments.length} reviewable lines</h1></div>
           <span className="provenanceTag">{activeRevision ? activeRevision.provider === "fake" ? "DEMO FIXTURE" : `${activeRevision.provider} · ${activeRevision.model}` : "No transcript yet"}</span></div>
@@ -447,11 +461,12 @@ export default function ProjectPage() {
           onApply={structureAction} />}
         {project.active_revision_id && <StructurePanel key={`structure:${project.active_revision_id}`} project={project}
           disabled={locked} unsaved={dirtyIds.size > 0} onApply={structureAction} onDirty={setStructureDirty}
-          onPlayRange={playRange} canPlay={!!sourceReady && timelineMatches} />}
+          onPlayRange={playRange} canPlay={!!sourceReady && timelineMatches} editorRef={structureEditor} />}
       </section>
       <section className="timelineDock" aria-label="Timeline workspace">
         {timelineMatches && <TimelineView project={project} sourceId={sourceId} mediaRef={mediaRef}
-          drafts={timingDrafts} editors={timingEditors} disabled={locked} onSeek={seek} onSelectLine={goToLine} />}
+          drafts={timingDrafts} editors={timingEditors} disabled={locked} onSeek={seek} onSelectLine={goToLine}
+          selectedLineId={selectedLineId} onSplit={openStructure} collapsed={!timelineOpen} onToggle={() => setTimelineOpen(!timelineOpen)} />}
       </section>
     </section>
   </main>;

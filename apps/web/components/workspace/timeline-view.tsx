@@ -1,12 +1,12 @@
 "use client";
 
 import type { ProjectDetail } from "@cinedub/contracts";
-import { Minus, Plus, ScanLine } from "lucide-react";
+import { Minus, MousePointer2, Plus, ScanLine, Scissors } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
 import { DemoBadge } from "@/components/demo-badge";
 import { API_URL } from "@/lib/api";
 import {
-  ZOOM_LEVELS, buildTracks, formatMs, moveEdge, neighboursOf, nextZoom, snap, ticks, type Range,
+  ZOOM_LEVELS, buildTracks, formatMs, moveEdge, moveRange, neighboursOf, nextZoom, snap, ticks, type Range,
 } from "@/lib/timeline";
 
 export type TimingEditor = (range: Range) => void;
@@ -19,11 +19,13 @@ const FIT_LABEL = { ready: "fits its window", overrun: "does not fit", missing: 
  * Dragging or nudging an edge only changes that line's unsaved draft; saving, conflicts and
  * undo stay with the dialogue line editor.
  */
-export function TimelineView({ project, sourceId, mediaRef, drafts, editors, disabled, onSeek, onSelectLine }: {
+export function TimelineView({ project, sourceId, mediaRef, drafts, editors, disabled, onSeek, onSelectLine, onSplit, selectedLineId, onToggle, collapsed }: {
   project: ProjectDetail; sourceId: string | null; mediaRef: RefObject<HTMLMediaElement | null>;
   drafts: Record<string, Range>; editors: RefObject<Map<string, TimingEditor>>; disabled: boolean;
   onSeek: (ms: number) => void;
   onSelectLine?: (lineId: string, startMs: number) => void;
+  onSplit?: () => void; selectedLineId?: string | null;
+  onToggle?: () => void; collapsed?: boolean;
 }) {
   const tracks = useMemo(() => buildTracks(project, sourceId), [project, sourceId]);
   const [pxPerMs, setPxPerMs] = useState<number>(ZOOM_LEVELS[1]);
@@ -33,6 +35,8 @@ export function TimelineView({ project, sourceId, mediaRef, drafts, editors, dis
   const content = useRef<HTMLDivElement>(null);
   const playhead = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string; edge: "start" | "end" } | null>(null);
+  const clipDrag = useRef<{ id: string; clientX: number; range: Range; moved: boolean } | null>(null);
+  const suppressClick = useRef(false);
   // Edits applied since the last render: rapid key repeats must build on each other.
   const pending = useRef<Record<string, Range>>({});
   const width = Math.max(1, Math.round(tracks.durationMs * pxPerMs));
@@ -130,16 +134,46 @@ export function TimelineView({ project, sourceId, mediaRef, drafts, editors, dis
     apply(id, edge, current + step, true, false);
   }
 
+  function moveClip(id: string, range: Range, target: number, announce: boolean, snapping = true) {
+    const index = lines.findIndex((line) => line.id === id);
+    const editor = editors.current.get(id);
+    if (index < 0 || !editor || disabled) return;
+    const edges = lines.flatMap((line, position) => position === index ? [] : [line.start_ms, line.end_ms]);
+    const duration = range.end_ms - range.start_ms;
+    const start = snapping ? snap(target, [...edges, ...edges.map((ms) => ms - duration)], 8 / pxPerMs) : target;
+    const next = moveRange(range, start, neighboursOf(lines, index), tracks.durationMs);
+    pending.current[id] = next; editor(next);
+    if (announce) setAnnouncement(`Line ${lines[index].index + 1} draft moved to ${formatMs(next.start_ms)}; save the line to keep it`);
+  }
+  function startClipDrag(event: PointerEvent<HTMLButtonElement>, line: typeof lines[number]) {
+    suppressClick.current = false;
+    if (disabled || !editors.current.get(line.id) || event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    clipDrag.current = { id: line.id, clientX: event.clientX, range: { start_ms: line.start_ms, end_ms: line.end_ms }, moved: false };
+  }
+  function moveClipDrag(event: PointerEvent<HTMLButtonElement>, finish = false) {
+    const current = clipDrag.current; if (!current) return;
+    if (Math.abs(event.clientX - current.clientX) > 3) current.moved = true;
+    if (current.moved) moveClip(current.id, current.range, current.range.start_ms + (event.clientX - current.clientX) / pxPerMs, finish);
+    if (finish) {
+      suppressClick.current = current.moved; clipDrag.current = null;
+      if (current.moved) onSelectLine?.(current.id, pending.current[current.id]?.start_ms ?? current.range.start_ms);
+    }
+  }
+
   const peaks = wave?.peaks ?? [];
   return <section className="timelineView" aria-label="Scene timeline">
     <div className="timelineToolbar">
       <strong>Timeline</strong>
+      <span className="timelineMode"><MousePointer2 size={13} aria-hidden="true" /> Select</span>
+      {onSplit && <button className="smallButton" disabled={disabled || !project.segments.length} onClick={onSplit}><Scissors size={13} aria-hidden="true" /> Split / merge</button>}
       <button className="iconButton" aria-label="Zoom timeline out" disabled={pxPerMs <= ZOOM_LEVELS[0]} onClick={() => zoom(-1)}><Minus size={14} /></button>
       <button className="iconButton" aria-label="Zoom timeline in" disabled={pxPerMs >= ZOOM_LEVELS[ZOOM_LEVELS.length - 1]} onClick={() => zoom(1)}><Plus size={14} /></button>
       <button className="iconButton" aria-label="Fit timeline to view" onClick={fit}><ScanLine size={14} /></button>
-      <small>{Math.round(pxPerMs * 1000)} px/s · drag or use arrow keys on a line edge (Shift for 100 ms)</small>
+      <small>Drag to move · edges to trim · {Math.round(pxPerMs * 1000)} px/s</small>
+      {onToggle && <button className="smallButton" onClick={onToggle} aria-expanded={!collapsed} aria-controls="timeline-tracks">{collapsed ? "Show timeline" : "Hide timeline"}</button>}
     </div>
-    <div className="timelineTracks">
+    <div id="timeline-tracks" className="timelineTracks" hidden={collapsed}>
       <div className="trackLabels" aria-hidden="true"><span>TRACKS</span><strong>Source</strong><strong>Dialogue</strong><strong>Voice takes</strong>
         {tracks.stems.map((stem) => <strong key={stem.name}>{stem.name}</strong>)}
       </div>
@@ -159,7 +193,7 @@ export function TimelineView({ project, sourceId, mediaRef, drafts, editors, dis
         <div className="timelineTrack" data-track="dialogue" role="group" aria-label="Dialogue track">
           {lines.map((line) => {
             const changed = !!drafts[line.id];
-            return <div key={line.id} className={`timelineBlock ${line.approved ? "approved" : ""} ${changed ? "drafted" : ""}`}
+            return <div key={line.id} className={`timelineBlock ${line.approved ? "approved" : ""} ${changed ? "drafted" : ""} ${selectedLineId === line.id ? "clipSelected" : ""}`}
               style={{ left: line.start_ms * pxPerMs, width: Math.max(4, (line.end_ms - line.start_ms) * pxPerMs) }}>
               {(["start", "end"] as const).map((edge) => {
                 const value = edge === "start" ? line.start_ms : line.end_ms;
@@ -168,9 +202,18 @@ export function TimelineView({ project, sourceId, mediaRef, drafts, editors, dis
                   aria-valuemin={0} aria-valuemax={tracks.durationMs} aria-valuenow={value} aria-valuetext={formatMs(value)}
                   aria-disabled={disabled}
                   onPointerDown={(event) => startDrag(event, line.id, edge)} onPointerMove={moveDrag} onPointerUp={endDrag}
+                  onPointerCancel={() => { drag.current = null; }}
                   onKeyDown={(event) => nudge(event, line.id, edge, value)} />;
               })}
-              <button className="timelineLabel" onClick={() => { onSeek(line.start_ms); onSelectLine?.(line.id, line.start_ms); }}
+              <button className="timelineLabel" onPointerDown={(event) => startClipDrag(event, line)}
+                onPointerMove={(event) => moveClipDrag(event)} onPointerUp={(event) => moveClipDrag(event, true)}
+                onPointerCancel={() => { clipDrag.current = null; suppressClick.current = true; }}
+                onKeyDown={(event) => {
+                  if (disabled || event.nativeEvent.isComposing || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+                  event.preventDefault(); const range = pending.current[line.id] ?? line;
+                  moveClip(line.id, range, range.start_ms + (event.key === "ArrowLeft" ? -1 : 1) * (event.shiftKey ? 100 : 10), true, false);
+                }}
+                onClick={() => { if (suppressClick.current) { suppressClick.current = false; return; } onSeek(line.start_ms); onSelectLine?.(line.id, line.start_ms); }}
                 title={`${formatMs(line.start_ms)}–${formatMs(line.end_ms)}${changed ? " · unsaved timing draft" : ""}`}>
                 <span className="timelineText"><b>{line.index + 1}</b> {line.speaker ? `${line.speaker}: ` : ""}{line.label}</span>
               </button>

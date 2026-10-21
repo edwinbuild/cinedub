@@ -1,7 +1,7 @@
 "use client";
 
 import type { ProjectDetail, Segment, TimelineStructureEdit } from "@cinedub/contracts";
-import { useState } from "react";
+import { useImperativeHandle, useRef, useState, type Ref } from "react";
 import { api } from "@/lib/api";
 
 type Props = {
@@ -9,6 +9,7 @@ type Props = {
   onApply: (action: () => Promise<unknown>) => Promise<void>;
   onPlayRange: (start: number, end: number) => Promise<void>; canPlay: boolean;
   onDirty: (dirty: boolean) => void;
+  editorRef?: Ref<{ open: (lineId: string | null) => void }>;
 };
 
 function StructureForm({ line, next, unavailable, disabled, onApply, onPlayRange, canPlay, onDirty }: {
@@ -76,7 +77,8 @@ function StructureForm({ line, next, unavailable, disabled, onApply, onPlayRange
   </div>;
 }
 
-export function StructurePanel({ project, disabled, unsaved, onApply, onPlayRange, canPlay, onDirty }: Props) {
+export function StructurePanel({ project, disabled, unsaved, onApply, onPlayRange, canPlay, onDirty, editorRef }: Props) {
+  const root = useRef<HTMLDetailsElement>(null);
   const [selection, setSelection] = useState<Segment | null>(null);
   const [formDirty, setFormDirty] = useState(false);
   const [history, setHistory] = useState<TimelineStructureEdit[] | null>(null);
@@ -86,6 +88,14 @@ export function StructurePanel({ project, disabled, unsaved, onApply, onPlayRang
   const current = project.segments.find((line) => line.id === savedSelection?.id);
   const selected = current ?? savedSelection;
   const next = project.segments[project.segments.findIndex((line) => line.id === selected?.id) + 1];
+  useImperativeHandle(editorRef, () => ({ open(lineId) {
+    const line = project.segments.find((item) => item.id === lineId) ?? project.segments[0];
+    if (line && line.id !== selected?.id) {
+      if (formDirty && !window.confirm("Discard the current unsaved split/merge form and select another line?")) return;
+      setSelection(line); setFormDirty(false); onDirty(false);
+    }
+    if (root.current) { root.current.open = true; root.current.scrollIntoView({ block: "start" }); }
+  } }));
   async function loadHistory() {
     if (!project.active_revision_id) return;
     try { setBusy(true); setError(null); setHistory(await api.structureHistory(project.id, project.active_revision_id)); }
@@ -106,7 +116,7 @@ export function StructurePanel({ project, disabled, unsaved, onApply, onPlayRang
     await apply(() => api.restoreStructure(operation.id, { revision_id: operation.revision_id,
       expected_versions: versions, restoration_confirmed: true }));
   }
-  return <details className="dubPreview structurePanel" aria-label="Split merge and structural history"
+  return <details ref={root} className="dubPreview structurePanel" aria-label="Split merge and structural history"
     onToggle={(event) => { if (event.target === event.currentTarget && event.currentTarget.open && history === null && !busy) {
       setSelection((value) => value ?? project.segments[0] ?? null); void loadHistory();
     } }}>

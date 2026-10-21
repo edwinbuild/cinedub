@@ -25,8 +25,19 @@ Timeline track labels identify source, dialogue, selected takes and retained
 stems. Selecting a dialogue block seeks the source and reveals its line editor.
 Advanced operations are grouped by purpose rather than placed before the dialogue.
 
-This is a presentation and navigation change. It introduces no media capability,
-provider-quality claim, database migration or deployment requirement. Browser
+The reference refinement adds file drop import, whole-dialogue-clip movement,
+panel collapse and a toolbar shortcut to the existing split/merge editor. Clip
+movement preserves duration, stays within neighbouring dialogue and creates an
+unsaved timing draft. It is committed through the existing version-checked line
+save, which invalidates affected approvals/takes. It does not move or splice
+source video. Splitting still requires explicit text partitioning and review.
+
+All controls share a charcoal/grey surface scale, white text and cyan interaction
+states. Status warnings retain amber/red where needed. Dropdowns, fields, buttons,
+focus rings and hover states use the same rules in basic and advanced tools.
+Tools, dialogue and timeline can collapse without unmounting editing state.
+
+This introduces no provider-quality claim, database migration or deployment requirement. Browser
 verification must cover the complete DEMO workflow, keyboard editing, tool-switch
 draft preservation and desktop/narrow-screen layouts.
 
@@ -37,3 +48,7 @@ by design. The checks ran in isolated copies because a development server was
 already running in the main checkout. Desktop (1440px), laptop (1024px) and
 phone (390px) screenshots were reviewed. No live provider or listening-quality
 acceptance is inferred from these UI checks.
+
+The subsequent reference refinement passed the 25-test default browser suite and
+11 frontend unit tests. Its [reference decisions and interaction checks](../evaluations/editor-workspace.md)
+record the added upload/clip/panel behaviour and verification boundaries.

@@ -74,6 +74,18 @@ export function neighboursOf(lines: Range[], index: number) {
   };
 }
 
+/** Move a whole clip without changing its length or crossing a neighbouring line. */
+export function moveRange(line: Range, targetStartMs: number,
+  neighbours: { previousEnd: number | null; nextStart: number | null }, durationMs: number): Range {
+  const duration = line.end_ms - line.start_ms;
+  const floor = Math.max(0, neighbours.previousEnd ?? 0);
+  const ceiling = Math.min(durationMs, neighbours.nextStart ?? durationMs) - duration;
+  // Existing overlapping/invalid drafts must be corrected before dragging the whole clip.
+  if (ceiling < floor || duration < MIN_LINE_MS) return line;
+  const start = Math.round(Math.max(floor, Math.min(targetStartMs, ceiling)));
+  return { start_ms: start, end_ms: start + duration };
+}
+
 export type TakeFit = "ready" | "overrun" | "missing" | "unknown";
 
 export interface DialogueBlock extends Range {

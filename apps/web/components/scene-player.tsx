@@ -47,11 +47,11 @@ export function ScenePlayer({ artifacts, sourceId, mediaRef, onTime, stopAt, onS
     {media ? video ? <video key={media.id} controls preload="metadata" src={`${API_URL}${media.content_url}`}
       ref={(element) => { mediaRef.current = element; }} onTimeUpdate={(event) => updateTime(event.currentTarget)}
       onSeeking={onStop} onError={() => setError("Video could not load. Check media preparation and the local API.")} />
-      : <><div className="previewStage"><AudioLines size={44} aria-hidden="true" /><strong>Audio source</strong><span>Listen to your scene and follow the dialogue on the timeline.</span></div><audio key={media.id} controls preload="metadata" src={`${API_URL}${media.content_url}`}
+      : <><div className="previewStage"><AudioLines size={44} aria-hidden="true" /><strong>Audio preview</strong><span>Use the player below to review your source audio.</span></div><audio key={media.id} controls preload="metadata" src={`${API_URL}${media.content_url}`}
         ref={(element) => { mediaRef.current = element; }} onTimeUpdate={(event) => updateTime(event.currentTarget)}
         onSeeking={onStop} onError={() => setError("Audio could not load. Check the local API.")} /></>
-      : <div className="previewStage"><Clapperboard size={40} aria-hidden="true" /><strong>{sourceId ? "Preparing scene media…" : "Your scene takes centre stage"}</strong>
-        <span>{sourceId ? "Audio, waveform and video proxy appear after preparation." : "Import a video or audio file from the Media panel to get started."}</span></div>}
+      : <div className="previewStage"><Clapperboard size={40} aria-hidden="true" /><strong>{sourceId ? "Preparing media…" : "No media selected"}</strong>
+        <span>{sourceId ? "Your preview will appear when preparation finishes." : "Import a video or audio file to begin."}</span></div>}
     {wave && <div className="realWaveform">
       <svg viewBox="0 0 800 70" preserveAspectRatio="none" aria-hidden="true">
         {bins.map((peak, index) => <rect key={index} x={index * 800 / bins.length} y={35 - Math.max(1, peak * 33)}

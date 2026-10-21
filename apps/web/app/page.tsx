@@ -54,12 +54,12 @@ export default function Home() {
       <section className="hero">
         <div>
           <p className="eyebrow"><Sparkles size={14} /> English → Malayalam</p>
-          <h1>Your scene.<br /><span>A new voice.</span></h1>
-          <p className="heroCopy">Import a scene, shape the dialogue and review your dub. One workspace from the first line to the final mix.</p>
+          <h1>Your projects</h1>
+          <p className="heroCopy">Import, edit and review your English → Malayalam scenes.</p>
         </div>
         <form className="createCard" onSubmit={create}>
           <div className="createIcon"><Plus size={21} /></div>
-          <div><h2>Start a scene</h2><p>Up to two minutes for the first workflow.</p></div>
+          <div><h2>New project</h2><p>Video or audio · up to two minutes.</p></div>
           <label htmlFor="project-name">Project name</label>
           <input id="project-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Opening scene" maxLength={120} />
           <button className="primaryButton" disabled={saving || !name.trim()}>{saving ? "Creating…" : "Create workspace"}<ArrowRight size={16} /></button>
