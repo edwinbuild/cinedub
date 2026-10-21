@@ -119,3 +119,102 @@ test("dropping several files is refused without sending an upload", async ({ pag
   await expect(page.getByLabel("Scene file drop zone", { exact: true }).getByRole("alert")).toHaveText("Import one scene at a time.");
   expect(uploads).toBe(0);
 });
+
+test("pane sizing supports dragging, keyboard limits and reload without losing drafts during layout changes", async ({ page }) => {
+  const noErrors = guardPage(page);
+  await sceneWorkspace(page, "Resizable editor panes");
+  await page.getByRole("button", { name: /^Build demo timeline/ }).click();
+  const line = page.getByRole("article", { name: "Dialogue line 1", exact: true });
+  await line.getByLabel("Malayalam", { exact: true }).fill("Preserve while resizing");
+  const tools = page.getByRole("separator", { name: "Resize tools panel", exact: true });
+  const inspector = page.getByRole("separator", { name: "Resize dialogue inspector", exact: true });
+  const timeline = page.getByRole("separator", { name: "Resize timeline", exact: true });
+  for (const [handle, dx, dy, expected] of [[tools, 80, 0, 390], [inspector, -60, 0, 430], [timeline, 0, -110, 368]] as const) {
+    const box = (await handle.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + dx, box.y + box.height / 2 + dy, { steps: 10 });
+    await page.mouse.up();
+    await expect(handle).toHaveAttribute("aria-valuenow", String(expected));
+  }
+  expect(Math.round((await page.getByLabel("Scene tools", { exact: true }).boundingBox())!.width)).toBe(390);
+  expect(Math.round((await page.getByLabel("Dialogue inspector", { exact: true }).boundingBox())!.width)).toBe(430);
+  expect(Math.round((await page.getByLabel("Timeline workspace", { exact: true }).boundingBox())!.height)).toBe(368);
+  await expect(line.getByLabel("Malayalam", { exact: true })).toHaveValue("Preserve while resizing");
+  await page.getByRole("button", { name: "Close dialogue inspector", exact: true }).click();
+  await expect(inspector).toBeHidden();
+  await page.getByRole("button", { name: "Show dialogue inspector", exact: true }).click();
+  await expect(inspector).toHaveAttribute("aria-valuenow", "430");
+  await expect(line.getByLabel("Malayalam", { exact: true })).toHaveValue("Preserve while resizing");
+  await page.getByRole("button", { name: "Save line", exact: true }).first().click();
+  await expect(line.getByRole("button", { name: "Save line", exact: true })).toBeDisabled();
+  await page.screenshot({ path: "test-results/editor-resized.png", fullPage: true });
+  await page.reload();
+  await expect(tools).toHaveAttribute("aria-valuenow", "390");
+  await expect(inspector).toHaveAttribute("aria-valuenow", "430");
+  await expect(timeline).toHaveAttribute("aria-valuenow", "368");
+  await expect(line.getByLabel("Malayalam", { exact: true })).toHaveValue("Preserve while resizing");
+  await tools.focus(); await tools.press("Home");
+  for (const tool of ["Workflow", "Voices", "Analysis", "Export", "Project", "Media"]) {
+    await openTool(page, tool);
+    const panel = page.getByLabel("Scene tools", { exact: true });
+    await panel.locator(".toolBody:visible details").evaluateAll((details) => details.forEach((detail) => { (detail as HTMLDetailsElement).open = true; }));
+    expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    const clippedFields = await panel.evaluate((element) => {
+      const pane = element.getBoundingClientRect();
+      return Array.from(element.querySelectorAll("input, select, textarea")).filter((field) => {
+        const box = field.getBoundingClientRect();
+        return box.width > 0 && (box.left < pane.left || box.right > pane.right);
+      }).map((field) => field.getAttribute("aria-label") ?? field.tagName);
+    });
+    expect(clippedFields, `${tool} fields stay inside the narrowest tools pane`).toEqual([]);
+  }
+  for (const handle of [tools, inspector, timeline]) {
+    await handle.focus(); await handle.press("Home");
+    await expect.poll(async () => await handle.getAttribute("aria-valuenow")).toBe(await handle.getAttribute("aria-valuemin"));
+    await handle.press("End");
+    await expect.poll(async () => await handle.getAttribute("aria-valuenow")).toBe(await handle.getAttribute("aria-valuemax"));
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  const monitor = page.getByRole("region", { name: "Source monitor", exact: true });
+  expect((await monitor.boundingBox())!.width).toBeGreaterThanOrEqual(320);
+  expect((await monitor.boundingBox())!.height).toBeGreaterThanOrEqual(250);
+  await page.screenshot({ path: "test-results/editor-sizing-limits.png", fullPage: true });
+  await page.setViewportSize({ width: 1120, height: 650 });
+  await expect.poll(async () => (await monitor.boundingBox())!.width).toBeGreaterThanOrEqual(320);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const compactTools = Number(await tools.getAttribute("aria-valuenow"));
+  const compactInspector = Number(await inspector.getAttribute("aria-valuenow"));
+  await tools.focus(); await tools.press("ArrowLeft");
+  await expect(tools).toHaveAttribute("aria-valuenow", String(compactTools - 10));
+  await expect(inspector).toHaveAttribute("aria-valuenow", String(compactInspector));
+  const audio = monitor.locator("audio");
+  expect((await audio.boundingBox())!.height).toBeGreaterThanOrEqual(32);
+  await expect(audio).toBeInViewport();
+  const monitorBox = (await monitor.boundingBox())!;
+  const audioBox = (await audio.boundingBox())!;
+  expect(audioBox.y).toBeGreaterThanOrEqual(monitorBox.y);
+  expect(audioBox.y + audioBox.height).toBeLessThanOrEqual(monitorBox.y + monitorBox.height);
+  await page.screenshot({ path: "test-results/editor-compact-sizing.png", fullPage: true });
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await expect(inspector).toBeHidden();
+  await expect(tools).toBeVisible();
+  await expect(timeline).toBeVisible();
+  await tools.focus(); await tools.press("ArrowLeft");
+  await timeline.focus(); await timeline.press("ArrowDown");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const handle of [tools, inspector, timeline]) await expect(handle).toBeHidden();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  for (const [handle, expected] of [[tools, 310], [inspector, 370], [timeline, 258]] as const) {
+    await handle.focus(); await handle.press("Enter");
+    await expect(handle).toHaveAttribute("aria-valuenow", String(expected));
+  }
+  await tools.press("Shift+ArrowRight");
+  await expect(tools).toHaveAttribute("aria-valuenow", "360");
+  await tools.dblclick();
+  await expect(tools).toHaveAttribute("aria-valuenow", "310");
+  await expect(line.getByLabel("Malayalam", { exact: true })).toHaveValue("Preserve while resizing");
+  noErrors();
+});

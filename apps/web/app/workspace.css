@@ -10,10 +10,11 @@
   --accent: #42cbed;
   --accent-dark: #248ba5;
   --cyan: #42cbed;
-  --control: #11151a;
+  --control: #25292e;
   --control-hover: #282f38;
   --selected: #1b303a;
-  --focus-ring: rgb(66 203 237 / .18);
+  --danger: #ed929b;
+  --warning: #d8bd84;
 }
 
 button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visible,
@@ -36,9 +37,9 @@ button { transition: background-color .15s, border-color .15s; }
 .headerExport { height: 32px; padding: 0 14px; border-radius: 5px; font-size: 12px; }
 .studioGrid {
   flex: 1; min-height: 0; display: grid;
-  grid-template-columns: 310px minmax(280px, 1fr) 370px;
-  grid-template-rows: 48px minmax(0, 1fr) 258px;
-  gap: 1px; background: var(--line-soft);
+  grid-template-columns: var(--tools-width) var(--tools-handle) minmax(320px, 1fr) var(--inspector-handle) var(--inspector-width);
+  grid-template-rows: 48px minmax(0, 1fr) var(--timeline-handle) var(--timeline-height);
+  background: var(--bg);
 }
 .toolNavigation { grid-column: 1 / -1; grid-row: 1; background: #181b1f; padding: 4px 12px; display: flex; align-items: stretch; gap: 5px; border-bottom: 1px solid var(--line); }
 .toolNavigation button { position: relative; border: 0; border-radius: 4px; background: transparent; color: var(--muted); min-height: 38px; padding: 0 13px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; font-size: 11px; }
@@ -54,24 +55,24 @@ button { transition: background-color .15s, border-color .15s; }
 .toolBody { padding: 16px; min-width: 0; overflow-wrap: anywhere; }
 .toolBody[hidden] { display: none !important; }
 .toolHint { color: var(--muted); font-size: 12px; line-height: 1.65; }
-.mediaImport { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; border: 1px dashed #545b63; border-radius: 7px; padding: 25px 12px; cursor: pointer; color: var(--accent); background: #151c22; }
+.mediaImport { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; border: 1px dashed #545b63; border-radius: 7px; padding: 25px 12px; cursor: pointer; color: var(--accent); background: #202429; }
 .mediaImport:hover { border-color: var(--accent); }
 .mediaImport:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
 .mediaImport strong { color: var(--text); font-size: 13px; }
 .mediaImport span { color: var(--muted); font-size: 11px; }
 .mediaImport input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
-.mediaImport:has(input:disabled) { opacity: .45; cursor: default; }
+.mediaImport:has(input:disabled) { color: #69737e; background: #1b1e22; border-color: #343a43; cursor: default; }
 .mediaBin { display: grid; gap: 8px; margin: 18px 0; }
-.mediaBinItem { width: 100%; display: flex; gap: 12px; align-items: center; text-align: left; padding: 13px 10px; color: var(--muted); border: 1px solid var(--line); background: #17191c; border-radius: 6px; cursor: pointer; }
-.mediaBinItem.selected { border-color: var(--accent-dark); background: #1b303a; }
+.mediaBinItem { width: 100%; display: flex; gap: 12px; align-items: center; text-align: left; padding: 13px 10px; color: var(--muted); border: 0; background: #202429; border-radius: 3px; cursor: pointer; }
+.mediaBinItem.selected { background: #273740; box-shadow: inset 2px 0 var(--accent); }
 .mediaBinItem > svg { flex-shrink: 0; }
 .mediaBinItem span { min-width: 0; display: grid; gap: 5px; }
 .mediaBinItem strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text); }
 .mediaBinItem small { font-size: 10px; }
 .toolPrimary { width: 100%; font-size: 12px; height: 38px; border-radius: 5px; }
 .toolBody .railSection { margin-top: 22px; }
-.toolBody .pipelineButton { display: flex; padding: 11px 10px; margin: 4px 0; background: #222529; border: 1px solid var(--line); border-radius: 5px; color: var(--text); }
-.toolBody .pipelineButton:hover:enabled { background: #2b3033; border-color: #4b6573; }
+.toolBody .pipelineButton { display: flex; padding: 11px 10px; margin: 4px 0; background: #272b30; border: 0; border-radius: 3px; color: var(--text); }
+.toolBody .pipelineButton:hover:enabled { background: #343b43; }
 .toolBody .pipelineButton strong { font-size: 12px; line-height: 1.5; }
 .toolBody .pipelineButton small, .toolBody .capability small { color: var(--muted); font-size: 10px; line-height: 1.5; }
 .toolBody .pipelinePanel { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
@@ -83,7 +84,7 @@ button { transition: background-color .15s, border-color .15s; }
 .toolBody .pipelineStep progress { grid-column: 2; }
 .toolBody .stemPanel, .toolBody .mixPanel, .toolBody .clonePanel, .toolBody .alignmentPanel,
 .toolBody .performancePanel, .toolBody .dialogueBriefPanel, .toolBody .dialogueAdaptationPanel,
-.toolBody .emotionPanel { margin: 16px 0; padding: 13px 10px; background: #202225; border-color: var(--line); border-radius: 6px; }
+.toolBody .emotionPanel { margin: 20px 0; padding: 16px 0 0; }
 .toolBody summary { cursor: pointer; font-size: 12px; line-height: 1.6; }
 .toolBody .adaptationOptions, .toolBody .stemPlayers { grid-template-columns: minmax(0, 1fr); }
 .toolBody input:not([type="checkbox"]):not([type="range"]):not([type="file"]), .toolBody select, .toolBody textarea { max-width: 100%; min-width: 0; }
@@ -98,21 +99,22 @@ button { transition: background-color .15s, border-color .15s; }
 .providerDetails { padding: 16px 0; border-top: 1px solid var(--line); margin-top: 18px; }
 .providerDetails .railSection { margin-top: 14px; }
 .toolBody .capability strong { font-size: 11px; }
-.viewerPanel { grid-column: 2; grid-row: 2; display: flex; flex-direction: column; background: #141517; }
+.viewerPanel { grid-column: 3; grid-row: 2; display: flex; flex-direction: column; background: #141517; container: source-monitor / size; }
 .monitorHeading { display: flex; justify-content: space-between; gap: 16px; padding: 15px 18px; border-bottom: 1px solid var(--line-soft); color: #d0d4d9; font-size: 11px; }
 .monitorHeading span:last-child { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; }
-.viewerPanel .scenePlayer { width: 100%; max-width: none; min-height: 0; flex: 1; margin: 0; padding: 18px; display: flex; flex-direction: column; justify-content: center; overflow: auto; }
-.viewerPanel .scenePlayer video { min-height: 0; max-height: calc(100dvh - 445px); flex: 1; width: 100%; background: #08090b; border: 0; border-radius: 3px; object-fit: contain; }
-.viewerPanel .previewStage { flex: 1; min-height: 170px; border: 0; border-radius: 3px; background: #0e0f11; gap: 12px; }
+.viewerPanel .scenePlayer { width: 100%; max-width: none; min-height: 0; flex: 1; margin: 0; padding: 18px; display: flex; flex-direction: column; justify-content: flex-start; overflow: auto; }
+.viewerPanel .scenePlayer audio { flex-shrink: 0; height: 40px; margin: 12px 0; }
+.viewerPanel .scenePlayer video { min-height: 80px; height: 0; max-height: none; flex: 1; width: 100%; background: #08090b; border: 0; border-radius: 3px; object-fit: contain; }
+.viewerPanel .previewStage { flex: 1 0 auto; min-height: 170px; border: 0; border-radius: 3px; background: #0e0f11; gap: 12px; }
 .viewerPanel .previewStage > svg { color: #657079; margin-bottom: 4px; }
 .viewerPanel .previewStage strong { max-width: none; color: #e2e5e9; font-size: 15px; font-weight: 500; }
 .viewerPanel .previewStage span { max-width: 300px; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .viewerPanel .realWaveform { flex-shrink: 0; }
-.viewerPanel .realWaveform svg { height: 46px; background: #1d2229; border-radius: 3px; }
-.viewerPanel .realWaveform rect { fill: var(--cyan); }
+.viewerPanel .realWaveform svg { height: 46px; background: #202429; border-radius: 3px; }
+.viewerPanel .realWaveform rect { fill: #5493a5; opacity: 1; }
 .viewerFootnote { display: flex; justify-content: space-between; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: 10px; }
 .viewerFootnote > span { display: flex; align-items: center; gap: 7px; }
-.dialogueInspector { grid-column: 3; grid-row: 2; padding: 0 14px 16px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.dialogueInspector { grid-column: 5; grid-row: 2; padding: 0 14px 16px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .dialogueInspector .timelineHeader { align-items: center; gap: 10px; }
 .dialogueInspector .timelineHeader h1 { font-size: 17px; letter-spacing: -.025em; }
 .dialogueInspector .eyebrow { font-size: 9px; margin-bottom: 5px; }
@@ -121,8 +123,8 @@ button { transition: background-color .15s, border-color .15s; }
 .dialogueInspector .reviewFilters .smallButton { font-size: 10px; padding: 5px 7px; min-height: 30px; }
 .dialogueInspector .lineTexts { grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .dialogueInspector .lineTexts textarea { min-height: 64px; font-size: 13px; background: #151619; border-radius: 4px; padding: 8px 10px; }
-.dialogueInspector .dialogueLine { padding: 12px; border-radius: 6px; background: #202225; }
-.dialogueInspector .dialogueLine.playing { border-color: var(--accent-dark); box-shadow: inset 2px 0 var(--accent); }
+.dialogueInspector .dialogueLine { padding: 12px; border: 0; border-radius: 3px; background: #202429; }
+.dialogueInspector .dialogueLine.playing { background: #232e35; box-shadow: inset 2px 0 var(--accent); }
 .dialogueInspector .lineHeader { display: grid; grid-template-columns: minmax(0, 1fr) 75px 75px; gap: 10px 8px; }
 .dialogueInspector .lineHeader > strong { grid-column: 1 / 3; }
 .dialogueInspector .lineHeader > button { grid-column: 3; justify-content: center; font-size: 10px; padding: 6px 4px; }
@@ -134,11 +136,11 @@ button { transition: background-color .15s, border-color .15s; }
 .dialogueInspector .muted { font-size: 10px; line-height: 1.6; }
 .dialogueInspector .jobProgress { height: auto; }
 .dialogueInspector .lineWarning, .dialogueInspector .inlineError { font-size: 11px; }
-.timelineDock { grid-column: 1 / -1; grid-row: 3; min-width: 0; overflow: auto; background: #181a1d; }
+.timelineDock { grid-column: 1 / -1; grid-row: 4; min-width: 0; overflow: auto; background: #181a1d; }
 .timelineDock .timelineView { min-height: 100%; border: 0; margin: 0; border-radius: 0; background: transparent; }
 .timelineDock .timelineToolbar { padding: 10px 14px; gap: 8px; min-height: 46px; }
 .timelineDock .timelineToolbar strong { font-size: 12px; margin-right: auto; }
-.timelineDock .timelineToolbar .smallButton { background: transparent; border-color: var(--line); color: var(--text); min-height: 28px; }
+.timelineDock .timelineToolbar .smallButton { background: var(--control); color: var(--text); min-height: 28px; }
 .timelineDock .timelineContent { padding-top: 25px; }
 .timelineDock .timelineRuler { height: 25px; background: #1e2024; }
 .timelineDock .timelineRuler span { top: 6px; font-size: 10px; }
@@ -150,12 +152,12 @@ button { transition: background-color .15s, border-color .15s; }
 .trackLabels strong:nth-of-type(2) { color: var(--accent); }
 .timelineScroller { min-width: 0; }
 .timelineDock .timelineTrack { height: 37px; background: #1a1c20; }
-.timelineDock .waveTrack { height: 44px; background: #18252d; }
-.timelineDock .waveTrack svg { fill: #4895ad; }
-.timelineDock .timelineBlock { border-color: #426980; background: #243a49; border-radius: 4px; }
-.timelineDock .timelineBlock.approved { border-color: #32859b; background: #1d414e; }
-.timelineDock .timelineTake { background: #263641; border-color: #4f7385; border-radius: 4px; }
-.timelineDock .timelineTake.ready { background: #1d414e; border-color: #32859b; }
+.timelineDock .waveTrack { height: 44px; background: #20262c; }
+.timelineDock .waveTrack svg { fill: #5b9aaf; }
+.timelineDock .timelineBlock { border: 0; background: #31596b; color: var(--text); border-radius: 3px; }
+.timelineDock .timelineBlock.approved { background: #286476; }
+.timelineDock .timelineTake { background: #354c5a; border: 0; border-radius: 3px; }
+.timelineDock .timelineTake.ready { background: #315f70; }
 .timelineDock .timelinePlayhead { background: #edf0f4; }
 .studioShell .studioError, .studioShell .noticeBanner { flex-shrink: 0; max-height: 125px; overflow: auto; margin: 0; border-radius: 0; }
 
@@ -165,36 +167,34 @@ button { transition: background-color .15s, border-color .15s; }
 .hero { min-height: 330px; padding-top: 48px; padding-bottom: 38px; grid-template-columns: 1.2fr 1fr; gap: 70px; }
 .hero h1 { font-size: clamp(32px, 4vw, 54px); line-height: 1.1; letter-spacing: -.045em; }
 .heroCopy { font-size: 14px; max-width: 430px; margin-top: 18px; }
-.createCard { background: var(--panel); border-radius: 10px; padding: 22px; box-shadow: none; gap: 12px; }
+.createCard { background: var(--panel); border: 0; border-radius: 6px; padding: 22px; box-shadow: none; gap: 12px; }
 .createIcon { background: #20313a; color: var(--accent); border-radius: 7px; }
 .createCard input, .createCard .primaryButton { height: 40px; border-radius: 6px; }
-.projectCard { border-radius: 8px; }
-.projectCard:hover { transform: none; border-color: var(--accent-dark); }
+.projectCard { border: 0; border-radius: 4px; }
+.projectCard:hover { transform: none; background: var(--control-hover); }
+.projectThumb, .environment, .emptyState { border: 0; }
 .environment span { background: var(--accent); box-shadow: none; }
 .createCard input:hover { border-color: #536171; }
-.createCard input:focus-visible { border-color: var(--accent); outline: 1px solid var(--accent); outline-offset: 0; box-shadow: 0 0 0 3px var(--focus-ring); }
+.createCard input:focus-visible { border-color: var(--accent); outline: 1px solid var(--accent); outline-offset: 0; box-shadow: none; }
 .primaryButton:hover:enabled { background: #81e0f7; }
 
 /* One control vocabulary across every editor panel, including advanced forms. */
 .studioShell [hidden] { display: none !important; }
-.studioGrid.toolsCollapsed { grid-template-columns: 0 minmax(280px, 1fr) 370px; }
-.studioGrid.inspectorCollapsed { grid-template-columns: 310px minmax(280px, 1fr) 0; }
-.studioGrid.toolsCollapsed.inspectorCollapsed { grid-template-columns: 0 minmax(280px, 1fr) 0; }
-.studioGrid.timelineCollapsed { grid-template-rows: 48px minmax(0, 1fr) 49px; }
+
 .inspectorHeading { position: sticky; top: 0; z-index: 3; background: var(--panel); display: flex; align-items: center; justify-content: space-between; min-height: 49px; border-bottom: 1px solid var(--line); margin: 0 -14px 15px; padding: 8px 14px; font-size: 12px; font-weight: 600; }
 .toolPanelHeading .iconButton, .inspectorHeading .iconButton { width: 27px; height: 27px; border-color: transparent; }
-.studioShell .iconButton { border-radius: 4px; }
+.studioShell .iconButton { border: 0; border-radius: 3px; }
 .studioShell .iconButton:hover:enabled { color: var(--text); border-color: #48525f; background: var(--control-hover); }
-.studioShell .smallButton { border: 1px solid var(--line); background: #232830; color: #d7dee7; border-radius: 4px; min-height: 30px; padding: 6px 9px; font-size: 11px; line-height: 1.4; }
-.studioShell .smallButton:hover:enabled { border-color: #526171; background: #303945; color: white; }
-.studioShell .smallButton.selected { color: var(--accent); background: var(--selected); border-color: var(--accent-dark); }
-.studioShell button:disabled { cursor: not-allowed; opacity: .4; }
+.studioShell .smallButton { border: 0; background: #2a2f35; color: #d7dee7; border-radius: 4px; min-height: 30px; padding: 6px 9px; font-size: 11px; line-height: 1.4; }
+.studioShell .smallButton:hover:enabled { background: #39434c; color: white; }
+.studioShell .smallButton.selected { color: var(--accent); background: #283c46; }
+.studioShell button:disabled { cursor: not-allowed; opacity: 1; color: #89929e; background: #202429; box-shadow: none; }
 .studioShell .primaryButton { background: var(--accent); color: #071114; border-radius: 4px; }
 .studioShell .primaryButton:hover:enabled { background: #81e0f7; }
 .studioShell :is(.fieldLabel, .lineHeader, .lineFooter, .lineTexts, .cloneFields, .briefTerm, .briefCharacter) :is(input:not([type="checkbox"]):not([type="range"]):not([type="file"]), select, textarea),
-.studioShell .voiceAssignment input, .createCard input { background: var(--control); border: 1px solid var(--line); color: var(--text); border-radius: 4px; min-height: 34px; padding: 7px 9px; font-size: 12px; line-height: 1.5; outline: none; box-shadow: none; }
-.studioShell :is(input, select, textarea):hover:enabled { border-color: #536171; }
-.studioShell :is(input, select, textarea):focus-visible { outline: 1px solid var(--accent); outline-offset: 0; border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-ring); }
+.studioShell .voiceAssignment input, .createCard input { background: var(--control); border: 1px solid transparent; color: var(--text); border-radius: 4px; min-height: 34px; padding: 7px 9px; font-size: 12px; line-height: 1.5; outline: none; box-shadow: none; }
+.studioShell :is(input, select, textarea):hover:enabled { background-color: #2c3239; }
+.studioShell :is(input, select, textarea):focus-visible { outline: 1px solid var(--accent); outline-offset: 0; border-color: var(--accent); box-shadow: none; }
 .studioShell select { appearance: none; cursor: pointer; padding-right: 29px !important; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='m3 4.5 3 3 3-3' fill='none' stroke='%23a1a9b5' stroke-width='1.3'/%3E%3C/svg%3E") !important; background-repeat: no-repeat !important; background-position: right 10px center !important; }
 .studioShell select option { background: #181b1f; color: var(--text); }
 .studioShell input[type="checkbox"], .studioShell input[type="range"], .studioShell progress { accent-color: var(--accent); }
@@ -202,46 +202,78 @@ button { transition: background-color .15s, border-color .15s; }
 .studioShell ::placeholder { color: #7e8999; opacity: 1; }
 .studioShell summary { padding: 3px 0; transition: color .15s; }
 .studioShell summary:hover { color: var(--accent); }
-.studioShell :is(.dubPreview, .clonePanel, .stemPanel, .mixPanel, .dialogueBriefPanel, .dialogueAdaptationPanel, .emotionPanel, .alignmentPanel, .performancePanel, .metricCard, .adaptationOption) { background: var(--panel-soft); border-color: var(--line); border-radius: 5px; box-shadow: none; }
-.studioShell .lineWarning { color: #d8bd84; }
-.studioShell .demoBadge { color: #bdd8e2; border-color: #486270; background: #223039; font-weight: 600; }
+.studioShell :is(.clonePanel, .stemPanel, .mixPanel, .dialogueBriefPanel, .dialogueAdaptationPanel, .emotionPanel, .alignmentPanel, .performancePanel) { background: var(--panel); border: 0; border-top: 1px solid var(--line-soft); border-radius: 0; box-shadow: none; }
+.studioShell :is(.dubPreview, .metricCard, .adaptationOption) { background: var(--panel-soft); border: 0; border-radius: 3px; box-shadow: none; }
+.studioShell .lineWarning { color: var(--warning); }
+.studioShell .demoBadge { color: #bdc9d2; border: 0; background: #30383f; font-weight: 600; }
 .studioShell .noticeBanner { background: #1b303a; color: #c7eef8; }
 .studioShell .jobProgress { background: #1b303a; border-color: #356273; color: var(--accent); }
 .studioShell .pipelineStep.current { background: var(--selected); color: var(--accent); }
-.studioShell .artifact { color: #d1d9e3; }
+.studioShell .artifact { color: #d1d9e3; border: 0; background: #22262c; border-radius: 3px; }
 .studioShell .artifact:hover, .studioShell .speakerRename:hover { background: var(--control-hover); border-color: var(--accent-dark); color: var(--accent); }
 .studioShell .speakerRename { border-radius: 4px; padding: 8px; }
 .mediaDropZone.dragOver .mediaImport { background: #173441; border-color: var(--accent); outline: 2px solid var(--accent); }
 .mediaImport .importBrowse { color: var(--accent); }
 .mediaImport small { color: var(--muted); font-size: 10px; }
-.mediaBinItem:hover:enabled { background: #242e37; border-color: var(--accent-dark); }
+.mediaBinItem:hover:enabled { background: #303c45; }
 .timelineMode { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 10px; padding-right: 8px; border-right: 1px solid var(--line); }
-.timelineBlock:hover { border-color: var(--accent); background: #284555; }
-.timelineDock .timelineBlock.clipSelected { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.timelineDock .timelineBlock:hover { background: #3c7083; }
+.timelineDock .timelineBlock.clipSelected { box-shadow: inset 0 0 0 1px var(--accent); }
+.timelineDock .timelineBlock.drafted { box-shadow: inset 0 -2px var(--accent); }
+.timelineDock .timelineBlock.clipSelected.drafted { box-shadow: inset 0 0 0 1px var(--accent), inset 0 -2px var(--accent); }
 .timelineLabel { cursor: grab; touch-action: none; user-select: none; }
 .timelineLabel:active { cursor: grabbing; }
 .timelineDock .timelineTake { color: #c7d3e0; }
-.timelineDock .timelineTake.overrun { background: #4a292b; border: 1px solid #b45d66; color: #ffe0e3; }
-.timelineDock .timelineTake.missing { background: #202830; border: 1px dashed #4c5a69; color: var(--muted); }
+.timelineDock .timelineTake.overrun { background: #62363c; color: #ffe0e3; }
+.timelineDock .timelineTake.missing { background: #2b3036; border: 0; color: var(--muted); }
 .studioShell :is(.mixDownloads, .stemPlayers a, .acceptedBundle) { color: var(--accent); }
 .timelineRuler span:first-child { transform: none; }
 .studioShell .scenePlayer audio { color-scheme: dark; }
 
+/* Small, reachable handles separate panes without boxing their contents. */
+.workspaceResizer { position: relative; z-index: 5; background: var(--bg); touch-action: none; cursor: col-resize; }
+.workspaceResizer::after { content: ""; position: absolute; background: #3c434b; border-radius: 2px; transition: background .15s; }
+.toolsResizer { grid-column: 2; grid-row: 2; }
+.inspectorResizer { grid-column: 4; grid-row: 2; }
+.toolsResizer::after, .inspectorResizer::after { width: 2px; height: 30px; left: 2px; top: calc(50% - 15px); }
+.timelineResizer { grid-column: 1 / -1; grid-row: 3; cursor: row-resize; }
+.timelineResizer::after { height: 2px; width: 40px; top: 2px; left: calc(50% - 20px); }
+.workspaceResizer:hover::after, .workspaceResizer:focus-visible::after, .resizing .workspaceResizer::after { background: var(--accent); }
+.workspaceResizer:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.resizing { cursor: col-resize; }
+.resizing-timeline { cursor: row-resize; }
+.resizing * { cursor: inherit !important; user-select: none !important; }
+.studioShell .provenanceTag { border: 0; background: #252c32; color: #b7c9d3; }
+.studioShell .reviewQueue { margin: 16px 0; padding: 12px; font-size: 12px; }
+.studioShell :is(.structurePanel, .dialogueBriefPanel, .emotionPanel) fieldset:not(.lineFields) { border: 0; border-top: 1px solid var(--line-soft); margin: 16px 0; padding: 14px 0 0; }
+.studioShell :is(.stemCard, .mixCard, .cloneCard, .candidateList) { border-color: var(--line-soft); }
+.studioShell :is(.stemCard header small, .mixCard header small, .mixPanel p, .stemPanel > p, .stemCard details):not(.lineWarning):not(.inlineError) { color: var(--muted); }
+.studioShell :is(.mixCard audio, .mixCard video) { background: #101215; }
+.studioShell .alignmentMetrics dt { opacity: 1; color: var(--muted); }
+.studioShell .capability .ready { background: var(--accent); }
+.studioShell .capability .missing { background: #aab0b9; }
+.studioShell .timelineEdge::after { opacity: 1; background: #78b0c3; }
+.studioShell .timelineEdge:hover::after, .studioShell .timelineEdge:focus-visible::after { background: var(--accent); }
+.errorBanner { border: 0; background: #39262c; color: #f3aab1; }
+
+@container source-monitor (max-height: 380px) {
+  .viewerPanel .scenePlayer { padding: 12px 18px; }
+  .viewerPanel .scenePlayer:has(> audio) .previewStage { display: none; }
+  .viewerPanel .realWaveform svg { height: 32px; }
+}
+
 @media (max-width: 1100px) and (min-width: 761px) {
   .studioShell { height: auto; min-height: 100dvh; overflow: visible; }
-  .studioGrid { flex: auto; grid-template-columns: 280px minmax(0, 1fr); grid-template-rows: 48px 450px 258px auto; }
-  .studioGrid.toolsCollapsed { grid-template-columns: 0 minmax(0, 1fr); }
-  .studioGrid.inspectorCollapsed { grid-template-columns: 280px minmax(0, 1fr); }
-  .studioGrid.toolsCollapsed.inspectorCollapsed { grid-template-columns: 0 minmax(0, 1fr); }
+  .studioGrid { flex: auto; grid-template-columns: var(--tools-width) var(--tools-handle) minmax(320px, 1fr); grid-template-rows: 48px max(300px, calc(100dvh - 112px - var(--timeline-height))) var(--timeline-handle) var(--timeline-height) auto; }
   .toolNavigation { grid-column: 1 / -1; grid-row: 1; }
   .toolPanel { grid-column: 1; grid-row: 2; }
-  .viewerPanel { grid-column: 2; grid-row: 2; }
-  .timelineDock { grid-column: 1 / -1; grid-row: 3; }
-  .dialogueInspector { grid-column: 1 / -1; grid-row: 4; overflow: visible; }
+  .viewerPanel { grid-column: 3; grid-row: 2; }
+  .timelineDock { grid-column: 1 / -1; grid-row: 4; }
+  .dialogueInspector { grid-column: 1 / -1; grid-row: 5; overflow: visible; }
   .dialogueInspector .lineTexts { grid-template-columns: 1fr 1fr; }
-  .studioGrid.timelineCollapsed { grid-template-rows: 48px 450px 49px auto; }
+  .inspectorResizer { display: none; }
   .workspaceContext { display: none; }
-  .viewerPanel .scenePlayer video { max-height: 290px; }
+  .viewerPanel .scenePlayer video { max-height: none; }
 }
 @media (max-width: 760px) {
   .studioShell { height: auto; min-height: 100dvh; overflow: visible; }
@@ -253,14 +285,15 @@ button { transition: background-color .15s, border-color .15s; }
   .studioStatus .iconButton { width: 28px; height: 30px; }
   .headerExport { padding: 0 8px; font-size: 11px; }
   .studioGrid { display: flex; flex-direction: column; gap: 1px; }
+  .workspaceResizer { display: none; }
   .toolNavigation { order: 0; position: sticky; top: 0; z-index: 10; padding: 4px; gap: 1px; }
   .toolNavigation button { flex: 1; flex-direction: column; min-width: 0; padding: 6px 2px; min-height: 49px; gap: 5px; font-size: 9px; }
   .toolNavigation button svg { width: 16px; height: 16px; }
   .toolPanel { order: 1; max-height: 380px; }
   .toolPanelHeading { padding: 9px 14px; }
   .toolBody { padding: 14px; }
-  .viewerPanel { order: 2; min-height: 300px; }
-  .viewerPanel .scenePlayer video { max-height: 290px; }
+  .viewerPanel { order: 2; min-height: 300px; container-type: normal; }
+  .viewerPanel .scenePlayer video { flex: auto; height: auto; max-height: 290px; }
   .timelineDock { order: 3; min-height: 220px; }
   .timelineCollapsed .timelineDock { min-height: 0; }
   .dialogueInspector { order: 4; overflow: visible; padding: 0 14px 14px; }

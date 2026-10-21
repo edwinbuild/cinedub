@@ -37,6 +37,14 @@ states. Status warnings retain amber/red where needed. Dropdowns, fields, button
 focus rings and hover states use the same rules in basic and advanced tools.
 Tools, dialogue and timeline can collapse without unmounting editing state.
 
+Pane dividers support pointer and keyboard resizing, with bounded side widths and
+timeline height to protect the source monitor. Only layout sizes are remembered
+in browser storage; project content and unsaved drafts are never stored there.
+Saved sizes adapt to smaller windows, the inspector stacks below on tablets and
+phones use the existing stacked layout without resize handles. Enter or a
+double-click resets a divider. Solid neutral surfaces and opaque clips replace
+nested card outlines; cyan remains visible for selection and keyboard focus.
+
 This introduces no provider-quality claim, database migration or deployment requirement. Browser
 verification must cover the complete DEMO workflow, keyboard editing, tool-switch
 draft preservation and desktop/narrow-screen layouts.

@@ -28,6 +28,12 @@ identifies secondary information. Amber/red remain available for actual warnings
   unmounting unsaved forms. Navigation also reopens the selected tool panel.
 - Text fields, dropdowns, checkboxes, buttons, focus states and hover states share
   the workspace control palette, including advanced forms.
+- Tools and inspector widths and timeline height support pointer and keyboard
+  resizing. Bounds protect the monitor; layouts adapt to smaller windows and
+  phones stack the panels. Only pane sizes persist in browser storage.
+- Nested panel outlines are replaced by spacing, subtle dividers and solid
+  charcoal surfaces. Dialogue/take clips use opaque fills. Focus, selection,
+  warnings and unavailable actions remain distinguishable.
 
 These are dialogue-timeline operations. Source-video splicing and full-film
 assembly are outside the existing short-scene workspace contract.
@@ -38,6 +44,9 @@ Run `npm run test:e2e -- tests/e2e/editor-interactions.spec.ts` for dropped vide
 preview playback, hover/focus styling, collapse/draft preservation, clip movement,
 keyboard nudging, save/reopen and a persisted split. It also checks the page at
 1440, 1280, 1024, 768 and 390 pixels without horizontal page overflow.
+The pane-sizing check also covers persistence, collapse/draft preservation,
+keyboard limits/reset, smaller-window resizing, compact audio controls and
+unclipped fields across every tool at the minimum tools width.
 
 Run the full default browser suite for the remaining review, conflict, consent,
 mix, export, keyboard, split/merge/reversal and timeline workflows. The CI browser
@@ -64,3 +73,22 @@ development server are not used for the rehearsals.
 
 Optional model inference, physical IME/screen-reader use, natural speech quality
 and professional source-video assembly are not established by these UI checks.
+
+## Pane and surface refinement — 2026-10-21
+
+- The complete default Chrome suite passed **26 tests**, with seven optional
+  model cases skipped. After the compact-monitor and smaller-window sizing
+  corrections, **five focused editor/workspace checks** passed on the final source.
+- The final production build, strict TypeScript and ESLint passed. Generated
+  contracts and all **11 frontend unit tests** passed; their inputs are unchanged
+  by the final layout corrections.
+- Pointer resizing, keyboard bounds/reset, persisted sizes and draft preservation
+  passed. Every tool was expanded at the minimum tools width: no horizontal pane
+  scrolling or clipped input/select/textarea fields were detected.
+- Screenshots at desktop/tablet/phone sizes and the resizing limits were inspected.
+  The initially cramped audio placeholder was corrected: a compact monitor keeps
+  its actual playback controls and waveform visible. No horizontal page overflow
+  was detected, including a 1120×650 window with large saved pane preferences.
+
+The tests still use synthetic fixtures and isolated local services. These results
+do not extend the provider/model/listening-quality acceptance boundary above.

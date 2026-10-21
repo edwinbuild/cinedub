@@ -75,6 +75,10 @@ On smaller screens the panels stack. See [workspace decisions](docs/decisions/00
 - Import with the file picker or drop one video/audio file into **Media**.
 - Close the tools or dialogue panel with its **×**, restore it from the header,
   and use **Hide timeline** / **Show timeline** to change the workspace layout.
+- Drag the dividers beside the tools/inspector or above the timeline to resize
+  them. Focus a divider and use arrow keys (Shift for larger steps), Home/End for
+  limits, or Enter/double-click to reset. Sizes are remembered in this browser;
+  narrower windows keep the monitor usable, and phones use a stacked layout.
 
 Timeline edits only change the line's unsaved draft. Save, conflict detection, grouped save and undo stay in the line editor. **Needs attention** lists unapproved, untranslated, speakerless, mistimed, warned and DEMO items, with a jump to each line.
 

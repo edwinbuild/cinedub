@@ -27,6 +27,7 @@ import { ReviewQueue } from "@/components/workspace/review-queue";
 import { TimelineView, type TimingEditor } from "@/components/workspace/timeline-view";
 import { ToolNavigation, WORKSPACE_TOOLS, type WorkspaceTool } from "@/components/workspace/tool-navigation";
 import { MediaImport } from "@/components/workspace/media-import";
+import { WorkspaceLayout } from "@/components/workspace/workspace-layout";
 import { API_URL, api } from "@/lib/api";
 import { useProjectEvents } from "@/lib/project-events";
 import type { Range } from "@/lib/timeline";
@@ -319,7 +320,7 @@ export default function ProjectPage() {
         if (window.confirm("Discard unsaved mix settings, emotion/mix review fields and other timeline-specific forms and load the current server timeline? Displaced dialogue drafts remain available to copy. Saved renders and review history will not change.")) void load(true);
       }}>Discard review drafts and load current timeline</button>
     </div>}
-    <section className={`studioGrid ${toolsOpen ? "" : "toolsCollapsed"} ${inspectorOpen ? "" : "inspectorCollapsed"} ${timelineOpen ? "" : "timelineCollapsed"}`}>
+    <WorkspaceLayout toolsOpen={toolsOpen} inspectorOpen={inspectorOpen} timelineOpen={timelineOpen}>
       <ToolNavigation active={activeTool} onChange={changeTool} />
       <aside id="scene-tools" className="toolPanel" aria-label="Scene tools" ref={toolPanel} hidden={!toolsOpen}>
         <div className="toolPanelHeading"><h2>{WORKSPACE_TOOLS.find((tool) => tool.id === activeTool)?.label}</h2><button className="iconButton" aria-label="Close tools panel" onClick={() => setToolsOpen(false)}><X size={14} /></button>
@@ -463,11 +464,11 @@ export default function ProjectPage() {
           disabled={locked} unsaved={dirtyIds.size > 0} onApply={structureAction} onDirty={setStructureDirty}
           onPlayRange={playRange} canPlay={!!sourceReady && timelineMatches} editorRef={structureEditor} />}
       </section>
-      <section className="timelineDock" aria-label="Timeline workspace">
+      <section id="timeline-workspace" className="timelineDock" aria-label="Timeline workspace">
         {timelineMatches && <TimelineView project={project} sourceId={sourceId} mediaRef={mediaRef}
           drafts={timingDrafts} editors={timingEditors} disabled={locked} onSeek={seek} onSelectLine={goToLine}
           selectedLineId={selectedLineId} onSplit={openStructure} collapsed={!timelineOpen} onToggle={() => setTimelineOpen(!timelineOpen)} />}
       </section>
-    </section>
+    </WorkspaceLayout>
   </main>;
 }
