@@ -79,6 +79,8 @@ On smaller screens the panels stack. See [workspace decisions](docs/decisions/00
   them. Focus a divider and use arrow keys (Shift for larger steps), Home/End for
   limits, or Enter/double-click to reset. Sizes are remembered in this browser;
   narrower windows keep the monitor usable, and phones use a stacked layout.
+- Hover or keyboard-focus a tool tab, header action or timeline control for its
+  name and a short explanation. Escape dismisses the hint; touch actions stay direct.
 
 Timeline edits only change the line's unsaved draft. Save, conflict detection, grouped save and undo stay in the line editor. **Needs attention** lists unapproved, untranslated, speakerless, mistimed, warned and DEMO items, with a jump to each line.
 

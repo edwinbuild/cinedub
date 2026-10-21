@@ -21,6 +21,7 @@ import { EmotionPanel } from "@/components/emotion-panel";
 import { DialogueBriefPanel } from "@/components/dialogue-brief-panel";
 import { DialogueAdaptationPanel } from "@/components/dialogue-adaptation-panel";
 import { DemoBadge } from "@/components/demo-badge";
+import { TooltipButton } from "@/components/tooltip-button";
 import { PipelinePanel } from "@/components/workspace/pipeline-panel";
 import { ArtifactDownloads, ProjectRail } from "@/components/workspace/project-rail";
 import { ReviewQueue } from "@/components/workspace/review-queue";
@@ -305,12 +306,12 @@ export default function ProjectPage() {
       <div className="workspaceContext"><span className="statusDot active" /> Editing workspace</div>
       <div className="studioStatus">{(dirtyIds.size > 0 || structureDirty || referenceDirty || panelDraftIds.size > 0) && <span>{dirtyIds.size + Number(structureDirty) + Number(referenceDirty) + panelDraftIds.size} unsaved</span>}
         {activeJob ? activeJob.phase.replaceAll("_", " ") : project.status}
-        <button className="iconButton" aria-label={toolsOpen ? "Hide tools panel" : "Show tools panel"} aria-expanded={toolsOpen} aria-controls="scene-tools" onClick={() => setToolsOpen(!toolsOpen)}>
-          {toolsOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}</button>
-        <button className="iconButton" aria-label={inspectorOpen ? "Hide dialogue inspector" : "Show dialogue inspector"} aria-expanded={inspectorOpen} aria-controls="dialogue-inspector" onClick={() => setInspectorOpen(!inspectorOpen)}>
-          {inspectorOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}</button>
-        <button className="iconButton" aria-label="Refresh project" onClick={() => void load()}><RefreshCw size={15} /></button>
-        <button className="primaryButton headerExport" onClick={() => changeTool("export")}><Download size={14} /> Export</button></div></header>
+        <TooltipButton className="iconButton" label={toolsOpen ? "Hide tools panel" : "Show tools panel"} description="Make more room for the monitor. Your tool drafts stay open." aria-expanded={toolsOpen} aria-controls="scene-tools" onClick={() => setToolsOpen(!toolsOpen)}>
+          {toolsOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}</TooltipButton>
+        <TooltipButton className="iconButton" label={inspectorOpen ? "Hide dialogue inspector" : "Show dialogue inspector"} description="Show or hide dialogue review without discarding edits." aria-expanded={inspectorOpen} aria-controls="dialogue-inspector" onClick={() => setInspectorOpen(!inspectorOpen)}>
+          {inspectorOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}</TooltipButton>
+        <TooltipButton className="iconButton" label="Refresh project" description="Load the latest saved project while preserving open drafts." onClick={() => void load()}><RefreshCw size={15} /></TooltipButton>
+        <TooltipButton className="primaryButton headerExport" label="Export" description="Open mix, render and download options for this scene." onClick={() => changeTool("export")}><Download size={14} /> Export</TooltipButton></div></header>
     {error && <div className="errorBanner studioError" role="alert">{error}</div>}
     {notice && <div className="noticeBanner" role="status">{notice}</div>}
     {remoteTimelineChanged && <div className="noticeBanner" role="alert">
@@ -323,7 +324,7 @@ export default function ProjectPage() {
     <WorkspaceLayout toolsOpen={toolsOpen} inspectorOpen={inspectorOpen} timelineOpen={timelineOpen}>
       <ToolNavigation active={activeTool} onChange={changeTool} />
       <aside id="scene-tools" className="toolPanel" aria-label="Scene tools" ref={toolPanel} hidden={!toolsOpen}>
-        <div className="toolPanelHeading"><h2>{WORKSPACE_TOOLS.find((tool) => tool.id === activeTool)?.label}</h2><button className="iconButton" aria-label="Close tools panel" onClick={() => setToolsOpen(false)}><X size={14} /></button>
+        <div className="toolPanelHeading"><h2>{WORKSPACE_TOOLS.find((tool) => tool.id === activeTool)?.label}</h2><TooltipButton className="iconButton" label="Close tools panel" description="Hide this panel; reopen it from the header or any tool tab." onClick={() => setToolsOpen(false)}><X size={14} /></TooltipButton>
           <p>{WORKSPACE_TOOLS.find((tool) => tool.id === activeTool)?.description}</p></div>
         {/* Hidden panels stay mounted: switching tools must never discard a draft. */}
         <section id="tool-media" className="toolBody" aria-label="Media tools" hidden={activeTool !== "media"}>
@@ -430,7 +431,7 @@ export default function ProjectPage() {
         <div className="viewerFootnote"><span>English <ArrowRight size={12} /> Malayalam</span><span>Review before you render</span></div>
       </section>
       <section id="dialogue-inspector" className="dialogueInspector" aria-label="Dialogue inspector" hidden={!inspectorOpen}>
-        <div className="inspectorHeading"><span>Dialogue inspector</span><button className="iconButton" aria-label="Close dialogue inspector" onClick={() => setInspectorOpen(false)}><X size={14} /></button></div>
+        <div className="inspectorHeading"><span>Dialogue inspector</span><TooltipButton className="iconButton" label="Close dialogue inspector" description="Keep your review drafts and hide the dialogue panel." onClick={() => setInspectorOpen(false)}><X size={14} /></TooltipButton></div>
         {!timelineMatches && <p className="lineWarning">The displayed timeline belongs to another source. Select its source or activate a matching revision to play individual lines.</p>}
         <div className="timelineHeader"><div><p className="eyebrow">Dialogue timeline</p><h1 ref={timelineHeading} tabIndex={-1}>{project.segments.length} reviewable lines</h1></div>
           <span className="provenanceTag">{activeRevision ? activeRevision.provider === "fake" ? "DEMO FIXTURE" : `${activeRevision.provider} · ${activeRevision.model}` : "No transcript yet"}</span></div>

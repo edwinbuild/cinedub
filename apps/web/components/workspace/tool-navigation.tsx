@@ -1,6 +1,7 @@
 "use client";
 
 import { AudioLines, Clapperboard, FolderOpen, Settings2, SlidersHorizontal, Workflow } from "lucide-react";
+import { TooltipButton } from "@/components/tooltip-button";
 
 export const WORKSPACE_TOOLS = [
   { id: "media", label: "Media", icon: FolderOpen, description: "Import and prepare your scene" },
@@ -18,9 +19,9 @@ export function ToolNavigation({ active, onChange }: {
   active: WorkspaceTool; onChange: (tool: WorkspaceTool) => void;
 }) {
   return <nav className="toolNavigation" aria-label="Workspace tools">
-    {WORKSPACE_TOOLS.map(({ id, label, icon: Icon }) => <button key={id} type="button"
+    {WORKSPACE_TOOLS.map(({ id, label, description, icon: Icon }) => <TooltipButton key={id} label={label} description={description}
       aria-pressed={active === id} aria-controls={`tool-${id}`} onClick={() => onChange(id)}>
       <Icon size={20} aria-hidden="true" /><span>{label}</span>
-    </button>)}
+    </TooltipButton>)}
   </nav>;
 }

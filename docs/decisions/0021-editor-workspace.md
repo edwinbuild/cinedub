@@ -45,6 +45,12 @@ phones use the existing stacked layout without resize handles. Enter or a
 double-click resets a divider. Solid neutral surfaces and opaque clips replace
 nested card outlines; cyan remains visible for selection and keyboard focus.
 
+Controls share a modest 6px corner radius; cards and tooltips use 8px. Pane frames
+stay simple. Tool tabs and compact header/timeline actions expose a short named
+explanation on hover or keyboard focus. Hints are portalled outside scrolling
+panels, stay within the viewport, allow pointer hover and dismiss on Escape,
+blur, scrolling, resizing or activation. Touch activation does not require a hint.
+
 This introduces no provider-quality claim, database migration or deployment requirement. Browser
 verification must cover the complete DEMO workflow, keyboard editing, tool-switch
 draft preservation and desktop/narrow-screen layouts.

@@ -92,3 +92,18 @@ and professional source-video assembly are not established by these UI checks.
 
 The tests still use synthetic fixtures and isolated local services. These results
 do not extend the provider/model/listening-quality acceptance boundary above.
+
+## Rounded controls and button hints — 2026-10-21
+
+Controls now share a 6px radius; cards and tooltip bubbles share 8px. Hints explain
+tool tabs and compact header/timeline actions without adding permanent labels or
+extra panels. They appear after a short hover or on keyboard focus, stay hoverable,
+and dismiss on Escape, blur, scrolling, resize or activation. Touch stays direct.
+
+The final focused Chrome run passed **nine tests**, covering named/described
+hover hints, keyboard focus and Escape, viewport bounds, button activation,
+accessibility, upload/playback, clip movement/split, pane sizing and draft retention.
+Desktop and phone hint screenshots were inspected. Production build, strict
+TypeScript, ESLint and all **11 frontend unit tests** passed. The earlier full
+26-test run covers the preceding pane/surface refinement; hosted CI runs the
+complete default editor workflows for the final PR head.

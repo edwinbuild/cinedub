@@ -4,6 +4,7 @@ import type { ProjectDetail } from "@cinedub/contracts";
 import { Minus, MousePointer2, Plus, ScanLine, Scissors } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
 import { DemoBadge } from "@/components/demo-badge";
+import { TooltipButton } from "@/components/tooltip-button";
 import { API_URL } from "@/lib/api";
 import {
   ZOOM_LEVELS, buildTracks, formatMs, moveEdge, moveRange, neighboursOf, nextZoom, snap, ticks, type Range,
@@ -166,12 +167,12 @@ export function TimelineView({ project, sourceId, mediaRef, drafts, editors, dis
     <div className="timelineToolbar">
       <strong>Timeline</strong>
       <span className="timelineMode"><MousePointer2 size={13} aria-hidden="true" /> Select</span>
-      {onSplit && <button className="smallButton" disabled={disabled || !project.segments.length} onClick={onSplit}><Scissors size={13} aria-hidden="true" /> Split / merge</button>}
-      <button className="iconButton" aria-label="Zoom timeline out" disabled={pxPerMs <= ZOOM_LEVELS[0]} onClick={() => zoom(-1)}><Minus size={14} /></button>
-      <button className="iconButton" aria-label="Zoom timeline in" disabled={pxPerMs >= ZOOM_LEVELS[ZOOM_LEVELS.length - 1]} onClick={() => zoom(1)}><Plus size={14} /></button>
-      <button className="iconButton" aria-label="Fit timeline to view" onClick={fit}><ScanLine size={14} /></button>
+      {onSplit && <TooltipButton label="Split / merge" description="Open the selected line's text and timing structure for review." className="smallButton" disabled={disabled || !project.segments.length} onClick={onSplit}><Scissors size={13} aria-hidden="true" /> Split / merge</TooltipButton>}
+      <TooltipButton label="Zoom timeline out" description="Show more of the scene without changing clip timing." className="iconButton" disabled={pxPerMs <= ZOOM_LEVELS[0]} onClick={() => zoom(-1)}><Minus size={14} /></TooltipButton>
+      <TooltipButton label="Zoom timeline in" description="Enlarge the timeline for more precise timing edits." className="iconButton" disabled={pxPerMs >= ZOOM_LEVELS[ZOOM_LEVELS.length - 1]} onClick={() => zoom(1)}><Plus size={14} /></TooltipButton>
+      <TooltipButton label="Fit timeline to view" description="Fit the full scene into the available timeline width." className="iconButton" onClick={fit}><ScanLine size={14} /></TooltipButton>
       <small>Drag to move · edges to trim · {Math.round(pxPerMs * 1000)} px/s</small>
-      {onToggle && <button className="smallButton" onClick={onToggle} aria-expanded={!collapsed} aria-controls="timeline-tracks">{collapsed ? "Show timeline" : "Hide timeline"}</button>}
+      {onToggle && <TooltipButton label={collapsed ? "Show timeline" : "Hide timeline"} description="Change the workspace layout while keeping your timing drafts." className="smallButton" onClick={onToggle} aria-expanded={!collapsed} aria-controls="timeline-tracks">{collapsed ? "Show timeline" : "Hide timeline"}</TooltipButton>}
     </div>
     <div id="timeline-tracks" className="timelineTracks" hidden={collapsed}>
       <div className="trackLabels" aria-hidden="true"><span>TRACKS</span><strong>Source</strong><strong>Dialogue</strong><strong>Voice takes</strong>

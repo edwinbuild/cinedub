@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { TooltipButton } from "@/components/tooltip-button";
 
 export default function Home() {
   const router = useRouter();
@@ -67,7 +68,7 @@ export default function Home() {
       </section>
 
       <section className="projectsSection">
-        <div className="sectionHeading"><div><p className="eyebrow">Recent work</p><h2>Your projects</h2></div><button className="iconButton" onClick={load} aria-label="Refresh"><RefreshCw size={16} /></button></div>
+        <div className="sectionHeading"><div><p className="eyebrow">Recent work</p><h2>Your projects</h2></div><TooltipButton className="iconButton" label="Refresh" description="Reload the latest projects saved in this workspace." onClick={load}><RefreshCw size={16} /></TooltipButton></div>
         {error && <div className="errorBanner">{error}. Make sure the local API is running on port 8000.</div>}
         {loading ? <div className="emptyState">Loading projects…</div> : projects.length === 0 ? (
           <div className="emptyState"><Film size={28} /><strong>Your next scene starts here</strong><span>Create a workspace above, then import your video or audio.</span></div>
