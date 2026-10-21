@@ -2,6 +2,8 @@
 
 Current branch: v0.3 development (`feature/v0.3-architecture`, built on v0.2), not a released or complete cinema-dubbing product. This ledger preserves the agreed scope; green fixture tests do not close live or human-quality gates.
 
+Publication recheck (2026-10-21): [PR #3](https://github.com/edwinbuild/cinedub/pull/3) is open against `main`, with published head `4103c3c05b71330edbe5a44b1c3e2dd637753a07`. Both hosted checks passed: **Backend and production build** and **Base-install editor workflows** ([run](https://github.com/edwinbuild/cinedub/actions/runs/39206956313)). GitHub authentication and `workflow` scope are available when network access is permitted; earlier publication blockers and “not pushed” notes below are historical, not current. No merge or deployment was performed. Sarvam remains unconfigured, and natural-scene/human-quality gates remain open.
+
 ## Target and boundaries
 
 Local single-user browser workspace, initially English → Malayalam scenes up to two minutes, designed for a 24 GB RAM laptop. Provider-neutral per-stage routing; Sarvam plus resource-bounded local models, with future providers replaceable through adapters. Stock voices first, then consented cloning. Timing-fit review is in scope; full facial lip-sync generation is not the initial release target. `OLD/` remains ignored and read-only. The user authorized milestone commits, a small number of branches and corresponding PRs on 2026-10-14. This does not authorize merging shared branches or deploying.
