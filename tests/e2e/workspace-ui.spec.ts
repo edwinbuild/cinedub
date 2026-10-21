@@ -1,0 +1,48 @@
+import { expect, test } from "@playwright/test";
+import { guardPage, openTool, sceneWorkspace } from "./helpers";
+
+test("workspace tools keep dialogue, mix and workflow drafts while the monitor and timeline stay available", async ({ page }) => {
+  const noErrors = guardPage(page);
+  await sceneWorkspace(page, "Simplified editing workspace");
+  await expect(page.getByRole("region", { name: "Source monitor", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Scene timeline", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /^Build demo timeline/ }).click();
+  const line = page.getByRole("article", { name: "Dialogue line 1", exact: true });
+  await line.getByLabel("Malayalam", { exact: true }).fill("Keep my dialogue draft");
+  await page.getByRole("group", { name: "Filter dialogue", exact: true }).getByRole("button", { name: "approved", exact: true }).click();
+  await expect(line).toBeHidden();
+  await page.getByRole("region", { name: "Scene timeline", exact: true }).locator(".timelineLabel").first().click();
+  await expect(line).toBeVisible();
+  await expect(line).toBeFocused();
+
+  await openTool(page, "Workflow");
+  await page.getByLabel("Workflow budget in rupees").fill("42");
+  await openTool(page, "Export");
+  const mix = page.getByRole("region", { name: "Retained-background mix and export", exact: true });
+  await mix.locator("summary").first().click();
+  await mix.getByLabel("Music gain (dB)").fill("-6");
+  await openTool(page, "Analysis");
+  await expect(mix).toBeHidden();
+  await expect(page.getByRole("region", { name: "Analysis tools", exact: true })).toBeVisible();
+  await expect(page.locator(".toolBody:visible")).toHaveCount(1);
+  await openTool(page, "Voices");
+  await openTool(page, "Project");
+  await expect(line.getByLabel("Malayalam", { exact: true })).toHaveValue("Keep my dialogue draft");
+  await openTool(page, "Workflow");
+  await expect(page.getByLabel("Workflow budget in rupees")).toHaveValue("42");
+  await page.getByRole("button", { name: "Export", exact: true }).first().click();
+  await expect(mix.getByLabel("Music gain (dB)")).toHaveValue("-6");
+  await expect(line.getByLabel("Malayalam", { exact: true })).toHaveValue("Keep my dialogue draft");
+  await openTool(page, "Media");
+  await page.locator(".dialogueInspector").evaluate((element) => { element.scrollTop = 0; });
+  await page.screenshot({ path: "test-results/cinedub-workspace-desktop.png" });
+  await page.setViewportSize({ width: 1024, height: 768 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: "test-results/cinedub-workspace-laptop.png", fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openTool(page, "Export");
+  await expect(mix.getByLabel("Music gain (dB)")).toHaveValue("-6");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: "test-results/cinedub-workspace-mobile.png", fullPage: true });
+  noErrors();
+});

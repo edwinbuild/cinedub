@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { API, guardPage, sceneWorkspace } from "./helpers";
+import { API, guardPage, openTool, sceneWorkspace } from "./helpers";
 
 test("DEMO workflow runs as one pipeline and waits at every review gate", async ({ page, request }) => {
   test.skip(["SEPARATOR", "ALIGNMENT", "PERFORMANCE", "ADAPTATION", "EMOTION", "TRANSCRIBER"]
@@ -7,13 +7,14 @@ test("DEMO workflow runs as one pipeline and waits at every review gate", async 
   test.setTimeout(180_000);
   const noErrors = guardPage(page);
   const id = await sceneWorkspace(page, "Pipeline workflow");
+  await openTool(page, "Workflow");
   const workflow = page.getByRole("region", { name: "Dubbing workflow" });
   await expect(workflow.getByText("DEMO", { exact: true })).toBeVisible();
   await workflow.getByLabel("Separate dialogue first").check();
   await workflow.getByRole("button", { name: /^Run dubbing workflow/ }).click();
   const status = workflow.getByRole("status");
   const step = (name: string) => workflow.getByRole("listitem").filter({ hasText: name });
-  const proceed = () => workflow.getByRole("button", { name: "Continue after review" }).click();
+  const proceed = async () => { await openTool(page, "Workflow"); await workflow.getByRole("button", { name: "Continue after review" }).click(); };
 
   await expect(step("Review: approve stems")).toHaveAttribute("aria-current", "step", { timeout: 60_000 });
   await proceed(); // Refused: nothing has been reviewed yet.
@@ -43,6 +44,7 @@ test("DEMO workflow runs as one pipeline and waits at every review gate", async 
   await proceed();
 
   await expect(step("Review: assign voices")).toHaveAttribute("aria-current", "step", { timeout: 30_000 });
+  await openTool(page, "Voices");
   await page.getByLabel("Voice for Speaker A", { exact: true }).selectOption("speaker-a");
   await expect(page.getByLabel("Voice pace for Speaker A")).toBeVisible();
   await page.getByLabel("Voice for Speaker B", { exact: true }).selectOption("speaker-b");
@@ -59,6 +61,7 @@ test("DEMO workflow runs as one pipeline and waits at every review gate", async 
   await proceed();
 
   await expect(step("Review: accept mix & export")).toHaveAttribute("aria-current", "step", { timeout: 90_000 });
+  await openTool(page, "Export");
   const mix = page.getByRole("region", { name: "Retained-background mix and export" });
   const mixDetails = mix.locator("details").first();
   if (!(await mixDetails.evaluate((element) => (element as HTMLDetailsElement).open)))

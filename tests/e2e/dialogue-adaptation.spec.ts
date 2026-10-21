@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openTool } from "./helpers";
 
 test("actual local model alternatives, explicit language review, safe application and reload", async ({ page }) => {
   test.skip(process.env.CINEDUB_E2E_ADAPTATION !== "1", "Explicit opt-in for the installed CPU dialogue model");
@@ -13,6 +14,7 @@ test("actual local model alternatives, explicit language review, safe applicatio
   await page.getByLabel("Project name").fill("Original contextual model evaluation");
   await page.getByRole("button", { name: "Create workspace" }).click();
   await expect(page).toHaveURL(/\/projects\//);
+  await openTool(page, "Media");
   await page.getByRole("button", { name: /^Build demo timeline/ }).click();
   await expect(page.getByRole("heading", { name: "4 reviewable lines" })).toBeVisible();
   const first = page.getByRole("article", { name: "Dialogue line 1", exact: true });
@@ -23,10 +25,12 @@ test("actual local model alternatives, explicit language review, safe applicatio
   await first.getByLabel("Review state for line 1", { exact: true }).selectOption("approved");
   await first.getByRole("button", { name: "Save line", exact: true }).click();
   await expect(first.getByRole("button", { name: "Save line", exact: true })).toBeDisabled();
+  await openTool(page, "Voices");
   await page.getByRole("combobox", { name: /^Voice for / }).first().selectOption("speaker-a");
   await expect(page.getByRole("spinbutton", { name: /^Voice pace for / }).first()).toBeVisible();
   await first.getByRole("button", { name: "Generate voice", exact: true }).click();
   await expect(first.getByLabel("Candidate 1 for line 1", { exact: true })).toBeVisible();
+  await openTool(page, "Analysis");
   const brief = page.getByLabel("Dialogue brief and editorial checks", { exact: true });
   await brief.locator("summary").first().click();
   await brief.getByLabel("Scene summary", { exact: true }).fill("Two friends are fishing by a river. Bank means the river shore, not a financial institution.");
@@ -83,6 +87,7 @@ test("actual local model alternatives, explicit language review, safe applicatio
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: "test-results/cinedub-local-dialogue-mobile.png", fullPage: true });
   await page.reload();
+  await openTool(page, "Analysis");
   await expect(page.getByRole("article", { name: "Dialogue line 1", exact: true }).getByLabel("Malayalam", { exact: true })).toHaveValue(faithful.text);
   const reopened = page.getByLabel("Model dialogue alternatives", { exact: true });
   await reopened.locator("summary").first().click();

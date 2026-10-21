@@ -1,7 +1,7 @@
 "use client";
 
 import type { CapabilityStatus, HardwareStatus, JobRequest, ProjectDetail, Segment } from "@cinedub/contracts";
-import { ArrowLeft, Film, LoaderCircle, RefreshCw, Upload } from "lucide-react";
+import { ArrowLeft, ArrowRight, Download, Film, LoaderCircle, RefreshCw, Upload } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent } from "react";
@@ -22,9 +22,10 @@ import { DialogueBriefPanel } from "@/components/dialogue-brief-panel";
 import { DialogueAdaptationPanel } from "@/components/dialogue-adaptation-panel";
 import { DemoBadge } from "@/components/demo-badge";
 import { PipelinePanel } from "@/components/workspace/pipeline-panel";
-import { ProjectRail } from "@/components/workspace/project-rail";
+import { ArtifactDownloads, ProjectRail } from "@/components/workspace/project-rail";
 import { ReviewQueue } from "@/components/workspace/review-queue";
 import { TimelineView, type TimingEditor } from "@/components/workspace/timeline-view";
+import { ToolNavigation, WORKSPACE_TOOLS, type WorkspaceTool } from "@/components/workspace/tool-navigation";
 import { API_URL, api } from "@/lib/api";
 import { useProjectEvents } from "@/lib/project-events";
 import type { Range } from "@/lib/timeline";
@@ -41,6 +42,12 @@ export default function ProjectPage() {
   const [speakerCount, setSpeakerCount] = useState("");
   const [preferDialogue, setPreferDialogue] = useState(false);
   const [filter, setFilter] = useState("all");
+  const [activeTool, setActiveTool] = useState<WorkspaceTool>("media");
+  const toolPanel = useRef<HTMLElement>(null);
+  function changeTool(tool: WorkspaceTool) {
+    setActiveTool(tool);
+    toolPanel.current?.scrollTo({ top: 0 });
+  }
   const [time, setTime] = useState(0);
   const [stopAt, setStopAt] = useState<number | null>(null);
   const [dirtyIds, setDirtyIds] = useState<Set<string>>(() => new Set());
@@ -232,8 +239,11 @@ export default function ProjectPage() {
   }
   function goToLine(lineId: string, startMs: number) {
     setFilter("all");
-    const target = document.getElementById(`line-${lineId}`);
-    target?.scrollIntoView({ block: "center" }); target?.focus();
+    // Wait for the filter change to reveal the line before scrolling/focusing it.
+    requestAnimationFrame(() => {
+      const target = document.getElementById(`line-${lineId}`);
+      target?.scrollIntoView({ block: "center" }); target?.focus();
+    });
     const player = mediaRef.current; if (player) player.currentTime = startMs / 1000;
   }
   function seek(ms: number) {
@@ -279,10 +289,12 @@ export default function ProjectPage() {
       <Link href="/" className="iconButton" aria-label="Projects" onClick={(event) => {
         if ((dirtyIds.size || structureDirty || referenceDirty || panelDraftIds.size) && !window.confirm("Leave this scene and discard unsaved drafts?")) event.preventDefault();
       }}><ArrowLeft size={17} /></Link><span className="brandMark"><Film size={17} /></span>
-      <div><strong>{project.name}</strong><span>English → Malayalam · v0.2</span></div></div>
+      <div><strong>{project.name}</strong><span>English → Malayalam</span></div></div>
+      <div className="workspaceContext"><span className="statusDot active" /> Local editing workspace</div>
       <div className="studioStatus">{(dirtyIds.size > 0 || structureDirty || referenceDirty || panelDraftIds.size > 0) && <span>{dirtyIds.size + Number(structureDirty) + Number(referenceDirty) + panelDraftIds.size} unsaved</span>}
         {activeJob ? activeJob.phase.replaceAll("_", " ") : project.status}
-        <button className="iconButton" aria-label="Refresh project" onClick={() => void load()}><RefreshCw size={15} /></button></div></header>
+        <button className="iconButton" aria-label="Refresh project" onClick={() => void load()}><RefreshCw size={15} /></button>
+        <button className="primaryButton headerExport" onClick={() => changeTool("export")}><Download size={14} /> Export</button></div></header>
     {error && <div className="errorBanner studioError" role="alert">{error}</div>}
     {notice && <div className="noticeBanner" role="status">{notice}</div>}
     {remoteTimelineChanged && <div className="noticeBanner" role="alert">
@@ -293,15 +305,30 @@ export default function ProjectPage() {
       }}>Discard review drafts and load current timeline</button>
     </div>}
     <section className="studioGrid">
-      <aside className="leftRail">
-        <div className="panelTitle"><span>Scene media</span><label className="uploadButton"><Upload size={14} />
-          {busy === "upload" ? "Uploading…" : "Import"}<input aria-label="Import scene" type="file" accept=".mp4,.mov,.mkv,.webm,.wav,.mp3,.flac,.m4a" onChange={upload} disabled={locked} /></label></div>
-        <PipelinePanel project={project} sourceId={sourceId} capabilities={capabilities}
-          locked={!!busy || remoteTimelineChanged || (!!activeJob && !["running", "awaiting_review"].includes(project.latest_pipeline?.status ?? ""))}
-          onChanged={load} />
+      <ToolNavigation active={activeTool} onChange={changeTool} />
+      <aside className="toolPanel" aria-label="Scene tools" ref={toolPanel}>
+        <div className="toolPanelHeading"><h2>{WORKSPACE_TOOLS.find((tool) => tool.id === activeTool)?.label}</h2>
+          <p>{WORKSPACE_TOOLS.find((tool) => tool.id === activeTool)?.description}</p></div>
+        {/* Hidden panels stay mounted: switching tools must never discard a draft. */}
+        <section id="tool-media" className="toolBody" aria-label="Media tools" hidden={activeTool !== "media"}>
+          <label className="mediaImport"><Upload size={22} aria-hidden="true" /><strong>{busy === "upload" ? "Importing scene…" : "Import a scene"}</strong>
+            <span>Video or audio · up to 2 minutes</span>
+            <input aria-label="Import scene" type="file" accept=".mp4,.mov,.mkv,.webm,.wav,.mp3,.flac,.m4a" onChange={upload} disabled={locked} /></label>
         <label className="fieldLabel">Source<select aria-label="Scene source" value={sourceId ?? ""} disabled={locked}
           onChange={(event) => { mediaRef.current?.pause(); setStopAt(null); setSelectedSource(event.target.value); }}>
           <option value="" disabled>Select a scene</option>{project.assets.map((asset) => <option key={asset.id} value={asset.id}>{asset.filename}</option>)}</select></label>
+          <div className="mediaBin" aria-label="Imported media">{project.assets.map((asset) => <button key={asset.id} className={`mediaBinItem ${sourceId === asset.id ? "selected" : ""}`}
+            disabled={locked} aria-pressed={sourceId === asset.id} onClick={() => { mediaRef.current?.pause(); setStopAt(null); setSelectedSource(asset.id); }}>
+            <Film size={22} aria-hidden="true" /><span><strong>{asset.filename}</strong><small>{sourceId === asset.id ? "Active source" : "Use this source"}</small></span></button>)}
+            {!project.assets.length && <p className="toolHint">Your imported clips will appear here.</p>}</div>
+          <button className="primaryButton toolPrimary" disabled={!sourceId} onClick={() => changeTool("workflow")}>Open dubbing workflow <ArrowRight size={15} /></button>
+        <div className="railSection"><p className="eyebrow">Development demo</p><button className="pipelineButton" disabled={locked || !!project.revisions.length}
+          onClick={() => run({ stage: "demo_pipeline", provider: "fake" })}><span><strong>Build demo timeline</strong><small>Four fixture lines; no AI calls</small></span></button></div>
+        </section>
+        <section id="tool-workflow" className="toolBody" aria-label="Workflow tools" hidden={activeTool !== "workflow"}>
+        <PipelinePanel project={project} sourceId={sourceId} capabilities={capabilities}
+          locked={!!busy || remoteTimelineChanged || (!!activeJob && !["running", "awaiting_review"].includes(project.latest_pipeline?.status ?? ""))}
+          onChanged={load} onOpenTool={changeTool} />
         <div className="railSection"><p className="eyebrow">Process scene</p>
           <button className="pipelineButton" aria-label="Separate dialogue and background" disabled={locked || !sourceId || !separator?.available}
             onClick={() => run({ stage: "separate", source_asset_id: sourceId!, force_new: project.stem_sets.some((stems) => stems.source_asset_id === sourceId) })}>
@@ -323,31 +350,22 @@ export default function ProjectPage() {
             <span><strong>Retranscribe into new revision</strong><small>Current edits remain saved</small></span></button>}
           <button className="pipelineButton" aria-label="Translate dialogue" disabled={locked || !project.segments.length || !translator?.available || dirtyIds.size > 0}
             onClick={() => run({ stage: "translate", revision_id: revisionId })}><span><strong>Translate dialogue</strong><small>Preserve human edits and approved lines</small></span></button>
-          <button className="pipelineButton" aria-label="Export Malayalam subtitles" disabled={locked || !project.segments.length || dirtyIds.size > 0}
-            onClick={() => { if (missing && !window.confirm("Some lines have no Malayalam translation. Export using English for those lines?")) return;
-              void run({ stage: "export", revision_id: revisionId, allow_incomplete: missing }); }}>
-            <span><strong>Export Malayalam subtitles</strong><small>Current saved timeline · SRT</small></span></button>
-          <button className="pipelineButton" aria-label="Generate voice candidates" disabled={locked || !allApproved || !voiceCapability?.available || dirtyIds.size > 0}
-            onClick={() => run({ stage: "synthesize", revision_id: revisionId })}><span><strong>Generate voice candidates</strong><small>{voiceCapability?.selected_provider === "fake" ? "Demo tones for approved lines" : "Selected voices · approved lines"}</small></span></button>
-          <button className="pipelineButton" aria-label="Render dialogue preview" disabled={locked || !allSelected || dirtyIds.size > 0}
-            onClick={() => run({ stage: "render_preview", revision_id: revisionId })}><span><strong>Render dialogue preview</strong><small>Selected takes · no original music/effects</small></span></button>
         </div>
-        <div className="railSection"><p className="eyebrow">Providers</p>{capabilities.map((item) =>
-          <div className="capability" key={item.capability}><span className={item.available ? "ready" : "missing"} />
-            <div><strong>{item.selected_provider === "fake" && <DemoBadge />}{item.capability.replaceAll("_", " ")}</strong><small>{item.selected_provider} · {item.verified ? "Verified job" : item.available ? "Adapter available" : "Unavailable"}</small>
-              {item.reason && <small>{item.reason}</small>}</div></div>)}</div>
-        <div className="railSection"><p className="eyebrow">Development demo</p><button className="pipelineButton" disabled={locked || !!project.revisions.length}
-          onClick={() => run({ stage: "demo_pipeline", provider: "fake" })}><span><strong>Build demo timeline</strong><small>Four fixture lines; no AI calls</small></span></button></div>
+        <StemPanel project={project} sourceId={sourceId} disabled={locked} onSaved={load} />
+        </section>
+        <section id="tool-voices" className="toolBody" aria-label="Voice tools" hidden={activeTool !== "voices"}>
         {voiceCapability && ["sarvam", "fake"].includes(voiceCapability.selected_provider) && <VoicePanel speakers={project.speakers}
           profiles={project.voice_profiles} provider={voiceCapability.selected_provider as "sarvam" | "fake"} disabled={locked} onSaved={load} />}
-      </aside>
-      <section className="timelinePanel">
-        <ScenePlayer artifacts={project.artifacts} sourceId={sourceId} mediaRef={mediaRef} onTime={onTime} stopAt={stopAt} onStop={onStop} />
-        {project.segments.length > 0 && timelineMatches && <TimelineView project={project} sourceId={sourceId} mediaRef={mediaRef}
-          drafts={timingDrafts} editors={timingEditors} disabled={locked} onSeek={seek} />}
-        <StemPanel project={project} sourceId={sourceId} disabled={locked} onSaved={load} />
+          <button className="pipelineButton" aria-label="Generate voice candidates" disabled={locked || !allApproved || !voiceCapability?.available || dirtyIds.size > 0}
+            onClick={() => run({ stage: "synthesize", revision_id: revisionId })}><span><strong>Generate voice candidates</strong><small>{voiceCapability?.selected_provider === "fake" ? "Demo tones for approved lines" : "Selected voices · approved lines"}</small></span></button>
         {project.active_revision_id && <SpeakerReusePanel key={`reuse:${project.active_revision_id}`} project={project}
           disabled={locked} unsaved={dirtyIds.size > 0 || structureDirty || referenceDirty || panelDraftIds.size > 0} onSaved={load} />}
+        {cloneCapability && ["fake", "sarvam"].includes(cloneCapability.selected_provider) && <ClonePanel project={project}
+          provider={cloneCapability.selected_provider as "fake" | "sarvam"} available={cloneCapability.available}
+          disabled={locked} onSaved={load} onRun={run} onDirty={setReferenceDirty} />}
+        </section>
+        <section id="tool-analysis" className="toolBody" aria-label="Analysis tools" hidden={activeTool !== "analysis"}>
+          <p className="toolHint">Optional tools. Review suggestions before applying them to your dialogue.</p>
         {project.active_revision_id && <DialogueBriefPanel key={`brief:${project.active_revision_id}`} project={project}
           disabled={locked} unsaved={dirtyIds.size > 0} onRun={run} onSaved={load} onDirty={onDirty}
           onPlayRange={playRange} canPlay={!!sourceReady && timelineMatches} />}
@@ -363,6 +381,14 @@ export default function ProjectPage() {
         {project.active_revision_id && <EmotionPanel key={`emotion:${project.active_revision_id}`} project={project} sourceId={sourceId}
           disabled={locked} unsaved={dirtyIds.size > 0} available={!!capabilities.find((item) => item.capability === "emotion_analyzer")?.available}
           transcriptionInput={transcriptionInput} onRun={run} onPlayRange={playRange} canPlay={!!sourceReady && timelineMatches} onDirty={onPanelDirty} />}
+        </section>
+        <section id="tool-export" className="toolBody" aria-label="Export tools" hidden={activeTool !== "export"}>
+          <button className="pipelineButton" aria-label="Export Malayalam subtitles" disabled={locked || !project.segments.length || dirtyIds.size > 0}
+            onClick={() => { if (missing && !window.confirm("Some lines have no Malayalam translation. Export using English for those lines?")) return;
+              void run({ stage: "export", revision_id: revisionId, allow_incomplete: missing }); }}>
+            <span><strong>Export Malayalam subtitles</strong><small>Current saved timeline · SRT</small></span></button>
+          <button className="pipelineButton" aria-label="Render dialogue preview" disabled={locked || !allSelected || dirtyIds.size > 0}
+            onClick={() => run({ stage: "render_preview", revision_id: revisionId })}><span><strong>Render dialogue preview</strong><small>Selected takes · no original music/effects</small></span></button>
         <MixPanel key={`mix:${project.active_revision_id ?? "none"}`} project={project} disabled={locked || !timelineMatches} unsaved={dirtyIds.size > 0} onSaved={load} onRun={run} onDirty={onPanelDirty} />
         {voicePreview && <section className="dubPreview" aria-label="Dialogue-only preview"><h2>{voicePreview.metadata_json.demo ? "Demo-tone preview" : "Dialogue-only preview"}</h2>
           <p className="lineWarning">{previewStale ? "Saved preview uses earlier takes. Render again after selecting current audio." : "Original dialogue, music and effects are excluded from this preview."}</p>
@@ -370,6 +396,26 @@ export default function ProjectPage() {
             : <>{voicePreview.kind === "dub_preview" ? <video controls preload="metadata" src={`${API_URL}${voicePreview.content_url}`} />
               : <audio controls preload="metadata" src={`${API_URL}${voicePreview.content_url}`} />}
               <a className="smallButton" href={`${API_URL}${voicePreview.download_url}`}>Download dialogue preview</a></>}</section>}
+          <ArtifactDownloads project={project} />
+        </section>
+        <section id="tool-project" className="toolBody" aria-label="Project tools" hidden={activeTool !== "project"}>
+      <ProjectRail project={project} hardware={hardware} locked={locked} hasRevision={!!activeRevision}
+        onChangeBudget={(value) => void jobAction(() => api.changeBudget(id, value))} onActivate={activate}
+        onAddSpeaker={addSpeaker} onRename={rename} onResume={(jobId) => void jobAction(() => api.resumeJob(jobId))} />
+          <details className="providerDetails"><summary>Provider status</summary>
+        <div className="railSection"><p className="eyebrow">Providers</p>{capabilities.map((item) =>
+          <div className="capability" key={item.capability}><span className={item.available ? "ready" : "missing"} />
+            <div><strong>{item.selected_provider === "fake" && <DemoBadge />}{item.capability.replaceAll("_", " ")}</strong><small>{item.selected_provider} · {item.verified ? "Verified job" : item.available ? "Adapter available" : "Unavailable"}</small>
+              {item.reason && <small>{item.reason}</small>}</div></div>)}</div>
+          </details>
+        </section>
+      </aside>
+      <section className="viewerPanel" aria-label="Source monitor">
+        <div className="monitorHeading"><span>Source monitor</span><span>{project.assets.find((asset) => asset.id === sourceId)?.filename ?? "No source selected"}</span></div>
+        <ScenePlayer artifacts={project.artifacts} sourceId={sourceId} mediaRef={mediaRef} onTime={onTime} stopAt={stopAt} onStop={onStop} />
+        <div className="viewerFootnote"><span>English <ArrowRight size={12} /> Malayalam</span><span>Review before you render</span></div>
+      </section>
+      <section className="dialogueInspector" aria-label="Dialogue inspector">
         {!timelineMatches && <p className="lineWarning">The displayed timeline belongs to another source. Select its source or activate a matching revision to play individual lines.</p>}
         <div className="timelineHeader"><div><p className="eyebrow">Dialogue timeline</p><h1 ref={timelineHeading} tabIndex={-1}>{project.segments.length} reviewable lines</h1></div>
           <span className="provenanceTag">{activeRevision ? activeRevision.provider === "fake" ? "DEMO FIXTURE" : `${activeRevision.provider} · ${activeRevision.model}` : "No transcript yet"}</span></div>
@@ -377,9 +423,6 @@ export default function ProjectPage() {
           <button className="smallButton" onClick={() => jobAction(() => api.cancelJob(activeJob.id))}>Cancel</button></div>}
         {activeRevision?.warnings_json.filter((warning) => warning !== "Some lines have no speaker assignment"
           || project.segments.some((line) => !line.speaker_id)).map((warning) => <p className="lineWarning" key={warning}>{warning}</p>)}
-        {cloneCapability && ["fake", "sarvam"].includes(cloneCapability.selected_provider) && <ClonePanel project={project}
-          provider={cloneCapability.selected_provider as "fake" | "sarvam"} available={cloneCapability.available}
-          disabled={locked} onSaved={load} onRun={run} onDirty={setReferenceDirty} />}
         <ReviewQueue project={project} onGoTo={goToLine} />
         <div className="reviewFilters" role="group" aria-label="Filter dialogue">{["all", "untranslated", "edited", "approved", "warnings"].map((value) =>
           <button key={value} className={`smallButton ${filter === value ? "selected" : ""}`} aria-pressed={filter === value} onClick={() => setFilter(value)}>{value}</button>)}</div>
@@ -406,9 +449,10 @@ export default function ProjectPage() {
           disabled={locked} unsaved={dirtyIds.size > 0} onApply={structureAction} onDirty={setStructureDirty}
           onPlayRange={playRange} canPlay={!!sourceReady && timelineMatches} />}
       </section>
-      <ProjectRail project={project} hardware={hardware} locked={locked} hasRevision={!!activeRevision}
-        onChangeBudget={(value) => void jobAction(() => api.changeBudget(id, value))} onActivate={activate}
-        onAddSpeaker={addSpeaker} onRename={rename} onResume={(jobId) => void jobAction(() => api.resumeJob(jobId))} />
+      <section className="timelineDock" aria-label="Timeline workspace">
+        {timelineMatches && <TimelineView project={project} sourceId={sourceId} mediaRef={mediaRef}
+          drafts={timingDrafts} editors={timingEditors} disabled={locked} onSeek={seek} onSelectLine={goToLine} />}
+      </section>
     </section>
   </main>;
 }

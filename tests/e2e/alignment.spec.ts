@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openTool } from "./helpers";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -21,7 +22,9 @@ test("real local source alignment, acoustic review and explicit timing applicati
     await page.getByRole("button", { name: "Create workspace" }).click();
     await expect(page).toHaveURL(/\/projects\//);
     const projectId = page.url().split("/").at(-1)!;
+    await openTool(page, "Media");
     await page.getByLabel("Import scene").setInputFiles({ name: "scene.wav", mimeType: "audio/wav", buffer: readFileSync(source) });
+    await openTool(page, "Workflow");
     await expect(page.getByRole("button", { name: "Transcribe scene", exact: true })).toBeEnabled();
     await page.getByRole("button", { name: "Transcribe scene", exact: true }).click();
     const line = page.getByRole("article", { name: "Dialogue line 1", exact: true });
@@ -30,6 +33,7 @@ test("real local source alignment, acoustic review and explicit timing applicati
     await line.getByLabel("English", { exact: true }).fill(text.toUpperCase());
     await line.getByRole("button", { name: "Save line" }).click();
     await expect(line.getByRole("button", { name: "Save line" })).toBeDisabled();
+    await openTool(page, "Analysis");
     const panel = page.getByLabel("Source timing and performance");
     await panel.locator("summary").click();
     await panel.getByRole("button", { name: "Align source words", exact: true }).click();
@@ -56,6 +60,7 @@ test("real local source alignment, acoustic review and explicit timing applicati
     await expect(line.getByLabel("Review state for line 1")).toHaveValue("needs_review");
     await page.screenshot({ path: "test-results/cinedub-alignment.png", fullPage: true });
     await page.reload();
+    await openTool(page, "Analysis");
     await expect(line.getByLabel("Start (s)")).toHaveValue(String(report.lines[0].words[0].start_ms / 1000));
     await page.setViewportSize({ width: 390, height: 844 });
     await panel.locator("summary").click();

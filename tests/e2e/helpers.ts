@@ -2,6 +2,12 @@ import { expect, type Page } from "@playwright/test";
 
 export const API = "http://127.0.0.1:8011";
 
+/** Switch the visible tool without unmounting forms or changing the dialogue draft. */
+export async function openTool(page: Page, name: "Media" | "Workflow" | "Voices" | "Analysis" | "Export" | "Project") {
+  const button = page.getByRole("navigation", { name: "Workspace tools" }).getByRole("button", { name, exact: true });
+  if (await button.getAttribute("aria-pressed") !== "true") await button.click();
+}
+
 /** A synthetic tone WAV (never actor or licensed speech). */
 export function wav(seconds = 8) {
   const rate = 16000, samples = rate * seconds, buffer = Buffer.alloc(44 + samples * 2);

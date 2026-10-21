@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openTool } from "./helpers";
 import { execFileSync } from "node:child_process";
 
 test("another tab cannot silently discard mix settings on refresh", async ({ page, context }) => {
@@ -7,18 +8,23 @@ test("another tab cannot silently discard mix settings on refresh", async ({ pag
   await page.getByRole("button", { name: "Create workspace" }).click();
   await expect(page).toHaveURL(/\/projects\//);
   const buffer = execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=220:duration=4", "-ar", "16000", "-ac", "1", "-f", "wav", "pipe:1"]);
+  await openTool(page, "Media");
   await page.getByLabel("Import scene").setInputFiles({ name: "remote-mix.wav", mimeType: "audio/wav", buffer });
   await expect(page.getByRole("slider", { name: "Seek scene" })).toBeVisible();
+  await openTool(page, "Workflow");
   await page.getByRole("button", { name: "Transcribe scene", exact: true }).click();
   await expect(page.getByRole("heading", { name: "2 reviewable lines" })).toBeVisible();
   await page.getByRole("button", { name: "Retranscribe into new revision", exact: true }).click();
+  await openTool(page, "Project");
   await expect(page.getByRole("button", { name: "Use this timeline", exact: true })).toBeEnabled();
+  await openTool(page, "Export");
   const panel = page.getByRole("region", { name: "Retained-background mix and export", exact: true });
   await panel.getByText("Mix & export · reviewed stereo delivery", { exact: true }).click();
   const gain = panel.getByLabel("Music gain (dB)");
   await gain.fill("-7");
   const other = await context.newPage();
   await other.goto(page.url());
+  await openTool(other, "Project");
   await other.getByRole("button", { name: "Use this timeline", exact: true }).click();
   await expect(other.getByRole("button", { name: "Use this timeline", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Refresh project", exact: true }).click();
@@ -58,10 +64,13 @@ test("unrendered mix settings survive refresh and require confirmed timeline dis
   await expect(page).toHaveURL(/\/projects\//);
   const scene = page.url();
   const buffer = execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=220:duration=4", "-ar", "16000", "-ac", "1", "-f", "wav", "pipe:1"]);
+  await openTool(page, "Media");
   await page.getByLabel("Import scene").setInputFiles({ name: "mix-scene.wav", mimeType: "audio/wav", buffer });
   await expect(page.getByRole("slider", { name: "Seek scene" })).toBeVisible();
+  await openTool(page, "Workflow");
   await page.getByRole("button", { name: "Transcribe scene", exact: true }).click();
   await expect(page.getByRole("heading", { name: "2 reviewable lines" })).toBeVisible();
+  await openTool(page, "Export");
   const panel = page.getByRole("region", { name: "Retained-background mix and export", exact: true });
   const summary = panel.getByText("Mix & export · reviewed stereo delivery", { exact: true });
   await summary.click();
@@ -70,15 +79,21 @@ test("unrendered mix settings survive refresh and require confirmed timeline dis
   await expect(page.getByText("1 unsaved", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Refresh project", exact: true }).click();
   await expect(gain).toHaveValue("-3");
+  await openTool(page, "Workflow");
   await page.getByRole("button", { name: "Retranscribe into new revision", exact: true }).click();
+  await openTool(page, "Project");
   const activate = page.getByRole("button", { name: "Use this timeline", exact: true });
   await expect(activate).toBeEnabled();
   await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.dismiss()), activate.click()]);
+  await openTool(page, "Export");
   await expect(gain).toHaveValue("-3");
   await expect(page.getByText("1 unsaved", { exact: true })).toBeVisible();
+  await openTool(page, "Project");
   await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.accept()), activate.click()]);
+  await openTool(page, "Export");
   await expect(page.getByText("1 unsaved", { exact: true })).toHaveCount(0);
   await expect(gain).toHaveValue("0");
+  await openTool(page, "Export");
   await summary.click();
   await gain.fill("-6");
   await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.dismiss()), page.getByRole("link", { name: "Projects", exact: true }).click()]);

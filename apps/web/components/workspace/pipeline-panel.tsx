@@ -6,6 +6,7 @@ import { useState } from "react";
 import { DemoBadge } from "@/components/demo-badge";
 import { api } from "@/lib/api";
 import { errorAction } from "@/lib/review-queue";
+import type { WorkspaceTool } from "./tool-navigation";
 
 const STEP_LABELS: Record<string, string> = {
   ingest: "Prepare media",
@@ -36,9 +37,10 @@ function StepIcon({ step }: { step: PipelineStep }) {
 }
 
 /** Runs the whole workflow as one pipeline that stops at every human review gate. */
-export function PipelinePanel({ project, sourceId, capabilities, locked, onChanged }: {
+export function PipelinePanel({ project, sourceId, capabilities, locked, onChanged, onOpenTool }: {
   project: ProjectDetail; sourceId: string | null; capabilities: CapabilityStatus[]; locked: boolean;
   onChanged: () => Promise<void>;
+  onOpenTool?: (tool: WorkspaceTool) => void;
 }) {
   const [options, setOptions] = useState({ separate_dialogue: false, adapt_dialogue: false, analyze_performance: false });
   const [budget, setBudget] = useState("0");
@@ -94,6 +96,8 @@ export function PipelinePanel({ project, sourceId, capabilities, locked, onChang
     </p>}
     {failedJob?.error_code && <p className="lineWarning">{errorAction(failedJob.error_code)}</p>}
     {active && pipeline.status === "awaiting_review" && <div className="pipelineActions">
+      {onOpenTool && current?.key === "voices_assigned" && <button className="smallButton" onClick={() => onOpenTool("voices")}>Choose voices</button>}
+      {onOpenTool && current?.key === "mix_accepted" && <button className="smallButton" onClick={() => onOpenTool("export")}>Review mix and export</button>}
       {budgetPause && <label className="fieldLabel">New workflow budget (₹)<input aria-label="Raise workflow budget in rupees" type="number" min={pipeline.budget_confirmed_inr} step="1" value={budget} onChange={(event) => setBudget(event.target.value)} /></label>}
       <button className="smallButton" disabled={busy || locked}
         onClick={() => act(() => api.continuePipeline(pipeline.id, budgetPause ? { confirmed_budget_inr: confirmedBudget } : {}))}>

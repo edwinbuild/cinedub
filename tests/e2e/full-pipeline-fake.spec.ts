@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openTool } from "./helpers";
 
 function wav(seconds = 8) {
   const rate = 16000, samples = rate * seconds, buffer = Buffer.alloc(44 + samples * 2);
@@ -23,6 +24,7 @@ test("complete DEMO workflow from upload to an accepted export bundle without mo
   const detail = async () => (await request.get(`http://127.0.0.1:8011/projects/${id}`)).json();
   await page.getByLabel("Import scene").setInputFiles({ name: "demo-scene.wav", mimeType: "audio/wav", buffer: wav() });
   await expect(page.getByRole("slider", { name: "Seek scene" })).toBeVisible({ timeout: 30_000 });
+  await openTool(page, "Workflow");
   await expect(page.getByText("DEMO fixture stems · no separation")).toBeVisible();
 
   await page.getByRole("button", { name: "Separate dialogue and background", exact: true }).click();
@@ -51,6 +53,7 @@ test("complete DEMO workflow from upload to an accepted export bundle without mo
   }
   await approveAll();
 
+  await openTool(page, "Analysis");
   const adaptation = page.locator("details[aria-label='Model dialogue alternatives']");
   await adaptation.locator("summary").click();
   await adaptation.getByRole("button", { name: "Generate dialogue alternatives" }).click();
@@ -68,6 +71,7 @@ test("complete DEMO workflow from upload to an accepted export bundle without mo
   await expect(page.getByLabel("Malayalam", { exact: true }).nth(1)).toHaveValue("കയറ്റുമതിക്ക് മുമ്പ് ഓരോ വരിയും");
   await approveAll();
 
+  await openTool(page, "Voices");
   await page.getByLabel("Voice for Speaker A", { exact: true }).selectOption("speaker-a");
   await expect(page.getByLabel("Voice pace for Speaker A")).toBeVisible();
   await page.getByLabel("Voice for Speaker B", { exact: true }).selectOption("speaker-b");
@@ -79,6 +83,7 @@ test("complete DEMO workflow from upload to an accepted export bundle without mo
     await expect(line.getByRole("button", { name: "Selected take" })).toBeVisible();
   }
 
+  await openTool(page, "Analysis");
   const alignment = page.locator("details[aria-label='Source timing and performance']");
   await alignment.locator("summary").click();
   await alignment.getByRole("button", { name: "Align source words" }).click();
@@ -98,6 +103,7 @@ test("complete DEMO workflow from upload to an accepted export bundle without mo
   await expect(emotionResults.getByText("DEMO", { exact: true })).toBeVisible();
   await expect(emotionResults.getByText(/not analyzed/).first()).toBeVisible();
 
+  await openTool(page, "Export");
   const mix = page.getByRole("region", { name: "Retained-background mix and export" });
   await mix.getByText("Mix & export · reviewed stereo delivery", { exact: true }).click();
   await mix.getByRole("button", { name: "Render retained-background mix", exact: true }).click();

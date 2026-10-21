@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openTool } from "./helpers";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,12 +19,15 @@ test("real local emotion evidence and separate human review survive reload", asy
     await page.getByLabel("Project name").fill("Original speech performance check");
     await page.getByRole("button", { name: "Create workspace" }).click();
     await expect(page).toHaveURL(/\/projects\//);
+    await openTool(page, "Media");
     await page.getByLabel("Import scene").setInputFiles({ name: "synthetic-original.wav", mimeType: "audio/wav", buffer: readFileSync(path) });
     await expect(page.getByRole("slider", { name: "Seek scene" })).toBeVisible();
+    await openTool(page, "Workflow");
     await page.getByRole("button", { name: "Transcribe scene", exact: true }).click();
     const first = page.getByRole("article", { name: "Dialogue line 1", exact: true });
     await expect(first).toBeVisible();
     const original = await first.getByLabel("English", { exact: true }).inputValue();
+    await openTool(page, "Analysis");
     const panel = page.getByLabel("Speech-emotion hints", { exact: true });
     await panel.locator("summary").click();
     const limitation = panel.getByRole("complementary", { name: "Emotion model quality limitation", exact: true });
@@ -56,6 +60,7 @@ test("real local emotion evidence and separate human review survive reload", asy
     await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.dismiss()), page.getByRole("link", { name: "Projects", exact: true }).click()]);
     await expect(window.getByLabel("Emotion reviewer", { exact: true })).toHaveValue("Synthetic fixture reviewer");
     await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.dismiss()), page.reload({ timeout: 5000 }).catch(() => undefined)]);
+    await openTool(page, "Analysis");
     await expect(window.getByLabel("Performance direction", { exact: true })).toHaveValue("Synthetic speech; this test does not establish acting accuracy.");
     await page.getByRole("button", { name: "Refresh project", exact: true }).click();
     await inspect.click();
@@ -79,6 +84,7 @@ test("real local emotion evidence and separate human review survive reload", asy
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await panel.screenshot({ path: "test-results/cinedub-speech-emotion-mobile.png" });
     await page.reload();
+    await openTool(page, "Analysis");
     const reopened = page.getByLabel("Speech-emotion hints", { exact: true });
     await reopened.locator("summary").click();
     await reopened.getByRole("button", { name: "Inspect emotion report 1", exact: true }).click();
@@ -115,7 +121,9 @@ test("real local emotion evidence and separate human review survive reload", asy
     await firstReview.getByLabel("Performance direction", { exact: true }).fill("Keep this draft on remote timeline change");
     const other = await page.context().newPage();
     await other.goto(page.url());
+    await openTool(other, "Workflow");
     await other.getByRole("button", { name: "Retranscribe into new revision", exact: true }).click();
+    await openTool(other, "Project");
     await other.getByRole("button", { name: "Use this timeline", exact: true }).click();
     await expect(other.getByRole("button", { name: "Use this timeline", exact: true })).toBeEnabled();
     await page.getByRole("button", { name: "Refresh project", exact: true }).click();

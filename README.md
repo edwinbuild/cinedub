@@ -57,6 +57,13 @@ With every provider set to `fake` the whole run uses DEMO fixtures (see [Costs a
 
 **Timeline.** The editor shows a time-based timeline: the source waveform, dialogue lines, selected takes (green when they fit, red when they overrun) and approved stems.
 
+The editing workspace keeps the source monitor in the centre, dialogue review on
+the right and the labelled timeline below. Use **Media**, **Workflow**, **Voices**,
+**Analysis**, **Export** and **Project** on the left to open the tools you need.
+Switching tools keeps unsaved forms intact. **Export** in the header opens the
+mix/subtitle controls; rendering and acceptance still require explicit actions.
+On smaller screens the panels stack. See [workspace decisions](docs/decisions/0021-editor-workspace.md).
+
 - Zoom with the toolbar or Ctrl+wheel.
 - Click to seek.
 - Drag a line edge, or focus it and use the arrow keys (Shift for 100 ms).

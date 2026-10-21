@@ -19,10 +19,11 @@ const FIT_LABEL = { ready: "fits its window", overrun: "does not fit", missing: 
  * Dragging or nudging an edge only changes that line's unsaved draft; saving, conflicts and
  * undo stay with the dialogue line editor.
  */
-export function TimelineView({ project, sourceId, mediaRef, drafts, editors, disabled, onSeek }: {
+export function TimelineView({ project, sourceId, mediaRef, drafts, editors, disabled, onSeek, onSelectLine }: {
   project: ProjectDetail; sourceId: string | null; mediaRef: RefObject<HTMLMediaElement | null>;
   drafts: Record<string, Range>; editors: RefObject<Map<string, TimingEditor>>; disabled: boolean;
   onSeek: (ms: number) => void;
+  onSelectLine?: (lineId: string, startMs: number) => void;
 }) {
   const tracks = useMemo(() => buildTracks(project, sourceId), [project, sourceId]);
   const [pxPerMs, setPxPerMs] = useState<number>(ZOOM_LEVELS[1]);
@@ -138,6 +139,10 @@ export function TimelineView({ project, sourceId, mediaRef, drafts, editors, dis
       <button className="iconButton" aria-label="Fit timeline to view" onClick={fit}><ScanLine size={14} /></button>
       <small>{Math.round(pxPerMs * 1000)} px/s · drag or use arrow keys on a line edge (Shift for 100 ms)</small>
     </div>
+    <div className="timelineTracks">
+      <div className="trackLabels" aria-hidden="true"><span>TRACKS</span><strong>Source</strong><strong>Dialogue</strong><strong>Voice takes</strong>
+        {tracks.stems.map((stem) => <strong key={stem.name}>{stem.name}</strong>)}
+      </div>
     <div className="timelineScroller" ref={scroller} onWheel={(event) => {
       if (!event.ctrlKey) return;
       event.preventDefault(); zoom(event.deltaY < 0 ? 1 : -1);
@@ -165,7 +170,7 @@ export function TimelineView({ project, sourceId, mediaRef, drafts, editors, dis
                   onPointerDown={(event) => startDrag(event, line.id, edge)} onPointerMove={moveDrag} onPointerUp={endDrag}
                   onKeyDown={(event) => nudge(event, line.id, edge, value)} />;
               })}
-              <button className="timelineLabel" onClick={() => onSeek(line.start_ms)}
+              <button className="timelineLabel" onClick={() => { onSeek(line.start_ms); onSelectLine?.(line.id, line.start_ms); }}
                 title={`${formatMs(line.start_ms)}–${formatMs(line.end_ms)}${changed ? " · unsaved timing draft" : ""}`}>
                 <span className="timelineText"><b>{line.index + 1}</b> {line.speaker ? `${line.speaker}: ` : ""}{line.label}</span>
               </button>
@@ -182,6 +187,7 @@ export function TimelineView({ project, sourceId, mediaRef, drafts, editors, dis
           <span>{stem.demo && <DemoBadge />}{stem.name}</span></div>)}
         <div className="timelinePlayhead" ref={playhead} aria-hidden="true" />
       </div>
+    </div>
     </div>
     <p className="visuallyHidden" aria-live="polite">{announcement}</p>
   </section>;

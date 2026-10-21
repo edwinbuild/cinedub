@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openTool } from "./helpers";
 
 test("manual stock variation saves explicitly and retains failed or stale drafts without synthesis", async ({ page }) => {
   const errors: string[] = [];
@@ -19,8 +20,10 @@ test("manual stock variation saves explicitly and retains failed or stale drafts
   await page.goto("/");
   await page.getByLabel("Project name").fill("Stock variation UI contract");
   await page.getByRole("button", { name: "Create workspace" }).click();
+  await openTool(page, "Media");
   await page.getByRole("button", { name: /^Build demo timeline/ }).click();
   await expect(page.getByRole("heading", { name: "4 reviewable lines" })).toBeVisible();
+  await openTool(page, "Voices");
   await page.getByLabel("Voice for Speaker A", { exact: true }).selectOption("ritu");
   const field = page.getByLabel("Generation variation for Speaker A", { exact: true });
   const save = page.getByRole("button", { name: "Save generation variation for Speaker A", exact: true });
@@ -37,6 +40,7 @@ test("manual stock variation saves explicitly and retains failed or stale drafts
   await save.click();
   await expect(discard).toHaveCount(0);
   await page.reload();
+  await openTool(page, "Voices");
   await expect(field).toHaveValue("0.82");
   const id = page.url().split("/").at(-1)!;
   const detail = async () => (await page.request.get(`http://127.0.0.1:8011/projects/${id}`)).json();
@@ -65,6 +69,7 @@ test("manual stock variation saves explicitly and retains failed or stale drafts
   await save.click();
   await expect(discard).toHaveCount(0);
   await page.reload();
+  await openTool(page, "Voices");
   await expect(field).toHaveValue("0.41");
   expect(jobRequests).toBe(before);
   project = await detail();

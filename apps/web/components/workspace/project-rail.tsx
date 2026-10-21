@@ -34,8 +34,13 @@ export function ProjectRail({ project, hardware, locked, hasRevision, onChangeBu
       {job.warnings_json.map((warning) => <small key={warning}>{warning}</small>)}
       {job.status === "failed" && job.retryable && <button className="smallButton" disabled={locked}
         onClick={() => onResume(job.id)}>{job.provider === "sarvam" ? "Resume existing remote job" : "Resume saved local job"}</button>}</div>)}</div>
-    <div className="inspectorSection"><p className="eyebrow">Downloads</p>{project.artifacts.filter((item) => ["subtitle", "raw_transcript", "translation_candidates", "dub_preview", "dialogue_mix"].includes(item.kind)).map((item) =>
-      item.access_blocked_reason ? <div className="artifact" key={item.id}><strong>{item.filename}</strong><small>{item.access_blocked_reason}</small></div>
-        : <a className="artifact" href={`${API_URL}${item.download_url}`} key={item.id}><span><strong>{item.filename}</strong><small>{item.kind.replaceAll("_", " ")} · {item.metadata_json.revision_id === project.active_revision_id ? "active timeline" : "other timeline"}</small></span></a>)}</div>
+    <ArtifactDownloads project={project} />
   </aside>;
+}
+
+/** Saved deliverables are available beside export controls and in project history. */
+export function ArtifactDownloads({ project }: { project: ProjectDetail }) {
+  return <div className="inspectorSection"><p className="eyebrow">Downloads</p>{project.artifacts.filter((item) => ["subtitle", "raw_transcript", "translation_candidates", "dub_preview", "dialogue_mix"].includes(item.kind)).map((item) =>
+      item.access_blocked_reason ? <div className="artifact" key={item.id}><strong>{item.filename}</strong><small>{item.access_blocked_reason}</small></div>
+        : <a className="artifact" href={`${API_URL}${item.download_url}`} key={item.id}><span><strong>{item.filename}</strong><small>{item.kind.replaceAll("_", " ")} · {item.metadata_json.revision_id === project.active_revision_id ? "active timeline" : "other timeline"}</small></span></a>)}</div>;
 }

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openTool } from "./helpers";
 import { readFileSync } from "node:fs";
 
 test("split merge reversible history reload and current subtitles", async ({ page }) => {
@@ -9,6 +10,7 @@ test("split merge reversible history reload and current subtitles", async ({ pag
   await page.getByLabel("Project name").fill("Original structure correction");
   await page.getByRole("button", { name: "Create workspace" }).click();
   await expect(page).toHaveURL(/\/projects\//);
+  await openTool(page, "Media");
   await page.getByRole("button", { name: /^Build demo timeline/ }).click();
   await expect(page.getByRole("heading", { name: "4 reviewable lines" })).toBeVisible();
   let panel = page.getByLabel("Split merge and structural history", { exact: true });
@@ -39,7 +41,9 @@ test("split merge reversible history reload and current subtitles", async ({ pag
   await expect(panel.getByRole("article", { name: "Structural edit 2", exact: true })).toBeVisible();
   await panel.getByRole("article", { name: "Structural edit 2", exact: true }).getByRole("button", { name: "Reverse structural edit", exact: true }).click();
   await expect(page.getByRole("heading", { name: "5 reviewable lines" })).toBeVisible();
+  await openTool(page, "Export");
   await page.getByRole("button", { name: "Export Malayalam subtitles", exact: true }).click();
+  await openTool(page, "Project");
   const link = page.getByRole("link", { name: /demo-malayalam.srt/ });
   await expect(link).toBeVisible();
   const response = await page.request.get((await link.getAttribute("href"))!);
@@ -66,6 +70,7 @@ test("another editor replacing a line preserves an unsaved structure form", asyn
   await page.getByLabel("Project name").fill("Structure form conflict fixture");
   await page.getByRole("button", { name: "Create workspace" }).click();
   await expect(page).toHaveURL(/\/projects\//);
+  await openTool(page, "Media");
   await page.getByRole("button", { name: /^Build demo timeline/ }).click();
   await expect(page.getByRole("heading", { name: "4 reviewable lines" })).toBeVisible();
   const panel = page.getByLabel("Split merge and structural history", { exact: true });
@@ -103,6 +108,7 @@ test("unsaved dialogue displaced by another editor stays recoverable", async ({ 
   await page.getByLabel("Project name").fill("Displaced dialogue draft fixture");
   await page.getByRole("button", { name: "Create workspace" }).click();
   await expect(page).toHaveURL(/\/projects\//);
+  await openTool(page, "Media");
   await page.getByRole("button", { name: /^Build demo timeline/ }).click();
   await expect(page.getByRole("heading", { name: "4 reviewable lines" })).toBeVisible();
   const original = page.getByRole("article", { name: "Dialogue line 1", exact: true });

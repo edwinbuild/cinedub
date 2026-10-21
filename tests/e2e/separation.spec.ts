@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openTool } from "./helpers";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -17,8 +18,10 @@ test("actual offline separation, explicit review and dialogue-stem recognition",
     await expect(page).toHaveURL(/\/projects\//);
     const projectId = page.url().split("/").at(-1)!;
     const detail = async () => (await request.get(`http://127.0.0.1:8011/projects/${projectId}`)).json();
+    await openTool(page, "Media");
     await page.getByLabel("Import scene").setInputFiles({ name: "original-mixture.wav", mimeType: "audio/wav", buffer: readFileSync(join(directory, "mixture.wav")) });
     await expect(page.getByRole("slider", { name: "Seek scene" })).toBeVisible();
+    await openTool(page, "Workflow");
     const separate = page.getByRole("button", { name: "Separate dialogue and background", exact: true });
     await expect(separate).toBeEnabled();
     await separate.click();
