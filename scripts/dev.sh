@@ -6,17 +6,5 @@ if [[ ! -x .venv/bin/uvicorn ]]; then
   exit 1
 fi
 
-cleanup() {
-  kill "${api_pid:-}" "${worker_pid:-}" "${web_pid:-}" 2>/dev/null || true
-}
-trap cleanup EXIT INT TERM
-
-PYTHONPATH=apps/api .venv/bin/alembic -c alembic.ini upgrade head
-.venv/bin/uvicorn cinedub_api.main:app --app-dir apps/api --host 127.0.0.1 --port 8000 &
-api_pid=$!
-PYTHONPATH=apps/api .venv/bin/python apps/worker/main.py &
-worker_pid=$!
-npm run dev:web &
-web_pid=$!
-
-wait -n "$api_pid" "$worker_pid" "$web_pid"
+export PYTHONPATH=apps/api
+exec .venv/bin/python scripts/local-runtime.py start

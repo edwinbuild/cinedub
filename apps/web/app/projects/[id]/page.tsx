@@ -1,135 +1,387 @@
 "use client";
 
-import type { CapabilityStatus, HardwareStatus, ProjectDetail, Segment } from "@cinedub/contracts";
-import {
-  Activity, ArrowLeft, AudioWaveform, Check, ChevronRight, CircleAlert, CloudCog, Download,
-  Film, Gauge, Languages, LoaderCircle, Mic2, Play, RefreshCw, Save, Upload,
-} from "lucide-react";
+import type { CapabilityStatus, HardwareStatus, JobRequest, ProjectDetail, Segment } from "@cinedub/contracts";
+import { ArrowLeft, Film, LoaderCircle, RefreshCw, Upload } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent } from "react";
+import { DialogueLine, type GroupedDraft } from "@/components/dialogue-line";
+import { DialogueTimeline } from "@/components/dialogue-timeline";
+import { StructurePanel } from "@/components/structure-panel";
+import { GroupHistoryPanel } from "@/components/group-history-panel";
+import { ScenePlayer } from "@/components/scene-player";
+import { VoicePanel } from "@/components/voice-panel";
+import { SpeakerReusePanel } from "@/components/speaker-reuse-panel";
+import { ClonePanel } from "@/components/clone-panel";
+import { StemPanel } from "@/components/stem-panel";
+import { MixPanel } from "@/components/mix-panel";
+import { AlignmentPanel } from "@/components/alignment-panel";
+import { PerformancePanel } from "@/components/performance-panel";
+import { EmotionPanel } from "@/components/emotion-panel";
+import { DialogueBriefPanel } from "@/components/dialogue-brief-panel";
+import { DialogueAdaptationPanel } from "@/components/dialogue-adaptation-panel";
 import { API_URL, api } from "@/lib/api";
 
-function milliseconds(value: number) {
-  const seconds = value / 1000;
-  return `${Math.floor(seconds / 60).toString().padStart(2, "0")}:${(seconds % 60).toFixed(1).padStart(4, "0")}`;
-}
-
-function SegmentRow({ segment, speaker, onSaved }: { segment: Segment; speaker: string; onSaved: () => void }) {
-  const [text, setText] = useState(segment.translated_text);
-  const [status, setStatus] = useState(segment.status);
-  const [saving, setSaving] = useState(false);
-
-  async function save() {
-    setSaving(true);
-    try {
-      await api.updateSegment(segment, { translated_text: text, status });
-      onSaved();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <article className="segmentRow">
-      <div className="segmentMeta"><span className="segmentIndex">{String(segment.index + 1).padStart(2, "0")}</span><span>{milliseconds(segment.start_ms)} — {milliseconds(segment.end_ms)}</span></div>
-      <div className="speakerChip"><Mic2 size={13} /> {speaker}</div>
-      <div className="sourceLine">{segment.source_text}</div>
-      <textarea value={text} onChange={(event) => setText(event.target.value)} aria-label={`Malayalam translation for segment ${segment.index + 1}`} />
-      <div className="performance"><span>{segment.emotion_label ?? "unrated"}</span><span>Energy {Math.round((segment.energy ?? 0) * 100)}</span><span>Pace {(segment.pace ?? 1).toFixed(2)}×</span></div>
-      <div className="segmentActions">
-        <select value={status} onChange={(event) => setStatus(event.target.value as Segment["status"])} aria-label="Review state">
-          <option value="translated">Translated</option><option value="needs_review">Needs review</option><option value="approved">Approved</option><option value="voiced">Voiced</option>
-        </select>
-        <button className="smallButton" onClick={save} disabled={saving || (text === segment.translated_text && status === segment.status)}>{saving ? <LoaderCircle className="spin" size={14} /> : <Save size={14} />} Save</button>
-      </div>
-    </article>
-  );
-}
-
 export default function ProjectPage() {
-  const params = useParams<{ id: string }>();
-  const id = params.id;
+  const { id } = useParams<{ id: string }>();
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [capabilities, setCapabilities] = useState<CapabilityStatus[]>([]);
   const [hardware, setHardware] = useState<HardwareStatus | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      const [detail, capabilityList, hardwareStatus] = await Promise.all([
-        api.project(id),
-        api.capabilities(),
-        api.diagnostics(),
-      ]);
-      setProject(detail); setCapabilities(capabilityList); setHardware(hardwareStatus); setError(null);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not load project"); }
+  const [notice, setNotice] = useState<string | null>(null);
+  const [selectedSource, setSelectedSource] = useState<string | null>(null);
+  const [speakerCount, setSpeakerCount] = useState("");
+  const [preferDialogue, setPreferDialogue] = useState(false);
+  const [filter, setFilter] = useState("all");
+  const [time, setTime] = useState(0);
+  const [stopAt, setStopAt] = useState<number | null>(null);
+  const [dirtyIds, setDirtyIds] = useState<Set<string>>(() => new Set());
+  const [structureDirty, setStructureDirty] = useState(false);
+  const [referenceDirty, setReferenceDirty] = useState(false);
+  const [panelDraftIds, setPanelDraftIds] = useState<Set<string>>(() => new Set());
+  const panelDraftRef = useRef<Set<string>>(new Set());
+  const displayedRevision = useRef<string | null | undefined>(undefined);
+  const [remoteTimelineChanged, setRemoteTimelineChanged] = useState(false);
+  const onPanelDirty = useCallback((key: string, dirty: boolean) => {
+    const previous = panelDraftRef.current;
+    if (previous.has(key) === dirty) return;
+    const next = new Set(previous); if (dirty) next.add(key); else next.delete(key);
+    panelDraftRef.current = next; setPanelDraftIds(next);
+  }, []);
+  const [preservedDrafts, setPreservedDrafts] = useState<Segment[]>([]);
+  const dirtyRef = useRef<Set<string>>(new Set());
+  const groupedDrafts = useRef(new Map<string, GroupedDraft>());
+  const groupedFocus = useRef<HTMLElement | null>(null);
+  const timelineHeading = useRef<HTMLHeadingElement>(null);
+  useLayoutEffect(() => {
+    if (busy || !groupedFocus.current) return;
+    const target = groupedFocus.current; groupedFocus.current = null;
+    if (document.activeElement !== document.body) return;
+    if (target.isConnected && !target.matches(":disabled") && !target.closest("[hidden]")) target.focus();
+    else timelineHeading.current?.focus();
+  }, [busy]);
+  const onGroupedDraft = useCallback((lineId: string, value: GroupedDraft | null) => {
+    if (value) groupedDrafts.current.set(lineId, value); else groupedDrafts.current.delete(lineId);
+  }, []);
+  const lineCache = useRef<Map<string, Segment>>(new Map());
+  const mediaRef = useRef<HTMLMediaElement | null>(null);
+  const loadSequence = useRef(0);
+  const load = useCallback(async (discardPanelDrafts = false) => {
+    const sequence = ++loadSequence.current;
+    try { const detail = await api.project(id);
+      if (sequence === loadSequence.current) {
+        if (displayedRevision.current !== undefined && displayedRevision.current !== detail.active_revision_id
+          && panelDraftRef.current.size && !discardPanelDrafts) {
+          mediaRef.current?.pause(); setStopAt(null);
+          setRemoteTimelineChanged(true); setError(null); return;
+        }
+        if (displayedRevision.current !== undefined && displayedRevision.current !== detail.active_revision_id) {
+          setSelectedSource(null); setStructureDirty(false); mediaRef.current?.pause(); setStopAt(null);
+        }
+        displayedRevision.current = detail.active_revision_id;
+        setRemoteTimelineChanged(false);
+        const current = new Map(detail.segments.map((line) => [line.id, line]));
+        const displaced = Array.from(dirtyRef.current).flatMap((lineId) => {
+          const previous = lineCache.current.get(lineId);
+          return !current.has(lineId) && previous ? [{ ...previous, retired: true }] : [];
+        });
+        lineCache.current = new Map([...current, ...displaced.map((line) => [line.id, line] as const)]);
+        setPreservedDrafts(displaced); setProject(detail); setError(null);
+      } }
+    catch (cause) { if (sequence === loadSequence.current)
+      setError(cause instanceof Error ? cause.message : "Could not load project"); }
   }, [id]);
-
+  const loadDiagnostics = useCallback(async () => {
+    const results = await Promise.allSettled([api.capabilities(), api.diagnostics()]);
+    if (results[0].status === "fulfilled") setCapabilities(results[0].value);
+    if (results[1].status === "fulfilled") setHardware(results[1].value);
+  }, []);
   useEffect(() => {
-    const timer = window.setTimeout(load, 0);
+    const timer = window.setTimeout(() => { void load(); void loadDiagnostics(); }, 0);
     return () => window.clearTimeout(timer);
-  }, [load]);
+  }, [load, loadDiagnostics]);
+  const hasJobs = project?.jobs.some((job) => ["queued", "running"].includes(job.status));
   useEffect(() => {
-    if (!project?.jobs.some((job) => job.status === "queued" || job.status === "running")) return;
-    const timer = window.setInterval(load, 1200); return () => window.clearInterval(timer);
-  }, [project?.jobs, load]);
+    if (!hasJobs) return;
+    const timer = window.setInterval(load, 1500); return () => window.clearInterval(timer);
+  }, [hasJobs, load]);
+  useEffect(() => {
+    if (!dirtyIds.size && !structureDirty && !referenceDirty && !panelDraftIds.size) return;
+    function warn(event: BeforeUnloadEvent) { event.preventDefault(); event.returnValue = ""; }
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirtyIds.size, structureDirty, referenceDirty, panelDraftIds.size]);
+  const onDirty = useCallback((lineId: string, dirty: boolean) => {
+    const next = new Set(dirtyRef.current); if (dirty) next.add(lineId); else next.delete(lineId);
+    dirtyRef.current = next; setDirtyIds(next);
+    if (!dirty) setPreservedDrafts((lines) => lines.filter((line) => line.id !== lineId));
+  }, []);
+  const onTime = useCallback((value: number) => setTime(value), []);
+  const onStop = useCallback(() => setStopAt(null), []);
 
-  const speakers = useMemo(() => Object.fromEntries((project?.speakers ?? []).map((speaker) => [speaker.id, speaker.display_name])), [project?.speakers]);
+  const activeRevision = project?.revisions.find((item) => item.id === project.active_revision_id);
+  const sourceId = selectedSource ?? activeRevision?.source_asset_id ?? project?.assets.at(-1)?.id ?? null;
+  const sourceReady = project?.artifacts.some((item) => item.kind === "recognition_audio" && item.metadata_json.source_asset_id === sourceId);
+  const timelineMatches = !activeRevision?.source_asset_id || activeRevision.source_asset_id === sourceId;
+  const transcriber = capabilities.find((item) => item.capability === "transcriber");
+  const translator = capabilities.find((item) => item.capability === "translator");
+  const voiceCapability = capabilities.find((item) => item.capability === "voice_synthesizer");
+  const cloneCapability = capabilities.find((item) => item.capability === "voice_cloner");
+  const separator = capabilities.find((item) => item.capability === "stem_separator");
+  const aligner = capabilities.find((item) => item.capability === "timing_aligner");
+  const targetAligner = capabilities.find((item) => item.capability === "target_timing_aligner");
+  const performanceAnalyzer = capabilities.find((item) => item.capability === "performance_analyzer");
+  const dialogueAdapter = capabilities.find((item) => item.capability === "dialogue_adapter");
+  const activeStems = project?.stem_sets.find((stems) => stems.id === project.assets.find((asset) => asset.id === sourceId)?.active_stem_set_id && stems.status === "approved");
+  const transcriptionInput = preferDialogue && activeStems ? "dialogue_stem" : "original";
 
+  async function run(payload: JobRequest) {
+    try {
+      setBusy(payload.stage); setError(null); setNotice(null);
+      const estimate = await api.estimateJob(id, payload);
+      if (estimate.estimated_cost_inr > 0 && !window.confirm(
+        `Reserve up to ₹${estimate.estimated_cost_inr.toFixed(2)} for this operation? Remaining estimated budget: ₹${estimate.remaining_inr.toFixed(2)}. Estimates are not the provider bill.`
+      )) return;
+      const job = await api.startJob(id, payload);
+      if (estimate.cached_job_id) setNotice(`Reused existing ${job.status} result. Choose Retranscribe to create a fresh revision.`);
+      await load();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not start processing"); }
+    finally { setBusy(null); }
+  }
   async function upload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]; if (!file) return;
-    try { setBusy("upload"); await api.upload(id, file); await load(); }
+    try { setBusy("upload"); const result = await api.upload(id, file) as { id: string };
+      setSelectedSource(result.id); await load(); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Upload failed"); }
     finally { setBusy(null); event.target.value = ""; }
   }
-
-  async function run(stage: string, provider?: string) {
-    try { setBusy(stage); await api.startJob(id, stage, provider); await load(); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "Could not start job"); }
+  async function activate(revisionId: string) {
+    if (!project) return;
+    if ((dirtyIds.size || structureDirty || panelDraftIds.size) && !window.confirm("Discard unsaved drafts and switch timeline? Saved revisions are preserved.")) return;
+    try { setBusy("revision"); const detail = await api.activateRevision(id, revisionId, project.active_revision_id);
+      displayedRevision.current = detail.active_revision_id; setProject(detail); setRemoteTimelineChanged(false);
+      dirtyRef.current = new Set(); lineCache.current.clear(); setPreservedDrafts([]);
+      setDirtyIds(new Set()); panelDraftRef.current = new Set(); setPanelDraftIds(new Set()); setStructureDirty(false); setSelectedSource(null); mediaRef.current?.pause(); setStopAt(null); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Could not switch timeline"); }
     finally { setBusy(null); }
   }
+  async function jobAction(action: () => Promise<unknown>) {
+    try { setBusy("job"); await action(); await load(); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Job action failed"); }
+    finally { setBusy(null); }
+  }
+  async function structureAction(action: () => Promise<unknown>) {
+    setBusy("structure");
+    try { await action(); await load(); }
+    finally { setBusy(null); }
+  }
+  async function saveGroupedDrafts() {
+    if (!project?.active_revision_id || busy) return;
+    const drafts = Array.from(dirtyRef.current).map((lineId) => groupedDrafts.current.get(lineId));
+    if (!drafts.length || drafts.length > 100 || drafts.some((value) => !value || value.blocked)) {
+      setError("Grouped save is unavailable: resolve stale or removed lines and wait for individual saves. Save at most 100 dialogue drafts together."); return;
+    }
+    const ready = drafts as GroupedDraft[];
+    if (!window.confirm(`Save all ${ready.length} dialogue drafts together, including filtered-out lines? One invalid or changed line prevents the entire save. Dialogue/timing changes require review again. Other review forms are not saved.`)) return;
+    groupedFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setBusy("group-save"); setError(null); setNotice(null);
+    try {
+      const result = await api.updateSegments(id, { revision_id: project.active_revision_id, lines: ready.map((value) => value.item) });
+      const saved = new Map(result.lines.map((line) => [line.id, line]));
+      if (saved.size !== ready.length || ready.some((value) => !saved.has(value.item.segment_id))) throw new Error("Grouped save response was incomplete; refresh to inspect saved versions.");
+      ready.forEach((value) => value.accept(saved.get(value.item.segment_id)!));
+      setNotice(`${result.lines.length} dialogue drafts saved together. Changed content requires review again.`);
+      await load();
+    } catch (cause) {
+      setError(`${cause instanceof Error ? cause.message : "Grouped save failed"}. Drafts are preserved. Refresh to inspect saved versions before retrying if the connection failed.`);
+    } finally { setBusy(null); }
+  }
+  async function playLine(line: Segment) {
+    await playRange(line.start_ms, line.end_ms);
+  }
+  async function playRange(start: number, end: number) {
+    const player = mediaRef.current; if (!player) return;
+    try { player.currentTime = start / 1000;
+      await player.play(); setStopAt(end); }
+    catch { setError("Playback could not start. Use the media player's play control first."); }
+  }
+  async function rename(speakerId: string, oldName: string) {
+    const name = window.prompt("Speaker name", oldName); if (!name?.trim() || name === oldName) return;
+    await jobAction(() => api.renameSpeaker(speakerId, name));
+  }
+  async function addSpeaker() {
+    if (!project?.active_revision_id) return;
+    const name = window.prompt("New speaker name"); if (!name?.trim()) return;
+    await jobAction(() => api.createSpeaker(id, project.active_revision_id!, name));
+  }
+  if (!project) return <main className="loadingScreen"><LoaderCircle className="spin" />{error ?? "Opening scene…"}</main>;
+  const activeJob = project.jobs.find((job) => ["running", "queued"].includes(job.status));
+  const locked = !!busy || !!activeJob || remoteTimelineChanged;
+  const missing = project.segments.some((line) => !line.translated_text.trim());
+  const revisionId = project.active_revision_id ?? undefined;
+  const allApproved = project.segments.length > 0 && project.segments.every((line) => line.status === "approved");
+  const allSelected = allApproved && project.segments.every((line) => line.selected_candidate_id !== null);
+  const voicePreview = project.artifacts.find((item) => ["dub_preview", "dialogue_mix"].includes(item.kind)
+    && item.metadata_json.revision_id === project.active_revision_id);
+  const selectedTakes = voicePreview?.metadata_json.candidates as Record<string, string> | undefined;
+  const previewStale = !!voicePreview && (!allSelected || project.segments.some((line) => selectedTakes?.[line.id] !== line.selected_candidate_id));
+  function hidden(line: Segment) {
+    return filter === "untranslated" ? !!line.translated_text.trim() : filter === "edited" ? !line.human_edited
+      : filter === "approved" ? line.status !== "approved" : filter === "warnings" ? !line.warnings_json.length : false;
+  }
 
-  if (!project) return <main className="loadingScreen"><LoaderCircle className="spin" />{error ?? "Opening dubbing room…"}</main>;
-  const activeJob = project.jobs.find((job) => job.status === "running" || job.status === "queued");
-
-  return (
-    <main className="studioShell">
-      <header className="studioTopbar">
-        <div className="studioIdentity"><Link href="/" className="iconButton"><ArrowLeft size={17} /></Link><span className="brandMark"><Film size={17} /></span><div><strong>{project.name}</strong><span>English <ChevronRight size={10} /> Malayalam</span></div></div>
-        <div className="studioStatus"><span className={`statusDot ${activeJob ? "active" : ""}`} />{activeJob ? `${activeJob.stage} ${Math.round(activeJob.progress * 100)}%` : project.status}<button className="iconButton" onClick={load}><RefreshCw size={15} /></button></div>
-      </header>
-
-      {error && <div className="errorBanner studioError"><CircleAlert size={16} />{error}</div>}
-      <section className="studioGrid">
-        <aside className="leftRail">
-          <div className="panelTitle"><span>Scene media</span><label className="uploadButton"><Upload size={14} />{busy === "upload" ? "Uploading…" : "Import"}<input type="file" accept="video/*,audio/*" onChange={upload} disabled={busy === "upload"} /></label></div>
-          <div className="previewStage">{project.assets.length ? <><Film size={34} /><strong>{project.assets[0].filename}</strong><span>{project.assets[0].duration_ms ? milliseconds(project.assets[0].duration_ms) : "Duration unavailable"}</span></> : <><Upload size={30} /><strong>No source imported</strong><span>You can still run the deterministic demo.</span></>}</div>
-          <div className="railSection"><p className="eyebrow">Pipeline</p>
-            <button className="pipelineButton" onClick={() => run("demo_pipeline", "fake")} disabled={!!busy}><Play size={15} /><span><strong>Build demo timeline</strong><small>Safe, deterministic fixture</small></span></button>
-            <button className="pipelineButton" onClick={() => run("translate")} disabled={!project.segments.length || !!busy}><Languages size={15} /><span><strong>Translate dialogue</strong><small>Selected provider route</small></span></button>
-            <button className="pipelineButton" onClick={() => run("synthesize", "fake")} disabled={!project.segments.length || !!busy}><AudioWaveform size={15} /><span><strong>Generate candidates</strong><small>Fake tones until voice consent</small></span></button>
-            <button className="pipelineButton" onClick={() => run("export")} disabled={!project.segments.length || !!busy}><Download size={15} /><span><strong>Validate export</strong><small>SRT and reference artifact</small></span></button>
-          </div>
-          <div className="railSection"><p className="eyebrow">Providers</p>{capabilities.map((capability) => <div className="capability" key={capability.capability}><span className={capability.available ? "ready" : "missing"} /><div><strong>{capability.capability.replaceAll("_", " ")}</strong><small>{capability.selected_provider}{capability.reason ? ` · ${capability.reason}` : ""}</small></div></div>)}</div>
-        </aside>
-
-        <section className="timelinePanel">
-          <div className="timelineHeader"><div><p className="eyebrow">Dialogue timeline</p><h1>{project.segments.length} reviewable lines</h1></div><div className="legend"><span><i className="source" /> Source</span><span><i className="target" /> Malayalam</span></div></div>
-          {activeJob && <div className="jobProgress"><LoaderCircle className="spin" size={15} /><div><strong>{activeJob.stage.replaceAll("_", " ")}</strong><span style={{ width: `${Math.max(4, activeJob.progress * 100)}%` }} /></div><em>{Math.round(activeJob.progress * 100)}%</em></div>}
-          <div className="waveformMock" aria-hidden="true">{Array.from({ length: 80 }, (_, index) => <i key={index} style={{ height: `${16 + ((index * 17) % 46)}%` }} />)}</div>
-          <div className="segments">{project.segments.length ? project.segments.map((segment) => <SegmentRow key={segment.id} segment={segment} speaker={speakers[segment.speaker_id ?? ""] ?? "Unassigned"} onSaved={load} />) : <div className="timelineEmpty"><Activity size={30} /><strong>No timeline yet</strong><span>Import media, then connect a transcriber—or build the deterministic demo to inspect the workflow now.</span><button className="primaryButton" onClick={() => run("demo_pipeline", "fake")}>Build demo timeline <ChevronRight size={15} /></button></div>}</div>
-        </section>
-
-        <aside className="rightRail">
-          <div className="metricCard"><Gauge size={18} /><div><span>Review status</span><strong>{project.segments.filter((segment) => segment.status === "approved").length}/{project.segments.length} approved</strong></div></div>
-          <div className="metricCard hardwareCard"><CloudCog size={18} /><div><span>Local inference</span><strong>{hardware?.cuda_ready ? "GPU ready" : hardware?.gpu_detected ? "GPU driver blocked" : "CPU only"}</strong><small>{hardware?.gpu_name ?? "No NVIDIA GPU detected"}</small></div></div>
-          <div className="inspectorSection"><p className="eyebrow">Speakers</p>{project.speakers.length ? project.speakers.map((speaker) => <div className="speakerItem" key={speaker.id}><span>{speaker.display_name.slice(0, 1)}</span><div><strong>{speaker.display_name}</strong><small>{speaker.label}</small></div></div>) : <p className="muted">Speakers appear after diarization.</p>}</div>
-          <div className="inspectorSection"><p className="eyebrow">Jobs</p>{project.jobs.slice(0, 6).map((job) => <div className="jobItem" key={job.id}><span className={`jobIcon ${job.status}`}>{job.status === "completed" ? <Check size={12} /> : job.status === "failed" ? <CircleAlert size={12} /> : <LoaderCircle size={12} />}</span><div><strong>{job.stage.replaceAll("_", " ")}</strong><small>{job.provider} · {job.status}{job.error_message ? ` · ${job.error_message}` : ""}</small></div></div>)}</div>
-          <div className="inspectorSection"><p className="eyebrow">Artifacts</p>{project.artifacts.length ? project.artifacts.map((artifact) => <a className="artifact" href={`${API_URL}${artifact.download_url}`} key={artifact.id}><CloudCog size={14} /><span><strong>{artifact.filename}</strong><small>{artifact.kind.replaceAll("_", " ")}</small></span><Download size={13} /></a>) : <p className="muted">Exports and generated dialogue appear here.</p>}</div>
-        </aside>
+  return <main className="studioShell">
+    <a className="skipLink" href="#dialogue-editor">Skip to dialogue editor</a>
+    <header className="studioTopbar"><div className="studioIdentity">
+      <Link href="/" className="iconButton" aria-label="Projects" onClick={(event) => {
+        if ((dirtyIds.size || structureDirty || referenceDirty || panelDraftIds.size) && !window.confirm("Leave this scene and discard unsaved drafts?")) event.preventDefault();
+      }}><ArrowLeft size={17} /></Link><span className="brandMark"><Film size={17} /></span>
+      <div><strong>{project.name}</strong><span>English → Malayalam · v0.2</span></div></div>
+      <div className="studioStatus">{(dirtyIds.size > 0 || structureDirty || referenceDirty || panelDraftIds.size > 0) && <span>{dirtyIds.size + Number(structureDirty) + Number(referenceDirty) + panelDraftIds.size} unsaved</span>}
+        {activeJob ? activeJob.phase.replaceAll("_", " ") : project.status}
+        <button className="iconButton" aria-label="Refresh project" onClick={() => void load()}><RefreshCw size={15} /></button></div></header>
+    {error && <div className="errorBanner studioError" role="alert">{error}</div>}
+    {notice && <div className="noticeBanner" role="status">{notice}</div>}
+    {remoteTimelineChanged && <div className="noticeBanner" role="alert">
+      Another tab changed the active timeline. Your unsaved mix settings and emotion/mix review fields are still visible below.
+      Copy any needed values before continuing. Actions on this old timeline are paused.
+      <button className="smallButton" disabled={!!busy} onClick={() => {
+        if (window.confirm("Discard unsaved mix settings, emotion/mix review fields and other timeline-specific forms and load the current server timeline? Displaced dialogue drafts remain available to copy. Saved renders and review history will not change.")) void load(true);
+      }}>Discard review drafts and load current timeline</button>
+    </div>}
+    <section className="studioGrid">
+      <aside className="leftRail">
+        <div className="panelTitle"><span>Scene media</span><label className="uploadButton"><Upload size={14} />
+          {busy === "upload" ? "Uploading…" : "Import"}<input aria-label="Import scene" type="file" accept=".mp4,.mov,.mkv,.webm,.wav,.mp3,.flac,.m4a" onChange={upload} disabled={locked} /></label></div>
+        <label className="fieldLabel">Source<select aria-label="Scene source" value={sourceId ?? ""} disabled={locked}
+          onChange={(event) => { mediaRef.current?.pause(); setStopAt(null); setSelectedSource(event.target.value); }}>
+          <option value="" disabled>Select a scene</option>{project.assets.map((asset) => <option key={asset.id} value={asset.id}>{asset.filename}</option>)}</select></label>
+        <div className="railSection"><p className="eyebrow">Process scene</p>
+          <button className="pipelineButton" aria-label="Separate dialogue and background" disabled={locked || !sourceId || !separator?.available}
+            onClick={() => run({ stage: "separate", source_asset_id: sourceId!, force_new: project.stem_sets.some((stems) => stems.source_asset_id === sourceId) })}>
+            <span><strong>Separate dialogue & background</strong><small>Local CPU · three stems · review required</small></span></button>
+          <label className="fieldLabel">Transcription audio<select aria-label="Transcription audio" value={transcriptionInput} disabled={locked}
+            onChange={(event) => setPreferDialogue(event.target.value === "dialogue_stem")}>
+            <option value="original">Original source audio</option><option value="dialogue_stem" disabled={!activeStems}>Reviewed dialogue stem</option></select></label>
+          {transcriber?.selected_provider !== "local" && <label className="fieldLabel">Expected speakers<select value={speakerCount} onChange={(event) => setSpeakerCount(event.target.value)}>
+            <option value="">Detect automatically</option>{Array.from({ length: 20 }, (_, index) => <option key={index} value={index + 1}>{index + 1}</option>)}</select></label>
+          }
+          {transcriber?.selected_provider === "local" && <p className="lineWarning">Offline English transcription. Add speakers and assign each line manually; this model does not identify speakers.</p>}
+          {sourceId && !sourceReady && !activeJob && <button className="pipelineButton" disabled={locked}
+            onClick={() => run({ stage: "ingest", source_asset_id: sourceId })}><span><strong>Prepare media</strong><small>Create audio, waveform and preview</small></span></button>}
+          <button className="pipelineButton" aria-label="Transcribe scene" disabled={locked || !sourceReady || !transcriber?.available}
+            onClick={() => run({ stage: "transcribe", source_asset_id: sourceId!, transcription_input: transcriptionInput, num_speakers: transcriber?.selected_provider !== "local" && speakerCount ? Number(speakerCount) : undefined })}>
+            <span><strong>Transcribe scene</strong><small>{transcriber?.selected_provider === "fake" ? "Demo fixture transcription" : transcriber?.selected_provider === "local" ? "Local English ASR · manual speakers" : "Real dialogue and speakers"}</small></span></button>
+          {activeRevision && <button className="pipelineButton" aria-label="Retranscribe into new revision" disabled={locked || !sourceReady || !transcriber?.available}
+            onClick={() => run({ stage: "transcribe", source_asset_id: sourceId!, transcription_input: transcriptionInput, force_new: true, num_speakers: transcriber?.selected_provider !== "local" && speakerCount ? Number(speakerCount) : undefined })}>
+            <span><strong>Retranscribe into new revision</strong><small>Current edits remain saved</small></span></button>}
+          <button className="pipelineButton" aria-label="Translate dialogue" disabled={locked || !project.segments.length || !translator?.available || dirtyIds.size > 0}
+            onClick={() => run({ stage: "translate", revision_id: revisionId })}><span><strong>Translate dialogue</strong><small>Preserve human edits and approved lines</small></span></button>
+          <button className="pipelineButton" aria-label="Export Malayalam subtitles" disabled={locked || !project.segments.length || dirtyIds.size > 0}
+            onClick={() => { if (missing && !window.confirm("Some lines have no Malayalam translation. Export using English for those lines?")) return;
+              void run({ stage: "export", revision_id: revisionId, allow_incomplete: missing }); }}>
+            <span><strong>Export Malayalam subtitles</strong><small>Current saved timeline · SRT</small></span></button>
+          <button className="pipelineButton" aria-label="Generate voice candidates" disabled={locked || !allApproved || !voiceCapability?.available || dirtyIds.size > 0}
+            onClick={() => run({ stage: "synthesize", revision_id: revisionId })}><span><strong>Generate voice candidates</strong><small>{voiceCapability?.selected_provider === "fake" ? "Demo tones for approved lines" : "Selected voices · approved lines"}</small></span></button>
+          <button className="pipelineButton" aria-label="Render dialogue preview" disabled={locked || !allSelected || dirtyIds.size > 0}
+            onClick={() => run({ stage: "render_preview", revision_id: revisionId })}><span><strong>Render dialogue preview</strong><small>Selected takes · no original music/effects</small></span></button>
+        </div>
+        <div className="railSection"><p className="eyebrow">Providers</p>{capabilities.map((item) =>
+          <div className="capability" key={item.capability}><span className={item.available ? "ready" : "missing"} />
+            <div><strong>{item.capability.replaceAll("_", " ")}</strong><small>{item.selected_provider} · {item.verified ? "Verified job" : item.available ? "Adapter available" : "Unavailable"}</small>
+              {item.reason && <small>{item.reason}</small>}</div></div>)}</div>
+        <div className="railSection"><p className="eyebrow">Development demo</p><button className="pipelineButton" disabled={locked || !!project.revisions.length}
+          onClick={() => run({ stage: "demo_pipeline", provider: "fake" })}><span><strong>Build demo timeline</strong><small>Four fixture lines; no AI calls</small></span></button></div>
+        {voiceCapability && ["sarvam", "fake"].includes(voiceCapability.selected_provider) && <VoicePanel speakers={project.speakers}
+          profiles={project.voice_profiles} provider={voiceCapability.selected_provider as "sarvam" | "fake"} disabled={locked} onSaved={load} />}
+      </aside>
+      <section className="timelinePanel">
+        <ScenePlayer artifacts={project.artifacts} sourceId={sourceId} mediaRef={mediaRef} onTime={onTime} stopAt={stopAt} onStop={onStop} />
+        <StemPanel project={project} sourceId={sourceId} disabled={locked} onSaved={load} />
+        {project.active_revision_id && <SpeakerReusePanel key={`reuse:${project.active_revision_id}`} project={project}
+          disabled={locked} unsaved={dirtyIds.size > 0 || structureDirty || referenceDirty || panelDraftIds.size > 0} onSaved={load} />}
+        {project.active_revision_id && <DialogueBriefPanel key={`brief:${project.active_revision_id}`} project={project}
+          disabled={locked} unsaved={dirtyIds.size > 0} onRun={run} onSaved={load} onDirty={onDirty}
+          onPlayRange={playRange} canPlay={!!sourceReady && timelineMatches} />}
+        {project.active_revision_id && <DialogueAdaptationPanel key={`adaptation:${project.active_revision_id}`} project={project}
+          available={!!dialogueAdapter?.available} disabled={locked} unsaved={dirtyIds.size > 0} onRun={run} onSaved={load}
+          onPlayRange={playRange} canPlay={!!sourceReady && timelineMatches} />}
+        <AlignmentPanel project={project} disabled={locked} unsaved={dirtyIds.size > 0}
+          available={!!aligner?.available} sourceId={sourceId} transcriptionInput={transcriptionInput}
+          onRun={run} onSaved={load} onPlayRange={playRange} />
+        <PerformancePanel key={project.active_revision_id ?? "none"} project={project} sourceId={sourceId} disabled={locked} unsaved={dirtyIds.size > 0}
+          available={!!performanceAnalyzer?.available} targetAlignmentAvailable={!!targetAligner?.available}
+          transcriptionInput={transcriptionInput} onRun={run} onPlayRange={playRange} />
+        {project.active_revision_id && <EmotionPanel key={`emotion:${project.active_revision_id}`} project={project} sourceId={sourceId}
+          disabled={locked} unsaved={dirtyIds.size > 0} available={!!capabilities.find((item) => item.capability === "emotion_analyzer")?.available}
+          transcriptionInput={transcriptionInput} onRun={run} onPlayRange={playRange} canPlay={!!sourceReady && timelineMatches} onDirty={onPanelDirty} />}
+        <MixPanel key={`mix:${project.active_revision_id ?? "none"}`} project={project} disabled={locked || !timelineMatches} unsaved={dirtyIds.size > 0} onSaved={load} onRun={run} onDirty={onPanelDirty} />
+        {voicePreview && <section className="dubPreview" aria-label="Dialogue-only preview"><h2>{voicePreview.metadata_json.demo ? "Demo-tone preview" : "Dialogue-only preview"}</h2>
+          <p className="lineWarning">{previewStale ? "Saved preview uses earlier takes. Render again after selecting current audio." : "Original dialogue, music and effects are excluded from this preview."}</p>
+          {voicePreview.access_blocked_reason ? <p className="lineWarning">{voicePreview.access_blocked_reason}</p>
+            : <>{voicePreview.kind === "dub_preview" ? <video controls preload="metadata" src={`${API_URL}${voicePreview.content_url}`} />
+              : <audio controls preload="metadata" src={`${API_URL}${voicePreview.content_url}`} />}
+              <a className="smallButton" href={`${API_URL}${voicePreview.download_url}`}>Download dialogue preview</a></>}</section>}
+        {!timelineMatches && <p className="lineWarning">The displayed timeline belongs to another source. Select its source or activate a matching revision to play individual lines.</p>}
+        <div className="timelineHeader"><div><p className="eyebrow">Dialogue timeline</p><h1 ref={timelineHeading} tabIndex={-1}>{project.segments.length} reviewable lines</h1></div>
+          <span className="provenanceTag">{activeRevision ? activeRevision.provider === "fake" ? "DEMO FIXTURE" : `${activeRevision.provider} · ${activeRevision.model}` : "No transcript yet"}</span></div>
+        {activeJob && <div className="jobProgress"><LoaderCircle className="spin" /><strong>{activeJob.stage} · {activeJob.phase}</strong>
+          <button className="smallButton" onClick={() => jobAction(() => api.cancelJob(activeJob.id))}>Cancel</button></div>}
+        {activeRevision?.warnings_json.filter((warning) => warning !== "Some lines have no speaker assignment"
+          || project.segments.some((line) => !line.speaker_id)).map((warning) => <p className="lineWarning" key={warning}>{warning}</p>)}
+        {cloneCapability && ["fake", "sarvam"].includes(cloneCapability.selected_provider) && <ClonePanel project={project}
+          provider={cloneCapability.selected_provider as "fake" | "sarvam"} available={cloneCapability.available}
+          disabled={locked} onSaved={load} onRun={run} onDirty={setReferenceDirty} />}
+        <div className="reviewFilters" role="group" aria-label="Filter dialogue">{["all", "untranslated", "edited", "approved", "warnings"].map((value) =>
+          <button key={value} className={`smallButton ${filter === value ? "selected" : ""}`} aria-pressed={filter === value} onClick={() => setFilter(value)}>{value}</button>)}</div>
+        {dirtyIds.size > 1 && <div className="lineWarning" aria-label="Grouped dialogue save">
+          <button className="smallButton" disabled={locked || dirtyIds.size > 100 || preservedDrafts.length > 0} onClick={saveGroupedDrafts}>Save all dialogue drafts together</button>
+          <p>{dirtyIds.size} dialogue drafts, including filtered-out lines. All save or none save; other review forms are excluded. Limit: 100 lines.</p>
+          {preservedDrafts.length > 0 && <p>Copy or discard removed-line drafts before grouped saving.</p>}
+        </div>}
+        <DialogueTimeline>{[...project.segments, ...preservedDrafts].map((line) => <DialogueLine key={line.id} segment={line} speakers={project.speakers} artifacts={project.artifacts}
+          structureLocked={busy === "structure" || busy === "group-save" || remoteTimelineChanged}
+          disabled={locked} onGenerate={(lineId) => run({ stage: "synthesize", revision_id: revisionId, segment_ids: [lineId], force_new: true })}
+          active={!line.retired && timelineMatches && time >= line.start_ms && time < line.end_ms} hidden={!line.retired && hidden(line)} canPlay={!line.retired && !!sourceReady && timelineMatches}
+          onPlay={playLine} onSaved={load} onDirty={onDirty} onGroupedDraft={onGroupedDraft} onRegenerate={(lineId) => {
+            if (window.confirm("Generate a new translation for this saved line? It will need review again."))
+              void run({ stage: "translate", revision_id: revisionId, segment_ids: [lineId], regenerate: true });
+          }} />)}
+          {!project.segments.length && <div className="timelineEmpty"><strong>{activeRevision ? "No speech detected" : "Your dialogue will appear here"}</strong>
+            <span>{activeRevision ? "Try a clearer source or retranscribe into a new revision." : "Import a scene, wait for preparation, then transcribe it."}</span></div>}</DialogueTimeline>
+        {project.active_revision_id && <GroupHistoryPanel key={`group-history:${project.active_revision_id}`} project={project}
+          disabled={locked} unsaved={dirtyIds.size > 0 || structureDirty || panelDraftIds.size > 0 || referenceDirty}
+          onApply={structureAction} />}
+        {project.active_revision_id && <StructurePanel key={`structure:${project.active_revision_id}`} project={project}
+          disabled={locked} unsaved={dirtyIds.size > 0} onApply={structureAction} onDirty={setStructureDirty}
+          onPlayRange={playRange} canPlay={!!sourceReady && timelineMatches} />}
       </section>
-    </main>
-  );
+      <aside className="rightRail"><div className="metricCard"><div><span>Review</span><strong>{project.segments.filter((line) => line.status === "approved").length}/{project.segments.length} approved</strong></div></div>
+        <div className="metricCard"><div><span>Estimated processing budget</span><strong>₹{project.spent_estimate_inr.toFixed(2)} / ₹{project.budget_inr.toFixed(2)}</strong>
+          <small>₹{project.reserved_inr.toFixed(2)} reserved · provider bill may differ</small>
+          <button className="smallButton" onClick={() => { const value = window.prompt("Project processing budget in INR (estimate, not provider billing)", String(project.budget_inr));
+            if (value !== null && Number.isFinite(Number(value)) && Number(value) > 0) void jobAction(() => api.changeBudget(id, Number(value)));
+          }}>Change budget</button></div></div>
+        <div className="metricCard hardwareCard"><div><span>Local hardware</span><strong>{hardware?.cuda_ready ? "Driver detected" : "GPU inference unavailable"}</strong>
+          <small>v0.2 works without local AI models</small></div></div>
+        <div className="inspectorSection"><p className="eyebrow">Timeline revisions</p>{project.revisions.map((revision, index) => <div className="revisionItem" key={revision.id}>
+          <strong>{revision.provider === "fake" ? "Demo" : "Transcript"} · {project.revisions.length-index}</strong>
+          <small>{new Date(revision.created_at).toLocaleString()}</small>
+          <button className="smallButton" disabled={locked || revision.id === project.active_revision_id} onClick={() => activate(revision.id)}>
+            {revision.id === project.active_revision_id ? "Active timeline" : "Use this timeline"}</button></div>)}</div>
+        <div className="inspectorSection"><p className="eyebrow">Speakers</p>{activeRevision && <button className="smallButton" disabled={locked} onClick={addSpeaker}>Add speaker</button>}{project.speakers.map((speaker) => <button className="speakerRename" key={speaker.id}
+          onClick={() => rename(speaker.id, speaker.display_name)} title="Rename speaker">{speaker.display_name}<small>Rename</small></button>)}</div>
+        <div className="inspectorSection"><p className="eyebrow">Jobs</p>{project.jobs.slice(0, 8).map((job) => <div className="revisionItem" key={job.id}>
+          <strong>{job.stage} · {job.status}</strong><small>{job.provider} · {job.phase}</small>
+          {job.error_message && <p className="inlineError">{job.error_message}</p>}
+          {job.warnings_json.map((warning) => <small key={warning}>{warning}</small>)}
+          {job.status === "failed" && job.retryable && <button className="smallButton" disabled={locked}
+            onClick={() => jobAction(() => api.resumeJob(job.id))}>{job.provider === "sarvam" ? "Resume existing remote job" : "Resume saved local job"}</button>}</div>)}</div>
+        <div className="inspectorSection"><p className="eyebrow">Downloads</p>{project.artifacts.filter((item) => ["subtitle", "raw_transcript", "translation_candidates", "dub_preview", "dialogue_mix"].includes(item.kind)).map((item) =>
+          item.access_blocked_reason ? <div className="artifact" key={item.id}><strong>{item.filename}</strong><small>{item.access_blocked_reason}</small></div>
+            : <a className="artifact" href={`${API_URL}${item.download_url}`} key={item.id}><span><strong>{item.filename}</strong><small>{item.kind.replaceAll("_", " ")} · {item.metadata_json.revision_id === project.active_revision_id ? "active timeline" : "other timeline"}</small></span></a>)}</div>
+      </aside>
+    </section>
+  </main>;
 }

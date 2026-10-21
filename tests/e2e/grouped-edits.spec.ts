@@ -1,0 +1,62 @@
+import { expect, test } from "@playwright/test";
+
+test("grouped dialogue saves are atomic, include hidden drafts and retain failed drafts", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/");
+  await page.getByLabel("Project name").fill("Grouped corrections check");
+  await page.getByRole("button", { name: "Create workspace" }).click();
+  await page.getByRole("button", { name: /^Build demo timeline/ }).click();
+  await expect(page.getByRole("heading", { name: "4 reviewable lines" })).toBeVisible();
+  const line = (index: number) => page.getByRole("article", { name: `Dialogue line ${index}`, exact: true });
+  const first = line(1).getByLabel("English", { exact: true });
+  const second = line(2).getByLabel("English", { exact: true });
+  await first.fill("First grouped correction");
+  await second.fill("Second grouped correction");
+  const save = page.getByRole("button", { name: "Save all dialogue drafts together", exact: true });
+  await expect(save).toBeEnabled();
+  await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.dismiss()), save.click()]);
+  await expect(first).toHaveValue("First grouped correction");
+  await expect(second).toHaveValue("Second grouped correction");
+  await expect(page.getByText("2 unsaved", { exact: true })).toBeVisible();
+  await page.route("**/projects/*/segments", (route) => route.fulfill({ status: 507, json: { detail: "Storage is full" } }));
+  await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.accept()), save.click()]);
+  await expect(page.getByRole("alert").filter({ hasText: "Drafts are preserved" })).toBeVisible();
+  await expect(first).toHaveValue("First grouped correction");
+  await expect(second).toHaveValue("Second grouped correction");
+  await page.unroute("**/projects/*/segments");
+  await page.getByRole("button", { name: "approved", exact: true }).click();
+  await expect(line(1)).toBeHidden();
+  await expect(line(2)).toBeHidden();
+  await Promise.all([page.waitForEvent("dialog").then((dialog) => {
+    expect(dialog.message()).toContain("including filtered-out lines"); return dialog.accept();
+  }), save.click()]);
+  await expect(page.getByText("2 dialogue drafts saved together. Changed content requires review again.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "4 reviewable lines" })).toBeFocused();
+  await page.getByRole("button", { name: "all", exact: true }).click();
+  await expect(first).toHaveValue("First grouped correction");
+  await expect(second).toHaveValue("Second grouped correction");
+  await expect(save).toHaveCount(0);
+  await page.reload();
+  await expect(first).toHaveValue("First grouped correction");
+  await expect(second).toHaveValue("Second grouped correction");
+  const projectId = page.url().split("/").at(-1)!;
+  const detail = await (await page.request.get(`http://127.0.0.1:8011/projects/${projectId}`)).json();
+  await first.fill("Keep this first draft after conflict");
+  await second.fill("Keep this second draft after conflict");
+  const changed = await page.request.patch(`http://127.0.0.1:8011/segments/${detail.segments[1].id}`, { data: {
+    expected_version: detail.segments[1].version, source_text: "External editor's second line",
+  } });
+  expect(changed.ok()).toBe(true);
+  await Promise.all([page.waitForEvent("dialog").then((dialog) => dialog.accept()), save.click()]);
+  await expect(page.getByRole("alert").filter({ hasText: "Segment changed" })).toBeVisible();
+  await expect(first).toHaveValue("Keep this first draft after conflict");
+  await expect(second).toHaveValue("Keep this second draft after conflict");
+  const after = await (await page.request.get(`http://127.0.0.1:8011/projects/${projectId}`)).json();
+  expect(after.segments[0].source_text).toBe("First grouped correction");
+  expect(after.segments[1].source_text).toBe("External editor's second line");
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByLabel("Grouped dialogue save", { exact: true }).screenshot({ path: "test-results/cinedub-grouped-edits-mobile.png" });
+  expect(errors).toEqual([]);
+});
