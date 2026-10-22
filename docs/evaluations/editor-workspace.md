@@ -129,3 +129,27 @@ model cases were skipped. The production build, strict TypeScript, ESLint,
 generated contracts and all **11 frontend unit tests** passed. The rehearsal used
 isolated services and synthetic media; provider/listening quality remains outside
 this verification scope.
+
+## Compact landing page — 2026-10-22
+
+The home screen now pairs a short typographic introduction with an illustrative
+editor mockup, followed directly by project creation and recent projects. The
+mockup's line selection changes its example text and playhead without creating a
+project or invoking a provider. The original generated film still and complete
+generation prompt are stored in `apps/web/public/images/landing-scene.png` and
+`landing-scene.provenance.json`.
+
+Motion uses masked headline entry, a flowing vector ribbon, animated audio bars,
+subtle image movement and scroll-linked perspective. A pause control stops the
+ambient animation; reduced-motion preferences remove it. Project lists have their
+own bounded scroll area so existing projects do not turn the page into a long
+marketing scroll.
+
+Final verification passed **14 Chrome checks**, including 320/390/768/1024/1440px
+layouts, no horizontal overflow, loaded imagery, no browser-console errors,
+mockup selection/pause, scroll motion, reduced motion, project creation/reopening,
+API error recovery, keyboard editing, clip/split/resizing and the complete DEMO
+create-to-export workflow. Production build, strict types, ESLint and all **11
+frontend unit tests** passed. Screenshots were visually inspected; an initial
+image overflow and fractional-style hydration warning were corrected. The local
+server at port 3000 returned the finished landing page with HTTP 200.

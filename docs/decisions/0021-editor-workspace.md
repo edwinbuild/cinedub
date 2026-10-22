@@ -12,7 +12,7 @@ desktop video editors, adapted to dialogue review. A labelled tool navigation
 selects Media, Workflow, Voices, Analysis, Export or Project. The source monitor,
 dialogue editor and timeline remain available on desktop; smaller screens stack
 these regions without horizontal page overflow. The home screen remains a simple
-project launcher.
+project launcher, now reached through a compact cinematic landing page.
 
 Tool containers use `hidden` rather than conditional unmounting. Switching tools
 must preserve dialogue, workflow options, mix, consent and analysis drafts. The
