@@ -57,6 +57,11 @@ With every provider set to `fake` the whole run uses DEMO fixtures (see [Costs a
 
 **Timeline.** The editor shows a time-based timeline: the source waveform, dialogue lines, selected takes (with red warnings for overruns) and approved stems.
 
+The home page introduces the workspace with a short animated preview. Select an
+example line to explore it, pause the preview motion, or choose **Start a project**
+to focus the project form. The illustration never runs a dubbing job. Existing
+projects remain available below; reduced-motion system settings are respected.
+
 The editing workspace keeps the source monitor in the centre, dialogue review on
 the right and the labelled timeline below. Use **Media**, **Workflow**, **Voices**,
 **Analysis**, **Export** and **Project** on the left to open the tools you need.
