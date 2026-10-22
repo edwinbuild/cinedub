@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ProjectDetail } from "@cinedub/contracts";
 import {
-  MIN_LINE_MS, buildTracks, clampScroll, formatMs, moveEdge, msToPx, neighboursOf, nextZoom, pxToMs,
+  MIN_LINE_MS, buildTracks, clampScroll, formatMs, moveEdge, moveRange, msToPx, neighboursOf, nextZoom, pxToMs,
   snap, ticks, visibleRange, zoomAround, type View,
 } from "./timeline.ts";
 
@@ -77,6 +77,16 @@ test("tracks reflect lines, selected take fit and approved stems", () => {
   assert.deepEqual(tracks.takes.map((take) => [take.fit, take.demo, take.rawDurationMs]),
     [["ready", true, 900], ["missing", false, null]]);
   assert.deepEqual(tracks.stems, [{ name: "music", artifactId: "p1", demo: true }]);
+});
+
+test("whole-clip movement preserves length and clamps against source and neighbours", () => {
+  const line = { start_ms: 1500, end_ms: 2500 };
+  const neighbours = { previousEnd: 1000, nextStart: 4000 };
+  assert.deepEqual(moveRange(line, 2200, neighbours, 8000), { start_ms: 2200, end_ms: 3200 });
+  assert.deepEqual(moveRange(line, -999, neighbours, 8000), { start_ms: 1000, end_ms: 2000 });
+  assert.deepEqual(moveRange(line, 9999, neighbours, 8000), { start_ms: 3000, end_ms: 4000 });
+  assert.deepEqual(moveRange(line, 9999, { previousEnd: null, nextStart: null }, 5000), { start_ms: 4000, end_ms: 5000 });
+  assert.deepEqual(moveRange(line, 2000, { previousEnd: 3000, nextStart: 3500 }, 8000), line);
 });
 
 test("labels and ticks stay readable", () => {

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openTool } from "./helpers";
 
 test("save editorial direction, preserve drafts, review glossary and flag stale context", async ({ page }) => {
   const errors: string[] = [];
@@ -12,8 +13,10 @@ test("save editorial direction, preserve drafts, review glossary and flag stale 
   await page.getByLabel("Project name").fill("Editorial brief workflow");
   await page.getByRole("button", { name: "Create workspace" }).click();
   await expect(page).toHaveURL(/\/projects\//);
+  await openTool(page, "Media");
   await page.getByRole("button", { name: /^Build demo timeline/ }).click();
   await expect(page.getByRole("heading", { name: "4 reviewable lines" })).toBeVisible();
+  await openTool(page, "Analysis");
   const panel = page.getByLabel("Dialogue brief and editorial checks", { exact: true });
   await panel.locator("summary").first().click();
   await panel.getByLabel("Scene summary", { exact: true }).fill("An editor explains a new dubbing workspace.");
@@ -67,6 +70,7 @@ test("save editorial direction, preserve drafts, review glossary and flag stale 
   await panel.getByRole("button", { name: "Load latest saved brief", exact: true }).click();
   await expect(panel.getByLabel("Scene summary", { exact: true })).toHaveValue("Another tab's saved brief");
   await page.reload();
+  await openTool(page, "Analysis");
   await page.getByLabel("Dialogue brief and editorial checks", { exact: true }).locator("summary").first().click();
   await expect(page.getByLabel("Scene summary", { exact: true })).toHaveValue("Another tab's saved brief");
   await page.getByRole("button", { name: "Inspect editorial checks 1", exact: true }).click();

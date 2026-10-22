@@ -107,6 +107,8 @@ jobs:
           tests/e2e/full-pipeline-fake.spec.ts
           tests/e2e/timeline.spec.ts
           tests/e2e/pipeline.spec.ts
+          tests/e2e/workspace-ui.spec.ts
+          tests/e2e/editor-interactions.spec.ts
       - name: Keep browser traces of failed workflows
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

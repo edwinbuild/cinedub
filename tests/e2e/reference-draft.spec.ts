@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openTool } from "./helpers";
 import { execFileSync } from "node:child_process";
 
 test("private reference drafts survive refresh and navigation refusal without granting consent", async ({ page }) => {
@@ -8,10 +9,13 @@ test("private reference drafts survive refresh and navigation refusal without gr
   await expect(page).toHaveURL(/\/projects\//);
   const scene = page.url();
   const buffer = execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=220:duration=12", "-ar", "16000", "-ac", "1", "-f", "wav", "pipe:1"]);
+  await openTool(page, "Media");
   await page.getByLabel("Import scene").setInputFiles({ name: "synthetic-reference.wav", mimeType: "audio/wav", buffer });
   await expect(page.getByRole("slider", { name: "Seek scene" })).toBeVisible();
+  await openTool(page, "Workflow");
   await page.getByRole("button", { name: "Transcribe scene", exact: true }).click();
   await expect(page.getByRole("heading", { name: "2 reviewable lines" })).toBeVisible();
+  await openTool(page, "Voices");
   await page.getByText("Voice references & consent", { exact: false }).first().click();
   const form = page.getByRole("form", { name: "Create consented voice reference" });
   const name = form.getByLabel("Reference name", { exact: true });
@@ -41,10 +45,13 @@ test("private reference drafts survive refresh and navigation refusal without gr
   expect(await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }))).not.toContain("Synthetic private draft owner");
 
   // This form is project-scoped, unlike revision-scoped dialogue and briefs.
+  await openTool(page, "Workflow");
   await page.getByRole("button", { name: "Retranscribe into new revision", exact: true }).click();
+  await openTool(page, "Project");
   const activate = page.getByRole("button", { name: "Use this timeline", exact: true });
   await expect(activate).toBeEnabled();
   await activate.click();
+  await openTool(page, "Voices");
   await expect(name).toHaveValue("Unsaved synthetic reference");
   await expect(page.getByText("1 unsaved", { exact: true })).toBeVisible();
   await Promise.all([
@@ -61,7 +68,9 @@ test("private reference drafts survive refresh and navigation refusal without gr
 
   // The transcribed scene contains multiple fixture speakers. Use a separate
   // unassigned synthetic recording, just as the consent workflow requires.
+  await openTool(page, "Media");
   await page.getByLabel("Import scene").setInputFiles({ name: "clean-synthetic-reference.wav", mimeType: "audio/wav", buffer });
+  await openTool(page, "Voices");
   await expect(form.getByLabel("Reference source").getByRole("option", { name: "clean-synthetic-reference.wav", exact: true })).toHaveCount(1);
   await form.getByLabel("Reference speaker").selectOption({ label: "Speaker A" });
   await name.fill("Saved original synthetic reference");

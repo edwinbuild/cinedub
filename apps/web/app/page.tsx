@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { TooltipButton } from "@/components/tooltip-button";
 
 export default function Home() {
   const router = useRouter();
@@ -54,12 +55,12 @@ export default function Home() {
       <section className="hero">
         <div>
           <p className="eyebrow"><Sparkles size={14} /> English → Malayalam</p>
-          <h1>Shape every line.<br /><span>Keep every intention.</span></h1>
-          <p className="heroCopy">A review-first dubbing room where timing, delivery, translation, and voice remain visible and editable.</p>
+          <h1>Your projects</h1>
+          <p className="heroCopy">Import, edit and review your English → Malayalam scenes.</p>
         </div>
         <form className="createCard" onSubmit={create}>
           <div className="createIcon"><Plus size={21} /></div>
-          <div><h2>Start a scene</h2><p>Up to two minutes for the first workflow.</p></div>
+          <div><h2>New project</h2><p>Video or audio · up to two minutes.</p></div>
           <label htmlFor="project-name">Project name</label>
           <input id="project-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Opening scene" maxLength={120} />
           <button className="primaryButton" disabled={saving || !name.trim()}>{saving ? "Creating…" : "Create workspace"}<ArrowRight size={16} /></button>
@@ -67,10 +68,10 @@ export default function Home() {
       </section>
 
       <section className="projectsSection">
-        <div className="sectionHeading"><div><p className="eyebrow">Recent work</p><h2>Your projects</h2></div><button className="iconButton" onClick={load} aria-label="Refresh"><RefreshCw size={16} /></button></div>
+        <div className="sectionHeading"><div><p className="eyebrow">Recent work</p><h2>Your projects</h2></div><TooltipButton className="iconButton" label="Refresh" description="Reload the latest projects saved in this workspace." onClick={load}><RefreshCw size={16} /></TooltipButton></div>
         {error && <div className="errorBanner">{error}. Make sure the local API is running on port 8000.</div>}
         {loading ? <div className="emptyState">Loading projects…</div> : projects.length === 0 ? (
-          <div className="emptyState"><Film size={28} /><strong>No scenes yet</strong><span>Create the first project above. Nothing from OLD is executed.</span></div>
+          <div className="emptyState"><Film size={28} /><strong>Your next scene starts here</strong><span>Create a workspace above, then import your video or audio.</span></div>
         ) : (
           <div className="projectGrid">{projects.map((project) => (
             <Link className="projectCard" href={`/projects/${project.id}`} key={project.id}>

@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { API, guardPage, sceneWorkspace } from "./helpers";
+import { API, guardPage, openTool, sceneWorkspace } from "./helpers";
 
 test("timeline zoom, keyboard nudge and drag edit line drafts that save through the line editor", async ({ page, request }) => {
   const noErrors = guardPage(page);
   const id = await sceneWorkspace(page, "Timeline editing");
+  await openTool(page, "Workflow");
   await page.getByRole("button", { name: "Transcribe scene", exact: true }).click();
   await expect(page.getByRole("heading", { name: "2 reviewable lines" })).toBeVisible({ timeout: 30_000 });
   const timeline = page.getByRole("region", { name: "Scene timeline" });

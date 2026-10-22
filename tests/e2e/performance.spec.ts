@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openTool } from "./helpers";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -19,7 +20,9 @@ test("real acoustic comparison and experimental Malayalam words preserve take ch
     await page.getByRole("button", { name: "Create workspace" }).click();
     await expect(page).toHaveURL(/\/projects\//);
     const projectId = page.url().split("/").at(-1)!;
+    await openTool(page, "Media");
     await page.getByLabel("Import scene").setInputFiles({ name: "synthetic-source.wav", mimeType: "audio/wav", buffer: readFileSync(source) });
+    await openTool(page, "Workflow");
     await expect(page.getByRole("button", { name: "Transcribe scene", exact: true })).toBeEnabled();
     await page.getByRole("button", { name: "Transcribe scene", exact: true }).click();
     await expect(page.getByRole("heading", { name: "2 reviewable lines" })).toBeVisible();
@@ -29,6 +32,7 @@ test("real acoustic comparison and experimental Malayalam words preserve take ch
     const detail = async () => (await request.get(`http://127.0.0.1:8011/projects/${projectId}`)).json();
     const before = await detail();
     await page.reload();
+    await openTool(page, "Analysis");
     await expect(page.getByText("Synthetic speech fixture 1", { exact: true })).toBeVisible();
     const panel = page.getByLabel("Source versus voice performance");
     await panel.locator("summary").click();
@@ -63,6 +67,7 @@ test("real acoustic comparison and experimental Malayalam words preserve take ch
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: "test-results/cinedub-take-performance-mobile.png", fullPage: true });
     await page.reload();
+    await openTool(page, "Analysis");
     await panel.locator("summary").click();
     await panel.getByRole("button", { name: "Inspect comparison 1", exact: true }).click();
     await expect(words.getByRole("button")).toHaveCount(6);

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openTool } from "./helpers";
 import { execFileSync } from "node:child_process";
 
 function wav(seconds = 4) {
@@ -22,9 +23,11 @@ test("upload, seek, review, preserve drafts, revise and export", async ({ page }
   await page.getByLabel("Project name").fill("Browser verified scene");
   await page.getByRole("button", { name: "Create workspace" }).click();
   await expect(page).toHaveURL(/\/projects\//);
+  await openTool(page, "Media");
   await page.getByLabel("Import scene").setInputFiles({ name: "synthetic-scene.wav", mimeType: "audio/wav", buffer: wav() });
   await expect(page.locator("audio")).toBeVisible();
   await expect(page.getByRole("slider", { name: "Seek scene" })).toBeVisible();
+  await openTool(page, "Workflow");
   await page.getByRole("button", { name: "Transcribe scene", exact: true }).click();
   await expect(page.getByRole("heading", { name: "2 reviewable lines" })).toBeVisible();
   await page.getByRole("button", { name: "Translate dialogue", exact: true }).click();
@@ -47,15 +50,20 @@ test("upload, seek, review, preserve drafts, revise and export", async ({ page }
   await expect(first.getByRole("button", { name: "Save line" })).toBeDisabled();
   await first.getByLabel("Review state for line 1").selectOption("approved");
   await first.getByRole("button", { name: "Save line" }).click();
+  await openTool(page, "Project");
   await expect(page.getByText("1/2 approved")).toBeVisible();
   await page.screenshot({ path: "test-results/cinedub-v02-editor.png", fullPage: true });
+  await openTool(page, "Export");
   await page.getByRole("button", { name: "Export Malayalam subtitles" }).click();
+  await openTool(page, "Project");
   const link = page.getByRole("link", { name: /demo-malayalam.srt/ });
   await expect(link).toBeVisible();
   const response = await page.request.get((await link.getAttribute("href"))!);
   expect(response.ok()).toBeTruthy();
   expect(await response.text()).toContain("ബ്രൗസറിൽ തിരുത്തിയ വരി");
+  await openTool(page, "Workflow");
   await page.getByRole("button", { name: "Retranscribe into new revision" }).click();
+  await openTool(page, "Project");
   await expect(page.getByRole("button", { name: "Use this timeline" })).toHaveCount(1);
   await expect(malayalam).toHaveValue("ബ്രൗസറിൽ തിരുത്തിയ വരി");
   await page.getByRole("button", { name: "Use this timeline" }).click();
@@ -76,11 +84,13 @@ test("video proxy playback and a usable narrow screen", async ({ page }) => {
   await page.getByLabel("Project name").fill("Synthetic video scene");
   await page.getByRole("button", { name: "Create workspace" }).click();
   await expect(page).toHaveURL(/\/projects\//);
+  await openTool(page, "Media");
   await page.getByLabel("Import scene").setInputFiles({ name: "synthetic-video.mp4", mimeType: "video/mp4", buffer: video });
   await expect(page.locator("video")).toBeVisible();
   await expect.poll(() => page.locator("video").evaluate((element: HTMLVideoElement) => element.readyState)).toBeGreaterThanOrEqual(2);
   await page.locator("video").evaluate((element: HTMLVideoElement) => { element.currentTime = 1; });
   await expect.poll(() => page.locator("video").evaluate((element: HTMLVideoElement) => element.currentTime)).toBeGreaterThanOrEqual(1);
+  await openTool(page, "Workflow");
   await page.getByRole("button", { name: "Transcribe scene", exact: true }).click();
   await expect(page.getByRole("heading", { name: "2 reviewable lines" })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
@@ -96,8 +106,10 @@ test("assign voices, review candidates and render a dialogue-only preview", asyn
   await page.getByLabel("Project name").fill("Voice preview workflow");
   await page.getByRole("button", { name: "Create workspace" }).click();
   await expect(page).toHaveURL(/\/projects\//);
+  await openTool(page, "Media");
   await page.getByLabel("Import scene").setInputFiles({ name: "eight-seconds.wav", mimeType: "audio/wav", buffer: wav(8) });
   await expect(page.getByRole("slider", { name: "Seek scene" })).toBeVisible();
+  await openTool(page, "Workflow");
   await page.getByRole("button", { name: "Transcribe scene", exact: true }).click();
   await expect(page.getByRole("heading", { name: "2 reviewable lines" })).toBeVisible();
   await page.getByRole("button", { name: "Translate dialogue", exact: true }).click();
@@ -109,7 +121,9 @@ test("assign voices, review candidates and render a dialogue-only preview", asyn
     await line.getByRole("button", { name: "Save line" }).click();
     await expect(line.getByRole("button", { name: "Save line" })).toBeDisabled();
   }
+  await openTool(page, "Project");
   await expect(page.getByText("2/2 approved")).toBeVisible();
+  await openTool(page, "Voices");
   await page.getByLabel("Voice for Speaker A", { exact: true }).selectOption("speaker-a");
   await expect(page.getByLabel("Voice pace for Speaker A", { exact: true })).toBeVisible();
   await page.getByLabel("Voice for Speaker B", { exact: true }).selectOption("speaker-b");
@@ -120,6 +134,7 @@ test("assign voices, review candidates and render a dialogue-only preview", asyn
     await line.getByRole("button", { name: "Use this take", exact: true }).click();
     await expect(line.getByRole("button", { name: "Selected take" })).toBeVisible();
   }
+  await openTool(page, "Export");
   await page.getByRole("button", { name: "Render dialogue preview", exact: true }).click();
   const preview = page.getByRole("region", { name: "Dialogue-only preview" });
   await expect(preview.getByRole("heading", { name: "Demo-tone preview" })).toBeVisible();
@@ -127,6 +142,7 @@ test("assign voices, review candidates and render a dialogue-only preview", asyn
   const response = await page.request.get((await download.getAttribute("href"))!);
   expect(response.ok()).toBeTruthy();
   expect((await response.body()).subarray(0, 4).toString()).toBe("RIFF");
+  await openTool(page, "Project");
   await expect(page.getByText("2/2 approved")).toBeVisible();
   await page.screenshot({ path: "test-results/cinedub-voice-preview.png", fullPage: true });
 });
@@ -137,13 +153,18 @@ test("consented reference, explicit demo enrollment and revocation", async ({ pa
   await page.getByLabel("Project name").fill("Consent workflow");
   await page.getByRole("button", { name: "Create workspace" }).click();
   await expect(page).toHaveURL(/\/projects\//);
+  await openTool(page, "Media");
   await page.getByLabel("Import scene").setInputFiles({ name: "scene.wav", mimeType: "audio/wav", buffer: wav(12) });
   await expect(page.getByRole("slider", { name: "Seek scene" })).toBeVisible();
+  await openTool(page, "Workflow");
   await page.getByRole("button", { name: "Transcribe scene", exact: true }).click();
   await expect(page.getByRole("heading", { name: "2 reviewable lines" })).toBeVisible();
   // Separate synthetic reference avoids knowingly crossing the two fixture speakers.
+  await openTool(page, "Media");
   await page.getByLabel("Import scene").setInputFiles({ name: "original-reference.wav", mimeType: "audio/wav", buffer: wav(12) });
+  await openTool(page, "Workflow");
   await expect(page.getByRole("button", { name: "Transcribe scene", exact: true })).toBeEnabled();
+  await openTool(page, "Voices");
   await page.getByText("Voice references & consent", { exact: false }).first().click();
   const form = page.getByRole("form", { name: "Create consented voice reference" });
   await form.getByLabel("Reference speaker").selectOption({ label: "Speaker A" });
@@ -179,6 +200,7 @@ test("consented reference, explicit demo enrollment and revocation", async ({ pa
   await card.getByRole("button", { name: "Delete provider copy" }).click();
   await expect(card.getByText(/deleted/)).toBeVisible();
   await page.reload();
+  await openTool(page, "Voices");
   await page.getByText("Voice references & consent", { exact: false }).first().click();
   await expect(card.getByText(/Consent: revoked/)).toBeVisible();
 });

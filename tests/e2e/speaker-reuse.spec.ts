@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openTool } from "./helpers";
 import { execFileSync } from "node:child_process";
 
 test("reviewed earlier character reuse preserves history and refuses stale previews", async ({ page, request }) => {
@@ -8,23 +9,30 @@ test("reviewed earlier character reuse preserves history and refuses stale previ
   await expect(page).toHaveURL(/\/projects\//);
   const id = page.url().split("/").at(-1)!;
   const detail = async () => (await request.get(`http://127.0.0.1:8011/projects/${id}`)).json();
+  await openTool(page, "Media");
   await page.getByRole("button", { name: /^Build demo timeline/ }).click();
   await expect(page.getByRole("heading", { name: "4 reviewable lines" })).toBeVisible();
   const old = await detail();
   const originalSpeaker = old.speakers[0];
   page.once("dialog", (dialog) => dialog.accept("Captain Ravi"));
+  await openTool(page, "Project");
   await page.locator("button.speakerRename").filter({ hasText: originalSpeaker.display_name }).click();
+  await openTool(page, "Voices");
   await page.getByLabel("Voice for Captain Ravi", { exact: true }).selectOption("speaker-a");
   await expect(page.getByLabel("Voice pace for Captain Ravi", { exact: true })).toBeVisible();
   await page.getByLabel("Voice pace for Captain Ravi", { exact: true }).fill("1.1");
   await page.getByLabel("Voice pace for Captain Ravi", { exact: true }).press("Tab");
   await expect.poll(async () => (await detail()).voice_profiles.find((voice: { speaker_id: string }) => voice.speaker_id === originalSpeaker.id)?.settings_json.pace).toBe(1.1);
   const buffer = execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=220:duration=4", "-ar", "16000", "-ac", "1", "-f", "wav", "pipe:1"]);
+  await openTool(page, "Media");
   await page.getByLabel("Import scene").setInputFiles({ name: "rerun-scene.wav", mimeType: "audio/wav", buffer });
   await expect(page.getByRole("slider", { name: "Seek scene" })).toBeVisible();
+  await openTool(page, "Workflow");
   await page.getByRole("button", { name: "Transcribe scene", exact: true }).click();
+  await openTool(page, "Project");
   await page.getByRole("button", { name: "Use this timeline", exact: true }).click();
   await expect(page.getByRole("heading", { name: "2 reviewable lines" })).toBeVisible();
+  await openTool(page, "Workflow");
   await page.getByRole("button", { name: "Translate dialogue", exact: true }).click();
   const first = page.getByRole("article", { name: "Dialogue line 1", exact: true });
   await expect(first.getByLabel("Malayalam", { exact: true })).toHaveValue("സിനിഡബിലേക്ക് സ്വാഗതം.");
@@ -33,6 +41,7 @@ test("reviewed earlier character reuse preserves history and refuses stale previ
   await expect(first.getByRole("button", { name: "Save line", exact: true })).toBeDisabled();
   const current = await detail();
   const target = current.speakers.find((speaker: { id: string }) => speaker.id === current.segments[0].speaker_id);
+  await openTool(page, "Voices");
   const panel = page.getByLabel("Reuse earlier character", { exact: true });
   await panel.locator("summary").click();
   await panel.getByLabel("Current speaker to map", { exact: true }).selectOption(target.id);
@@ -60,6 +69,7 @@ test("reviewed earlier character reuse preserves history and refuses stale previ
   expect(targetVoice.id).not.toBe(originalVoice.id);
   expect(targetVoice.settings_json.pace).toBe(1.1);
   await page.reload();
+  await openTool(page, "Voices");
   await panel.locator("summary").click();
   await panel.getByLabel("Current speaker to map", { exact: true }).selectOption(target.id);
   await panel.getByRole("button", { name: "Load character reuse history", exact: true }).click();

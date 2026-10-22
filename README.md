@@ -55,11 +55,32 @@ With every provider set to `fake` the whole run uses DEMO fixtures (see [Costs a
 - `POST /pipelines/{id}/continue` opens the next gate and can raise `confirmed_budget_inr`.
 - `POST /pipelines/{id}/cancel` stops the run.
 
-**Timeline.** The editor shows a time-based timeline: the source waveform, dialogue lines, selected takes (green when they fit, red when they overrun) and approved stems.
+**Timeline.** The editor shows a time-based timeline: the source waveform, dialogue lines, selected takes (with red warnings for overruns) and approved stems.
+
+The editing workspace keeps the source monitor in the centre, dialogue review on
+the right and the labelled timeline below. Use **Media**, **Workflow**, **Voices**,
+**Analysis**, **Export** and **Project** on the left to open the tools you need.
+Switching tools keeps unsaved forms intact. **Export** in the header opens the
+mix/subtitle controls; rendering and acceptance still require explicit actions.
+On smaller screens the panels stack. See [workspace decisions](docs/decisions/0021-editor-workspace.md).
 
 - Zoom with the toolbar or Ctrl+wheel.
 - Click to seek.
 - Drag a line edge, or focus it and use the arrow keys (Shift for 100 ms).
+- Drag the body of a dialogue clip to move its complete timing window. Duration is
+  preserved and movement stops at neighbouring lines. Arrow keys also move a
+  focused clip; Shift uses 100 ms steps.
+- **Split / merge** opens the existing structural editor for the selected line.
+  Partition its text and confirm the change before applying it.
+- Import with the file picker or drop one video/audio file into **Media**.
+- Close the tools or dialogue panel with its **×**, restore it from the header,
+  and use **Hide timeline** / **Show timeline** to change the workspace layout.
+- Drag the dividers beside the tools/inspector or above the timeline to resize
+  them. Focus a divider and use arrow keys (Shift for larger steps), Home/End for
+  limits, or Enter/double-click to reset. Sizes are remembered in this browser;
+  narrower windows keep the monitor usable, and phones use a stacked layout.
+- Hover or keyboard-focus a tool tab, header action or timeline control for its
+  name and a short explanation. Escape dismisses the hint; touch actions stay direct.
 
 Timeline edits only change the line's unsaved draft. Save, conflict detection, grouped save and undo stay in the line editor. **Needs attention** lists unapproved, untranslated, speakerless, mistimed, warned and DEMO items, with a jump to each line.
 

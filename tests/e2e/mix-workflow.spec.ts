@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openTool } from "./helpers";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -20,8 +21,10 @@ test("actual separation through reviewed stereo export and hash-verifiable accep
     await expect(page).toHaveURL(/\/projects\//);
     const id = page.url().split("/").at(-1)!;
     const detail = async () => (await request.get(`http://127.0.0.1:8011/projects/${id}`)).json();
+    await openTool(page, "Media");
     await page.getByLabel("Import scene").setInputFiles({ name: "original-scene.mp4", mimeType: "video/mp4", buffer: readFileSync(videoPath) });
     await expect(page.getByRole("slider", { name: "Seek scene" })).toBeVisible();
+    await openTool(page, "Workflow");
     await page.getByRole("button", { name: "Separate dialogue and background", exact: true }).click();
     const stems = page.getByRole("region", { name: "Separated audio review" });
     await expect(stems).toBeVisible({ timeout: 90_000 });
@@ -40,6 +43,7 @@ test("actual separation through reviewed stereo export and hash-verifiable accep
       await line.getByRole("button", { name: "Save line" }).click();
       await expect(line.getByRole("button", { name: "Save line" })).toBeDisabled();
     }
+    await openTool(page, "Voices");
     await page.getByLabel("Voice for Speaker A", { exact: true }).selectOption("speaker-a");
     await expect(page.getByLabel("Voice pace for Speaker A")).toBeVisible();
     await page.getByLabel("Voice for Speaker B", { exact: true }).selectOption("speaker-b");
@@ -50,6 +54,7 @@ test("actual separation through reviewed stereo export and hash-verifiable accep
       await line.getByRole("button", { name: "Use this take", exact: true }).click();
       await expect(line.getByRole("button", { name: "Selected take" })).toBeVisible();
     }
+    await openTool(page, "Export");
     const panel = page.getByRole("region", { name: "Retained-background mix and export" });
     await panel.getByText("Mix & export · reviewed stereo delivery", { exact: true }).click();
     await panel.getByLabel("Music gain (dB)").fill("-3");
@@ -104,6 +109,7 @@ test("actual separation through reviewed stereo export and hash-verifiable accep
     await expect(page.getByText("1 unsaved", { exact: true })).toHaveCount(0);
     expect((await detail()).mixes[0].reviews.length).toBe(acceptanceCount);
     await page.reload();
+    await openTool(page, "Export");
     await expect(panel.getByLabel("Music gain (dB)")).toHaveValue("-3");
     await expect(panel.getByRole("link", { name: "Download accepted export bundle", exact: true })).toBeVisible();
     const player = panel.getByLabel("Retained-background video preview");
@@ -121,7 +127,9 @@ test("actual separation through reviewed stereo export and hash-verifiable accep
     await panel.getByLabel("I reviewed dialogue, background leakage, effects, levels and timing against the scene.").check();
     const other = await page.context().newPage();
     await other.goto(page.url());
+    await openTool(other, "Workflow");
     await other.getByRole("button", { name: "Retranscribe into new revision", exact: true }).click();
+    await openTool(other, "Project");
     await other.getByRole("button", { name: "Use this timeline", exact: true }).click();
     await expect(other.getByRole("button", { name: "Use this timeline", exact: true })).toBeEnabled();
     await page.getByRole("button", { name: "Refresh project", exact: true }).click();

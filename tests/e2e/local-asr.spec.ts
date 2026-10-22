@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openTool } from "./helpers";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -17,9 +18,11 @@ test("real offline English ASR and manual speaker review", async ({ page }) => {
     await page.getByLabel("Project name").fill("Real local inference");
     await page.getByRole("button", { name: "Create workspace" }).click();
     await expect(page).toHaveURL(/\/projects\//);
+    await openTool(page, "Media");
     await page.getByLabel("Import scene").setInputFiles({ name: "original-speech.wav", mimeType: "audio/wav", buffer: readFileSync(path) });
     await expect(page.getByRole("slider", { name: "Seek scene" })).toBeVisible();
     await expect(page.getByText("Local English ASR · manual speakers", { exact: true })).toBeVisible();
+    await openTool(page, "Workflow");
     await expect(page.getByLabel("Expected speakers")).toHaveCount(0);
     await page.getByRole("button", { name: "Transcribe scene", exact: true }).click();
     const line = page.getByRole("article", { name: "Dialogue line 1", exact: true });
@@ -37,6 +40,7 @@ test("real offline English ASR and manual speaker review", async ({ page }) => {
     expect(metadata.sampling_segments).toBe(metadata.decoder_segments.filter((item: { temperature: number }) => item.temperature > 0).length);
     await expect(page.getByText("DEMO FIXTURE", { exact: true })).toHaveCount(0);
     await expect(line.getByLabel("Speaker for line 1")).toHaveValue("");
+    await openTool(page, "Project");
     await page.getByRole("button", { name: "Add speaker", exact: true }).click();
     await expect(line.getByLabel("Speaker for line 1").getByRole("option", { name: "Narrator" })).toHaveCount(1);
     await line.getByLabel("Speaker for line 1").selectOption({ label: "Narrator" });
