@@ -107,3 +107,25 @@ Desktop and phone hint screenshots were inspected. Production build, strict
 TypeScript, ESLint and all **11 frontend unit tests** passed. The earlier full
 26-test run covers the preceding pane/surface refinement; hosted CI runs the
 complete default editor workflows for the final PR head.
+
+## PR review follow-up — 2026-10-22
+
+PR #4 had no review comments or unresolved threads; both hosted checks passed on
+`acc96e8`. A source review and two browser regressions exposed these edge cases:
+
+- Escape during the 350ms hover delay did not cancel the pending tooltip because
+  its dismissal listeners were attached only after the bubble appeared. The
+  listeners now cover pending and visible hints, including scrolling and resizing,
+  and are removed when the hint closes.
+- Alt/Ctrl/Meta with an arrow key changed dialogue timing by 10ms. Clip and trim
+  handlers now leave these combinations to the browser; plain arrows and
+  Shift-arrows retain the existing exact 10ms/100ms nudges.
+
+Both added regressions failed before the fix and passed afterward. They also
+confirm a fresh hint can still open and normal clip/trim nudging still works.
+
+The final complete default Chrome suite passed **29 tests**; seven optional
+model cases were skipped. The production build, strict TypeScript, ESLint,
+generated contracts and all **11 frontend unit tests** passed. The rehearsal used
+isolated services and synthetic media; provider/listening quality remains outside
+this verification scope.

@@ -263,3 +263,55 @@ test("button explanations work on hover and keyboard focus without clipping or b
   await expect(page.getByRole("region", { name: "Source monitor", exact: true })).toBeVisible();
   noErrors();
 });
+
+test("Escape, scrolling and resizing cancel a tooltip before its hover delay finishes", async ({ page }) => {
+  const noErrors = guardPage(page);
+  await sceneWorkspace(page, "Pending hint cancellation");
+  await page.clock.install();
+  const refresh = page.getByRole("button", { name: "Refresh project", exact: true });
+  const tooltip = page.getByRole("tooltip");
+  for (const action of ["escape", "scroll", "resize"]) {
+    await page.mouse.move(2, 2);
+    await refresh.hover();
+    await page.clock.runFor(100);
+    if (action === "escape") await page.keyboard.press("Escape");
+    if (action === "scroll") await page.evaluate(() => window.dispatchEvent(new Event("scroll")));
+    if (action === "resize") await page.setViewportSize({ width: 1280, height: 900 });
+    await page.clock.runFor(500);
+    await expect(tooltip, `${action} cancels the pending hint`).toBeHidden({ timeout: 1000 });
+  }
+  await page.mouse.move(2, 2);
+  await refresh.hover();
+  await page.clock.runFor(400);
+  await expect(tooltip).toContainText("Refresh project");
+  await refresh.click();
+  await expect(tooltip).toBeHidden();
+  noErrors();
+});
+
+test("browser shortcut modifiers do not change dialogue clip or trim drafts", async ({ page }) => {
+  const noErrors = guardPage(page);
+  await sceneWorkspace(page, "Timeline shortcut boundaries");
+  await page.getByRole("button", { name: /^Build demo timeline/ }).click();
+  const line = page.getByRole("article", { name: "Dialogue line 2", exact: true });
+  const start = line.getByLabel("Start (s)");
+  const end = line.getByLabel("End (s)");
+  const original = { start: await start.inputValue(), end: await end.inputValue() };
+  const timeline = page.getByRole("region", { name: "Scene timeline", exact: true });
+  const clip = timeline.locator(".timelineLabel").nth(1);
+  const trim = page.getByRole("slider", { name: "Start of line 2 on timeline", exact: true });
+  for (const control of [clip, trim]) {
+    for (const modifier of ["altKey", "ctrlKey", "metaKey"]) {
+      await control.dispatchEvent("keydown", { key: "ArrowRight", [modifier]: true, bubbles: true, cancelable: true });
+      await expect(start).toHaveValue(original.start);
+      await expect(end).toHaveValue(original.end);
+      await expect(line.getByRole("button", { name: "Save line", exact: true })).toBeDisabled();
+    }
+  }
+  await clip.focus(); await clip.press("ArrowRight");
+  await expect(start).toHaveValue(String((Math.round(Number(original.start) * 1000) + 10) / 1000));
+  await trim.focus(); await trim.press("Shift+ArrowRight");
+  await expect(start).toHaveValue(String((Math.round(Number(original.start) * 1000) + 110) / 1000));
+  await expect(end).toHaveValue(String((Math.round(Number(original.end) * 1000) + 10) / 1000));
+  noErrors();
+});

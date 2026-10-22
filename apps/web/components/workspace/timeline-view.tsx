@@ -125,6 +125,7 @@ export function TimelineView({ project, sourceId, mediaRef, drafts, editors, dis
     drag.current = null;
   }
   function nudge(event: KeyboardEvent<HTMLSpanElement>, id: string, edge: "start" | "end", rendered: number) {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
     if (event.nativeEvent.isComposing) return;
     event.preventDefault();
@@ -210,6 +211,7 @@ export function TimelineView({ project, sourceId, mediaRef, drafts, editors, dis
                 onPointerMove={(event) => moveClipDrag(event)} onPointerUp={(event) => moveClipDrag(event, true)}
                 onPointerCancel={() => { clipDrag.current = null; suppressClick.current = true; }}
                 onKeyDown={(event) => {
+                  if (event.altKey || event.ctrlKey || event.metaKey) return;
                   if (disabled || event.nativeEvent.isComposing || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
                   event.preventDefault(); const range = pending.current[line.id] ?? line;
                   moveClip(line.id, range, range.start_ms + (event.key === "ArrowLeft" ? -1 : 1) * (event.shiftKey ? 100 : 10), true, false);

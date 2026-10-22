@@ -10,11 +10,12 @@ export function TooltipButton({ label, description, children, ...props }: Button
   const id = useId();
   const button = useRef<HTMLButtonElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [active, setActive] = useState(false);
   const [position, setPosition] = useState<{ left: number; top: number; arrow: number; above: boolean } | null>(null);
   function clearTimer() { if (timer.current) clearTimeout(timer.current); timer.current = null; }
-  function hide() { clearTimer(); setPosition(null); }
+  function hide() { clearTimer(); setPosition(null); setActive(false); }
   function show(delay: number) {
-    clearTimer();
+    clearTimer(); setActive(true);
     timer.current = setTimeout(() => {
       const element = button.current;
       if (!element?.isConnected || element.closest("[hidden]")) return;
@@ -27,12 +28,13 @@ export function TooltipButton({ label, description, children, ...props }: Button
   }
   function leave() {
     clearTimer();
-    if (!button.current?.matches(":focus-visible")) timer.current = setTimeout(() => setPosition(null), 120);
+    if (!button.current?.matches(":focus-visible")) timer.current = setTimeout(hide, 120);
   }
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
   useEffect(() => {
-    if (!position) return;
-    function dismiss() { if (timer.current) clearTimeout(timer.current); setPosition(null); }
+    // Dismissal must cover the pending hover delay as well as the visible bubble.
+    if (!active) return;
+    function dismiss() { if (timer.current) clearTimeout(timer.current); timer.current = null; setPosition(null); setActive(false); }
     function escape(event: globalThis.KeyboardEvent) { if (event.key === "Escape") dismiss(); }
     window.addEventListener("resize", dismiss);
     window.addEventListener("scroll", dismiss, true);
@@ -41,7 +43,7 @@ export function TooltipButton({ label, description, children, ...props }: Button
       window.removeEventListener("resize", dismiss); window.removeEventListener("scroll", dismiss, true);
       document.removeEventListener("keydown", escape);
     };
-  }, [position]);
+  }, [active]);
 
   return <><button {...props} ref={button} type={props.type ?? "button"} aria-label={props["aria-label"] ?? label}
     aria-describedby={[props["aria-describedby"], position ? id : null].filter(Boolean).join(" ") || undefined}
